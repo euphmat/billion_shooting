@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>BILLION SHOOTING — 1億ブロック惑星破壊</title>
+<meta name="description" content="1億ブロックの超巨大惑星を削り切る放置シューティング。素材を集めて装備を製作し、スキルツリーを育てよう。">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<!-- PWA (ホーム画面に追加するとフルスクリーンのアプリとして動く) -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BILLION">
+<link rel="stylesheet" href="css/style.css?v=72">
+<link rel="stylesheet" href="css/mobile.css?v=72">
+</head>
+<body>
+<div id="app">
+  <!-- ================= MAIN (80%) ================= -->
+  <div id="main">
+    <canvas id="game"></canvas>
+    <div id="targetBar">
+      <div class="target-head"><span id="targetSwatch"></span><span id="targetText"></span><span id="targetPct"></span></div>
+      <div class="target-sub" id="targetSub"></div>
+      <div class="bar"><div class="fill" id="targetFill"></div></div>
+    </div>
+    <canvas id="minimap" width="150" height="150"></canvas>
+    <div id="toast"></div>
+    <div id="dungeonFx"><span class="dfx-body" id="dfxBody"></span><span class="dfx-name" id="dfxName"></span><span class="dfx-desc" id="dfxDesc"></span></div>
+    <!-- レベル / 経験値 / スキルツリーの入口 -->
+    <div id="lvHud">
+      <div class="lv-badge"><span>Lv</span><b id="lvNum">1</b></div>
+      <div class="lv-mid">
+        <div class="xp-track"><div id="xpFill"></div></div>
+        <div class="xp-text" id="xpText"></div>
+      </div>
+      <button id="treeBtn"><span class="b-long">スキルツリー</span><span class="b-short">SKILL</span><kbd>T</kbd><i id="spBadge">0</i></button>
+      <button id="artBtn"><span class="b-long">アーティファクト</span><span class="b-short">ART</span><i id="artBadge">0</i></button>
+    </div>
+    <div id="hpHud"><span class="hp-label">HP</span><div class="hp-track"><div id="hpFill"></div></div><span id="hpText"></span></div>
+    <div id="buffBox"></div>
+    <!-- スキルツリー (開いている間はゲームが止まる) -->
+    <div id="treeOverlay">
+      <div class="tree-head">
+        <h3>SKILL TREE</h3>
+        <span id="treeSp"></span>
+        <span id="treeCount"></span>
+        <span class="tree-hint b-long">ドラッグで移動 ・ ホイールで拡大縮小 ・ T / Esc で閉じる</span>
+        <span class="tree-hint b-short">ドラッグで移動 ・ ピンチで拡大縮小</span>
+        <button id="respecBtn">振り直し</button>
+        <button id="treeClose" class="icon-btn" aria-label="閉じる">×</button>
+      </div>
+      <div id="treeView"><div id="treeWorld"></div></div>
+      <div id="treeDetail"></div>
+    </div>
+    <div id="artOverlay">
+      <div class="tree-head">
+        <h3>アーティファクト</h3>
+        <span class="tree-hint">衛星惑星の宝箱から手に入る恒久パッシブ。所持しているだけで全て自動発動</span>
+        <button id="artClose" class="icon-btn" aria-label="閉じる">×</button>
+      </div>
+      <div id="artSummary"></div>
+      <div id="artGrid"></div>
+    </div>
+    <div id="artGet"></div>
+    <div id="startOverlay" class="overlay">
+      <h1>BILLION<br>SHOOTING</h1>
+      <p>1億ブロックの超巨大惑星「地球」を破壊せよ。<br>
+         <span class="b-long">WASD で移動 / ブロックに近づくと自動射撃 / マウスホイールでズーム</span>
+         <span class="b-short">右下のスティックで移動 / ブロックに近づくと自動射撃 / ピンチでズーム</span><br>
+         ブロックを壊すと<b>コインと素材</b>が手に入る。素材は全106種、地層ごとに違う。<br>
+         <span class="b-long">集めた素材とコインで、右の工房で装備 (全107種) を<b>製作・強化</b>しよう。</span>
+         <span class="b-short">集めた素材とコインで、<b>工房</b>ボタンから装備 (全107種) を製作・強化しよう。</span><br>
+         ブロックを壊すとレベルアップ。<span class="b-long">T キーで</span><span class="b-short">SKILL ボタンで</span>スキルツリー (全100種) を開こう。<br>
+         <span class="note">音が出ます。開始ボタンを押すと効果音が有効になります。</span></p>
+      <button class="bigbtn" id="startBtn">START</button>
+      <button class="ghostbtn" id="startInstallBtn" hidden>▼ アプリとしてインストール</button>
+    </div>
+    <!-- ================= スマホ用の操作系 (CSS でスマホのときだけ表示) ================= -->
+    <div id="stickZone">
+      <div id="stickBase"><span class="st-cross"></span><div id="stickKnob"></div></div>
+    </div>
+    <div id="mBtns">
+      <button id="mZoomOut" class="mbtn" aria-label="縮小">－</button>
+      <button id="mZoomIn"  class="mbtn" aria-label="拡大">＋</button>
+    </div>
+    <!-- 左下メニュー: アイコンはゲーム内の線画アイコンと統一 (ハンマー=工房 / ノード=スキルツリー / 宝石=アーティファクト / 歯車=設定) -->
+    <nav id="mMenu" aria-label="メニュー">
+      <button id="mShop" class="mmbtn" aria-label="工房を開く">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-2.5 2.5-6-6z"/><path d="M12.5 8.5 3.5 17.5a1.4 1.4 0 0 0 2 2l9-9"/></svg>
+        <span>工房</span><i class="afford-dot" id="mShopDot"></i>
+      </button>
+      <button id="mMenuTree" class="mmbtn" aria-label="スキルツリーを開く">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.8" r="2.1"/><circle cx="12" cy="12.2" r="2.1"/><circle cx="5.2" cy="19.2" r="2.1"/><circle cx="18.8" cy="19.2" r="2.1"/><path d="M12 6.9v3.2M10.8 13.9l-3.9 3.4M13.2 13.9l3.9 3.4"/></svg>
+        <span>SKILL</span><i class="mbadge" id="mSpBadge"></i>
+      </button>
+      <button id="mMenuArt" class="mmbtn" aria-label="アーティファクトを開く">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 4h11L21.5 9.5 12 20.5 2.5 9.5z"/><path d="M2.5 9.5h19M9 4 7.5 9.5 12 20.5l4.5-11L15 4"/></svg>
+        <span>ART</span><i class="mbadge" id="mArtBadge"></i>
+      </button>
+      <button id="mMenuGear" class="mmbtn" aria-label="設定を開く">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>設定</span>
+      </button>
+    </nav>
+
+    <div id="clearOverlay" class="overlay">
+      <h1>PLANET DESTROYED!</h1>
+      <p id="clearStats"></p>
+      <button class="bigbtn" id="restartBtn">もう一度遊ぶ</button>
+    </div>
+  </div>
+
+  <!-- ================= SIDE (20%) ================= -->
+  <div id="sheetBack"></div>
+  <div id="side">
+    <button id="sheetHandle" aria-label="工房を閉じる"><span></span></button>
+    <div id="sideHead">
+      <div class="sideHead-top">
+        <h2>WORKSHOP</h2>
+        <button id="gearBtn" class="icon-btn" title="設定" aria-label="設定">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3.2"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="progress-block">
+        <div class="progress-label"><span>惑星破壊率</span><span id="sidePct">0.000%</span></div>
+        <div class="progress-track"><div class="progress-fill" id="sideProgress"></div></div>
+        <div class="progress-sub"><span id="sideDestroyed">破壊 0</span><span id="sideRemain">残り 100,000,000</span></div>
+      </div>
+
+      <div class="coin-block">
+        <span class="coin-label"><i class="coin-dot coin-dot-lg"></i>コイン</span>
+        <b id="sideCoins">0</b>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-cell"><span>攻撃</span><b id="statDmg">1.0</b></div>
+        <div class="stat-cell"><span>総DPS</span><b id="statDps">5</b></div>
+        <div class="stat-cell"><span>仲間</span><b id="statCrew">0</b></div>
+        <div class="stat-cell"><span>累計コイン</span><b id="statTotalCoins">0</b></div>
+      </div>
+    </div>
+
+    <div id="equipBar"></div>
+
+    <div id="tabs">
+      <button data-tab="craft" class="active">工房<i class="afford-dot"></i></button>
+      <button data-tab="bot">攻撃ボット<i class="afford-dot"></i></button>
+      <button data-tab="coinbot">回収ボット<i class="afford-dot"></i></button>
+      <button data-tab="items">素材<i class="afford-dot"></i></button>
+    </div>
+
+    <div id="panels">
+      <div class="panel active" id="panel-craft"></div>
+      <div class="panel" id="panel-bot"></div>
+      <div class="panel" id="panel-coinbot"></div>
+      <div class="panel" id="panel-items"></div>
+    </div>
+  </div>
+
+  <!-- ================= SETTINGS POPUP ================= -->
+  <div id="settingsOverlay">
+    <div class="settings-card">
+      <div class="settings-head">
+        <h3>設定</h3>
+        <button id="settingsClose" class="icon-btn" aria-label="閉じる">×</button>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">サウンド</div>
+          <div class="settings-desc">射撃・破壊・コインなどの効果音</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="soundToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-row" id="installRow" hidden>
+        <div>
+          <div class="settings-label">アプリとしてインストール</div>
+          <div class="settings-desc" id="installRowDesc">ホーム画面に追加すると、全画面・オフラインで遊べます</div>
+        </div>
+        <button id="installRowBtn" class="mini-btn">追加</button>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">セーブデータ</div>
+          <div class="settings-desc">コイン・強化に加えて、壊した惑星のブロックもブラウザ内 (IndexedDB) に自動保存されます</div>
+        </div>
+      </div>
+      <button id="resetBtn" class="danger-btn">セーブを削除して最初から</button>
+      <p class="settings-note">削除するとコイン・素材・装備・ボット・スキル・惑星の破壊状況がすべてリセットされます。</p>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PWA インストール案内 (スマホで初回に出る) ================= -->
+<div id="pwaSheet" hidden>
+  <div class="pwa-card">
+    <img class="pwa-icon" src="icons/icon-192.png" width="72" height="72" alt="">
+    <h3>アプリとして遊ぶ</h3>
+    <p class="pwa-lead">ホーム画面に追加すると<b>全画面</b>で遊べて、<br>オフラインでも起動します。</p>
+
+    <!-- Android / Chrome など: ワンタップでインストール -->
+    <div class="pwa-auto">
+      <button class="pwa-main" id="pwaInstall">ホーム画面に追加</button>
+    </div>
+
+    <!-- iOS Safari: API が無いので手順を見せる -->
+    <div class="pwa-ios">
+      <ol class="pwa-steps">
+        <li><span class="pwa-step-n">1</span>下の<b>共有</b>ボタン
+          <svg class="pwa-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg>
+          をタップ</li>
+        <li><span class="pwa-step-n">2</span><b>「ホーム画面に追加」</b>を選ぶ</li>
+        <li><span class="pwa-step-n">3</span>右上の<b>「追加」</b>をタップ</li>
+      </ol>
+    </div>
+
+    <button class="pwa-skip" id="pwaLater">このままブラウザで遊ぶ</button>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+<!-- セーブ (IndexedDB) を読み終えてからゲーム本体を読み込む。
+     store.js だけ同期で読み、残りは SaveDB.boot が記述順どおりに実行する -->
+<script src="js/store.js?v=72"></script>
+<script>
+SaveDB.boot([
+  "js/materials.js?v=72",
+  "js/planet.js?v=72",
+  "js/core.js?v=72",
+  "js/audio.js?v=72",
+  "js/skills.js?v=72",
+  "js/ui.js?v=72",
+  "js/mobs.js?v=72",
+  "js/artifacts.js?v=72",
+  "js/game.js?v=72",
+  "js/skillfx.js?v=72",
+  "js/skilltree.js?v=72",
+  "js/mobile.js?v=72",
+]);
+</script>
+</body>
+</html>
