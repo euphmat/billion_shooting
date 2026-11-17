@@ -102,7 +102,7 @@ function wipeSave(){
 }
 if (migrated) saveNow();   // localStorage からの引っ越し分をすぐ IndexedDB へ
 
-/* ---------- 装備 (全107種・素材でクラフト) ----------
+/* ---------- 装備 (全137種・素材でクラフト) ----------
    設計の約束: 「リストの後ろにある装備ほど、必ず効率が良い」
    - 各装備の実効DPS (= 基礎ダメージ1あたりの採掘力) は 1つ進むごとに x1.115
      1発の威力は「連射 x 実効倍率 eff」から逆算するので、連射や弾数で効率が逆転しない
@@ -273,7 +273,7 @@ WEAPON_SRC.forEach(([key, name, mat, tag, icon, shape, o, feat, desc, recipe], i
     cost: i === 0 ? 0 : niceRound(30 * Math.pow(CRAFT_STEP, i - 1)),
     dmg: 5 * power / (o.rate * eff) };   // 実効DPS = 5 x power になるよう、1発の威力を逆算
 });
-// 武器アイコンは全107種ユニークに (WEAPON_SRC の icon は下書きで、この表が正)
+// 武器アイコンは全137種ユニークに (WEAPON_SRC の icon は下書きで、この表が正)
 const WEAPON_ICONS = {
   woodBow: "bow", copperGun: "coin", ironCannon: "cannon", tungstenAP: "ap", tinRapid: "speed",
   oilFlamethrower: "flame", sapphireFrost: "snow", permaFrost: "glacier", rubyLaser: "ray",
