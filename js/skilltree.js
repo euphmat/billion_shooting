@@ -48,7 +48,7 @@ function buildTree(){
     <div class="t-core" style="left:${TREE_C}px;top:${TREE_C}px"><span>Lv</span><b id="treeCoreLv"></b></div>${labels}${nodes}`;
   treeBuilt = true;
 }
-function applyView(){ $("treeWorld").style.transform = `translate(${tv.x}px,${tv.y}px) scale(${tv.s})`; }
+function applyView(){ $("treeWorld").style.transform = `translate(${tv.x}px,${tv.y}px) scale(${tv.s})`; positionDetail(); }
 function refreshTree(){
   if (!treeBuilt) return;
   const sp = spLeft();
@@ -74,8 +74,9 @@ function renderDetail(){
     $("treeDetail").innerHTML = `<div class="td-empty"><b>スキルツリー</b>
       <p>ブロックを壊すと経験値が入り、レベルアップでスキルポイントが手に入る (5レベルごとにボーナス +1)。レベル1ごとに全ダメージ +2%。</p>
       <p>中心から外へ、線でつながった順に習得できる。スキルは全てパッシブ (常時発動)。外周の大きなスキルは各系統の切り札。</p>
-      <p>${TOUCH_UI ? "ノードをタップで選択、下に出る「習得」ボタンで習得。" : "クリックで選択、ダブルクリックか Enter で習得。"}</p>
+      <p>${TOUCH_UI ? "ノードをタップで選択、下に出る「習得」ボタンで習得。" : "ノードをクリックすると、近くに詳細と「習得」ボタンが出る。ダブルクリックか Enter でも習得できる。"}</p>
       ${BRANCHES.map(b => `<div class="td-br" style="color:${b.color}"><b>${b.name}</b><span>${b.sub}</span></div>`).join("")}</div>`;
+    positionDetail();
     return;
   }
   const on = sk(n.id), open = skillUnlocked(n), sp = spLeft();
@@ -85,11 +86,35 @@ function renderDetail(){
   $("treeDetail").innerHTML = `<div class="td-top" style="--c:${n.br.color}">
       <div class="td-icon">${skillSVG(n)}</div>
       <div><h4>${n.name}</h4><div class="td-meta">${n.br.name} ・ パッシブ</div></div>
+      <button class="td-close" id="tdClose" aria-label="閉じる">×</button>
     </div>
     <p>${n.desc}</p>
     <div class="td-cost">必要スキルポイント <b>${n.cost}</b>${n.reqLv ? ` ・ 必要Lv <b>${n.reqLv}</b>` : ""}</div>
     ${status}
     ${!on && n.id === selId ? `<button class="buy-btn" id="learnBtn" ${canLearn(n) ? "" : "disabled"}><span>習得する</span><span>${TOUCH_UI ? "" : "Enter"}</span></button>` : ""}`;
+  positionDetail();
+}
+// ---------- 詳細ポップオーバー: 選択/ホバー中のノードの近くに出す ----------
+function clearTreeSelection(){ selId = null; hoverId = null; renderDetail(); }
+function positionDetail(){
+  const el = $("treeDetail"), n = SKILL[hoverId || selId];
+  if (!treeOpen || !n || TOUCH_UI){   // 未選択 / 閉じている間 / タッチUI (下部シート固定) は CSS の定位置に戻す
+    el.classList.remove("pop");
+    el.style.left = el.style.top = el.style.right = el.style.bottom = "";
+    return;
+  }
+  const orc = $("treeOverlay").getBoundingClientRect(), vr = $("treeView").getBoundingClientRect();
+  const pw = el.offsetWidth || 264, ph = el.offsetHeight || 200;
+  const nx = vr.left - orc.left + tv.x + n.x * tv.s, ny = vr.top - orc.top + tv.y + n.y * tv.s;   // ノード中心の画面座標 (#treeOverlay 基準)
+  const nr = (n.depth >= 8 ? 66 : 46) * tv.s / 2, gap = 12, m = 8;
+  let left = nx + nr + gap;                                        // 基本はノードの右隣
+  if (left + pw > orc.width - m) left = nx - nr - gap - pw;        // 右に収まらなければ左隣へ回り込む
+  left = Math.max(m, Math.min(left, Math.max(m, orc.width - pw - m)));
+  const minTop = vr.top - orc.top + 6, maxTop = Math.max(minTop, orc.height - ph - m);
+  const top = Math.max(minTop, Math.min(ny - ph / 2, maxTop));     // ノード中心の高さに合わせ、上下はツリー表示域内にクランプ
+  el.classList.add("pop");
+  el.style.right = el.style.bottom = "auto";
+  el.style.left = left + "px"; el.style.top = top + "px";
 }
 function tryLearn(id){
   const n = SKILL[id];
@@ -137,19 +162,22 @@ $("treeWorld").addEventListener("click", e => {
 $("treeWorld").addEventListener("dblclick", e => { const el = e.target.closest(".tn"); if (el) tryLearn(el.dataset.id); });
 $("treeWorld").addEventListener("mouseover", e => { const el = e.target.closest(".tn"); if (el && hoverId !== el.dataset.id){ hoverId = el.dataset.id; renderDetail(); } });
 $("treeWorld").addEventListener("mouseout", e => { if (e.target.closest(".tn") && hoverId){ hoverId = null; renderDetail(); } });
-$("treeDetail").addEventListener("click", e => { if (e.target.closest("#learnBtn")) tryLearn(selId); });
+$("treeDetail").addEventListener("click", e => {
+  if (e.target.closest("#tdClose")){ clearTreeSelection(); return; }
+  if (e.target.closest("#learnBtn")) tryLearn(selId);
+});
 
 // パン (ドラッグ) / ズーム (ホイール)
 let drag = null;
 $("treeView").addEventListener("pointerdown", e => {
   if (e.target.closest(".tn")) return;
-  drag = { x: e.clientX - tv.x, y: e.clientY - tv.y };
+  drag = { x: e.clientX - tv.x, y: e.clientY - tv.y, sx: e.clientX, sy: e.clientY, moved: false };
   $("treeView").setPointerCapture(e.pointerId);
   $("treeView").classList.add("dragging");
 });
-$("treeView").addEventListener("pointermove", e => { if (drag){ tv.x = e.clientX - drag.x; tv.y = e.clientY - drag.y; applyView(); } });
+$("treeView").addEventListener("pointermove", e => { if (drag){ if (Math.abs(e.clientX - drag.sx) > 6 || Math.abs(e.clientY - drag.sy) > 6) drag.moved = true; tv.x = e.clientX - drag.x; tv.y = e.clientY - drag.y; applyView(); } });
 const endDrag = () => { drag = null; $("treeView").classList.remove("dragging"); };
-$("treeView").addEventListener("pointerup", endDrag);
+$("treeView").addEventListener("pointerup", () => { const d = drag; endDrag(); if (d && !d.moved && selId) clearTreeSelection(); });   // 何もない場所のクリック (ドラッグなし) で選択解除
 $("treeView").addEventListener("pointercancel", endDrag);
 $("treeView").addEventListener("wheel", e => {
   e.preventDefault();
@@ -164,7 +192,7 @@ window.addEventListener("keydown", e => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.code === "KeyT"){ toggleTree(); return; }
   if (treeOpen){
-    if (e.key === "Escape") toggleTree(false);
+    if (e.key === "Escape"){ if (selId) clearTreeSelection(); else toggleTree(false); }   // 選択中はまずポップオーバーを閉じる
     else if (e.key === "Enter" && selId) tryLearn(selId);
     return;
   }
