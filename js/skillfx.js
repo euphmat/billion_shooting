@@ -94,7 +94,7 @@ function skillsUpdate(dt, fdt, bdt, now){
           if (isBurn && (sk("b_burn2") || sk("b_wildfire")) && (b.g || 0) < (sk("b_wildfire") ? 5 : 3)){   // 延焼 / 山火事 (世代で打ち切り)
             const gx = idx % D, gy = (idx / D) | 0, cand = [];
             for (const [dx, dy] of (sk("b_wildfire") ? N8 : N4)){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && !burns.has(j)) cand.push(j); }
-            if (cand.length) burns.set(cand[(Math.random() * cand.length) | 0], { d: b.d, t: 3, k: "burn", g: (b.g || 0) + 1 });
+            if (cand.length){ burns.set(cand[(Math.random() * cand.length) | 0], { d: b.d, t: 3, k: "burn", g: (b.g || 0) + 1 }); bumpProc("burn"); }
           }
           continue;
         }

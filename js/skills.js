@@ -248,13 +248,13 @@ const playerRate = () => (sk("a_rapid") ? 1.08 : 1) * (sk("a_rapid2") ? 1.2 : 1)
 const crewRate   = () => (sk("d_rate") ? 1.15 : 1) * (sk("d_rate2") ? 1.25 : 1);
 // 素材ドロップ倍率 (装備の触媒効果はヒット時に別に掛かる)
 const matDropMul = () => (1 + artVal("drop")) * (1 + (sk("c_vein") ? 0.15 : 0)) * (sk("e_master") ? 2 : 1) * (sk("e_master2") ? 2 : 1) * (sk("e_god") ? 3 : 1);
-const elemMul    = () => (sk("b_elem") ? 1.2 : 1) * (1 + artVal("elem")) * (artHas("lg_crown") ? 1.5 : 1);   // 元素の心得: 状態異常ダメージ / 元素の王冠: ×1.5
+const elemMul    = () => (sk("b_elem") ? 1.2 : 1) * (1 + artVal("elem")) * (artHas("lg_crown") ? 1.75 : 1);   // 元素の心得: 状態異常ダメージ / 元素の王冠: ×1.75
 const burnSetMul = () => elemMul() * (sk("b_burn") ? 1.5 : 1) * (sk("b_plasma") ? 2 : 1) * (1 + artVal("burn"));   // 燃焼の付与倍率
 
 // ---------- 元素付与 (スキルツリー): どの武器でも状態異常が乗る ----------
 function elemChances(){
   const all = sk("b_kindling") ? 0.05 : 0;   // 元素活性: 全ての付与率アップ
-  const crown = artHas("lg_crown") ? 0.15 : 0;   // 元素の王冠: 全元素の付与率 +15% (絶対値)
+  const crown = artHas("lg_crown") ? 0.20 : 0;   // 元素の王冠: 全元素の付与率 +20% (絶対値)
   return {
     burn:  (sk("b_burn")  ? 0.08 : 0) + all + crown,
     frost: (sk("b_frost") ? 0.08 : 0) + all + crown,
@@ -263,24 +263,44 @@ function elemChances(){
     shock: (sk("b_shock") ? 0.08 : 0) + (sk("b_tesla") ? 0.08 : 0) + all + crown,
   };
 }
+// 現在の武器 + スキル込みで「命中時にその状態異常が付く確率」(武器特性は命中時常時付与 = 100%扱い)
+function elemTotals(){
+  const w = WEAPONS[state.weapon], ec = elemChances();
+  const rnd = sk("b_elem") ? 0.10 / 3 : 0;   // 元素付与のランダム枠 (炎/氷/酸のどれか1つに 10%/3 ずつ)
+  const mix = (feat, c) => feat ? 1 : 1 - (1 - rnd) * (1 - c);
+  return {
+    burn:  mix(w.burn, ec.burn),
+    frost: mix(w.frost, ec.frost),
+    acid:  mix(w.acid, ec.acid),
+    rad:   w.radiation ? 1 : ec.rad,
+    shock: Math.min(1, (w.shock || 0) + ec.shock + (sk("b_elem") ? 0.025 : 0) + artVal("shockP") / 100),
+  };
+}
+
+// ---------- 発動カウンタ (セッション内のみ・セーブしない。「本当に発動しているか」の見える化用) ----------
+const skillProc = { burn: 0, frost: 0, acid: 0, rad: 0, shock: 0, thermo: 0, bolt: 0, firestorm: 0, icebreak: 0, meteor: 0, treasure: 0, treasureBreak: 0, chain: 0, blast: 0, quake: 0, jackpot: 0 };
+function bumpProc(k){ skillProc[k]++; }
+
 // 自機の命中時に呼ばれる。装備の特性とは独立に、スキル由来の状態異常を付ける
 function infuseElements(idx, gx, gy, dmg){
   const ec = elemChances();
   let kind = null;
   if (sk("b_elem") && Math.random() < 0.10) kind = ["burn", "frost", "acid"][(Math.random() * 3) | 0];   // 元素付与: ランダムに1つ (雷は放電判定側)
   const roll = k => kind === k || (ec[k] > 0 && Math.random() < ec[k]);
-  if (roll("burn") && (burns.size < 800 || burns.has(idx))) burns.set(idx, { d: dmg * 0.15 * burnSetMul(), t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn", g: 0 });
-  if (roll("acid") && (burns.size < 800 || burns.has(idx))) burns.set(idx, { d: dmg * 0.3 * elemMul() * (sk("b_acid") ? 1.5 : 1) * (1 + artVal("acid")), t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" });
-  if (ec.rad > 0 && Math.random() < ec.rad && (burns.size < 800 || burns.has(idx))) burns.set(idx, { d: dmg * 0.3 * elemMul(), t: 4, rad: true, k: "rad" });
+  if (roll("burn") && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * 0.15 * burnSetMul(), t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn", g: 0 }); bumpProc("burn"); }
+  if (roll("acid") && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * 0.3 * elemMul() * (sk("b_acid") ? 1.5 : 1) * (1 + artVal("acid")), t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" }); bumpProc("acid"); }
+  if (ec.rad > 0 && Math.random() < ec.rad && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * 0.3 * elemMul(), t: 4, rad: true, k: "rad" }); bumpProc("rad"); }
   if (roll("frost")){
     if (sk("b_thermo") && burns.has(idx)){   // 熱衝撃: 燃焼中の氷結で大爆発 (両方消える)
       burns.delete(idx);
       rings.push({ x: g2w(gx), y: g2w(gy), r: BS * 2, t: performance.now(), color: "255,150,60", dur: 300 });
       damageBlock(idx, blockMaxHP(gx, gy) * 0.15, 0);
+      bumpProc("thermo");
     } else if (frosts.size < 1500 || frosts.has(idx)){
       const freshFrost = !frosts.has(idx);
       frosts.set(idx, 3 + (sk("b_frost2") ? 2 : 0)); frostGen.set(idx, 0);
-      if (freshFrost && sk("b_permafrost")) for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && Math.random() < 0.5 && frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 2); frostGen.set(j, 1); } }   // 永久凍土
+      bumpProc("frost");
+      if (freshFrost && sk("b_permafrost")) for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && Math.random() < 0.5 && frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 2); frostGen.set(j, 1); bumpProc("frost"); } }   // 永久凍土
     }
   }
 }
@@ -330,8 +350,8 @@ function skillHitMods(idx, gx, gy, dmg, hp){
   let m = gMul;
   const max = blockMaxHP(gx, gy);
   if (hp >= max && sk("a_first")) m *= 1.2;
-  { const voidEye = artHas("lg_void");   // 虚無の単眼: 会心率 +20%、会心ダメは最低でも ×3、専用演出フラグを立てる
-    const ac = (sk("a_crit") ? 0.06 : 0) + artVal("crit") / 100 + (voidEye ? 0.20 : 0);
+  { const voidEye = artHas("lg_void");   // 虚無の単眼: 会心率 +25%、会心ダメは最低でも ×3、専用演出フラグを立てる
+    const ac = (sk("a_crit") ? 0.06 : 0) + artVal("crit") / 100 + (voidEye ? 0.25 : 0);
     if (ac > 0 && Math.random() < ac){ let cm = (sk("a_critx") ? 3 : 2) + artVal("critd") / 100; if (voidEye){ cm = Math.max(cm, 3); dmgVoidFlag = true; } m *= cm; } }   // 会心 (スキル+アーティファクト合算)
   if (sk("a_deep")) m *= 1 + (sk("a_deep2") ? 2.0 : 1.0) * blockDepth(gx, gy);
   if (artVal("deep")) m *= 1 + artVal("deep") * blockDepth(gx, gy);   // アーティファクト: 深さダメ
@@ -356,14 +376,14 @@ function skillHitMods(idx, gx, gy, dmg, hp){
 }
 // cur = 命中後の残りHP (0以下なら壊れた)
 function skillAfterHit(idx, gx, gy, dmg, cur){
-  if (curPl && !artZapBusy && artSpecial("zap") && Math.random() < 0.12){   // アーティファクト: 連鎖の稲妻
+  if (curPl && !artZapBusy && artSpecial("zap") && Math.random() < 0.18){   // アーティファクト: 連鎖の稲妻
     artZapBusy = true;
     try {
       const cand = findNearestBlocks(g2w(gx), g2w(gy), 210, 1, new Set([idx]));
-      if (cand.length){ const j = cand[0]; beams.push({ x1: g2w(gx), y1: g2w(gy), x2: g2w(j % D), y2: g2w((j / D) | 0), t: performance.now(), w: 2, color: "#ffe14d" }); damageBlock(j, dmg * 0.3, 0); }
+      if (cand.length){ const j = cand[0]; beams.push({ x1: g2w(gx), y1: g2w(gy), x2: g2w(j % D), y2: g2w((j / D) | 0), t: performance.now(), w: 2, color: "#ffe14d" }); damageBlock(j, dmg * 0.5, 0); }
     } finally { artZapBusy = false; }
   }
-  if (curPl && artHas("lg_dice") && Math.random() < 0.05) chaosDice(idx, gx, gy, dmg);   // 混沌のサイコロ: 自機の命中時 5%で発動
+  if (curPl && artHas("lg_dice") && Math.random() < 0.07) chaosDice(idx, gx, gy, dmg);   // 混沌のサイコロ: 自機の命中時 7%で発動
   if (cur < 0 && dmg < 1e300 && !curCarry && sk("a_overkill")){   // 弾・照射は damageBlock の余剰引き継ぎで強化される
     let carry = -cur, cx = gx, cy = gy;
     for (let k = 0; k < 6 && carry > 0; k++){
@@ -377,6 +397,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
     }
   }
   if (sk("a_bolt") && Math.random() < 0.05){
+    bumpProc("bolt");
     const x = g2w(gx), y = g2w(gy), cand = findNearestBlocks(x, y, 150, 8, new Set([idx]));
     for (let k = 0; k < 3 && cand.length; k++){
       const j = cand.splice((Math.random() * cand.length) | 0, 1)[0];
@@ -387,6 +408,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
   // 放電: 隣へ跳ねる (伝導体/テスラで連鎖、過負荷で脆くする)。装備の特性が無くても、スキルの放電付与で走る
   const shockP = (curFx && curFx.shock ? curFx.shock : 0) + (curPl ? elemChances().shock + (sk("b_elem") ? 0.025 : 0) : 0) + artVal("shockP") / 100;
   if (shockP > 0 && Math.random() < shockP){
+    bumpProc("shock");
     let left = sk("b_tesla") ? 3 : sk("b_conductor") ? 2 : 1;
     let from = idx, dealt = dmg * 0.5 * elemMul() * (sk("b_shock") ? 1.5 : 1);
     const hitSet = new Set([idx]);
@@ -402,7 +424,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
     }
   }
   if (cur > 0){
-    if (sk("a_burn") && (burns.size < 500 || burns.has(idx))) burns.set(idx, { d: dmg * 0.15 * burnSetMul(), t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn" });
+    if (sk("a_burn") && (burns.size < 500 || burns.has(idx))){ burns.set(idx, { d: dmg * 0.15 * burnSetMul(), t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn" }); bumpProc("burn"); }
     if (curPl){
       if (sk("c_goldhand") && Math.random() < 0.03 && goldSet.size < 4000) goldSet.add(idx);
       infuseElements(idx, gx, gy, dmg);   // 元素付与 (スキル): どの武器でも状態異常が乗る
@@ -418,7 +440,7 @@ function coinSkillMul(){
   if (sk("c_bonus2")) m *= 1.2;
   if (sk("c_combo")) m *= 1 + Math.min(20, Math.floor(combo / 10)) * 0.02;
   if (sk("c_lucky") && Math.random() < 0.08) m *= 2;
-  if (sk("c_jackpot") && ++jackN >= (sk("c_jackpot2") ? 400 : 1000)){ jackN = 0; const jm = sk("c_jackpot2") ? 50 : 30; m *= jm; toast(`JACKPOT!!  コイン${jm}倍`); }
+  if (sk("c_jackpot") && ++jackN >= (sk("c_jackpot2") ? 400 : 1000)){ jackN = 0; bumpProc("jackpot"); const jm = sk("c_jackpot2") ? 50 : 30; m *= jm; toast(`JACKPOT!!  コイン${jm}倍`); }
   if (sk("c_bonus3")) m *= 1.25;
   if (sk("c_king3")) m *= 1.2;
   return m;
@@ -439,9 +461,10 @@ function skillOnBreak(idx, gx, gy, kind, rare){
     burns.delete(idx);
     if (sk("a_spread") || fire.rad) for (const [dx, dy] of (fire.rad && sk("b_radio") ? N8 : N4)){   // 延焼 / 放射能は隣へ移る
       const j = liveAt(gx + dx, gy + dy);
-      if (j >= 0 && burns.size < 800 && !burns.has(j) && (fire.g || 0) < 3) burns.set(j, { d: fire.d, t: fire.rad ? 4 : 3, rad: fire.rad, k: fire.k, g: (fire.g || 0) + 1 });   // 燃え移りは3世代まで
+      if (j >= 0 && burns.size < 800 && !burns.has(j) && (fire.g || 0) < 3){ burns.set(j, { d: fire.d, t: fire.rad ? 4 : 3, rad: fire.rad, k: fire.k, g: (fire.g || 0) + 1 }); bumpProc(fire.k); }   // 燃え移りは3世代まで
     }
     if (sk("b_firestorm") && !deep && !firestorming){   // 火炎嵐: 燃焼中の撃破で爆発
+      bumpProc("firestorm");
       firestorming = true;
       try {
         const fd = fire.d * (sk("b_supernova") ? 12 : 6), rr = sk("b_supernova") ? 2 : 1;
@@ -455,12 +478,13 @@ function skillOnBreak(idx, gx, gy, kind, rare){
     }
   }
   if (wasFrost && sk("b_icebreak") && !deep && !shattering){   // 氷砕: 氷結中の撃破で氷片が飛ぶ
+    bumpProc("icebreak");
     const d = blockMaxHP(gx, gy) * (sk("b_glacier") ? 0.12 : 0.05), dirs = sk("b_glacier") ? N8 : N4;
     shattering = true;
     try { for (const [dx, dy] of dirs){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) damageBlock(j, d, 0); } }
     finally { shattering = false; }
   }
-  if (wasFrost && sk("b_frost3") && frostG < 2) for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 3 + (sk("b_frost2") ? 2 : 0)); frostGen.set(j, frostG + 1); } }   // 氷結伝播 (2世代まで)
+  if (wasFrost && sk("b_frost3") && frostG < 2) for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 3 + (sk("b_frost2") ? 2 : 0)); frostGen.set(j, frostG + 1); bumpProc("frost"); } }   // 氷結伝播 (2世代まで)
   const shat = (!deep && !shattering) ? (sk("a_shatter") ? (sk("a_shatter2") ? 0.12 : 0.05) : 0) + (curFx && curFx.shatter ? curFx.shatter : 0) : 0;
   if (shat > 0){   // 破砕で壊れたブロックは弾けない (連鎖で星ごと崩れないように)
     const d = blockMaxHP(gx, gy) * shat;
@@ -468,9 +492,9 @@ function skillOnBreak(idx, gx, gy, kind, rare){
     try { for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) damageBlock(j, d, 0); } }
     finally { shattering = false; }
   }
-  if (sk("a_meteor") && ++breakN >= (sk("a_meteor2") ? 120 : 300)){ breakN = 0; meteors.push({ x, y, t: 0.6, r: BS * 4, dmg: playerDamage() * 10 }); }
+  if (sk("a_meteor") && ++breakN >= (sk("a_meteor2") ? 120 : 300)){ breakN = 0; bumpProc("meteor"); meteors.push({ x, y, t: 0.6, r: BS * 4, dmg: playerDamage() * 10 }); }
   if (artHas("lg_nova") && !novaBusy && ++novaArtN >= 50){ novaArtN = 0; novaBusy = true; try { supernovaAt(x, y); } finally { novaBusy = false; } }   // 超新星の核: 50個破壊ごと
-  if (artHas("lg_gaia") && !deep && !shattering && Math.random() < 0.25){   // 大地母神の腕: 隣接ブロックも一緒に砕く (緑の衝撃波)
+  if (artHas("lg_gaia") && !deep && !shattering && Math.random() < 0.30){   // 大地母神の腕: 隣接ブロックも一緒に砕く (緑の衝撃波)
     shattering = true;
     try { for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) damageBlock(j, blockMaxHP(gx + dx, gy + dy) * 10, 0); } }
     finally { shattering = false; }
@@ -492,7 +516,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
     } } finally { resonating = false; }
   }
   if (sk("e_quake2") && ++quakeN >= 400){   // 地殻振動: 400個壊すごとに自動で地震
-    quakeN = 0;
+    quakeN = 0; bumpProc("quake");
     const r = 300, rb = Math.ceil(r / BS);
     rawDamage(() => {
       for (let yy = Math.max(0, gy - rb); yy <= Math.min(D - 1, gy + rb); yy++)
@@ -506,6 +530,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
   }
   // --- お宝ブロック: 壊したら大ボーナス、壊すたび近くのブロックがまれにお宝化する ---
   if (treasureSet.has(idx)){
+    bumpProc("treasureBreak");
     treasureSet.delete(idx);
     const tm = MATS[materialAt(gx, gy)], tb = sk("e_treasure3") ? 12 : sk("e_treasure2") ? 8 : 4;
     invAdd(tm.key, tb); noteDrop(x, y, tm, tb);
@@ -518,7 +543,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
   if (sk("e_treasure") && treasureSet.size < (sk("e_treasure3") ? 60 : sk("e_treasure2") ? 40 : 20) && Math.random() < (sk("e_treasure3") ? 0.02 : sk("e_treasure2") ? 0.012 : 0.005)){
     for (let t = 0; t < 10; t++){
       const j = liveAt(gx + ((Math.random() * 29) | 0) - 14, gy + ((Math.random() * 29) | 0) - 14);
-      if (j >= 0 && j !== idx && !treasureSet.has(j)){ treasureSet.add(j); break; }
+      if (j >= 0 && j !== idx && !treasureSet.has(j)){ treasureSet.add(j); bumpProc("treasure"); break; }
     }
   }
   // --- 連破: 周囲のブロックが巻き込まれて一緒に壊れる (予算の範囲で連鎖) ---
@@ -528,7 +553,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
   }
   // --- 発破採掘: 一定数壊すごとに、破壊地点を中心に大爆発 (発破で壊れた分は数えない) ---
   if (sk("e_blast") && !blasting && ++blastN >= (sk("e_blast3") ? 10 : sk("e_blast2") ? 15 : 25)){
-    blastN = 0;
+    blastN = 0; bumpProc("blast");
     blasting = true;
     try {
       const rr = sk("e_blast3") ? 3 : sk("e_blast2") ? 2 : 1;
@@ -544,6 +569,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
 }
 // 連破の一撃: 周囲8マスからランダムな1ブロックを即座に砕く
 function chainStrike(gx, gy){
+  bumpProc("chain");
   const cand = [];
   for (const [dx, dy] of N8){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) cand.push(j); }
   if (!cand.length) return;

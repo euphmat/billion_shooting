@@ -6,88 +6,89 @@
    - 抽選: レアリティを引いてから、未所持の中からランダムに1つ
    - 効果は全部「所持しているだけで自動発動」。管理画面でコレクションと
      合計ボーナスを確認できる
-   - rar:4 = LEGENDARY (真レジェンダリー10種)。専用の虹枠で表示され、
+   - ティアは5段階: コモン (灰) / レア (青) / エピック (紫) / レジェンダリー (金) / ミシック (虹)
+   - rar:4 = ミシック MYTHIC (最上位10種)。専用の虹色アニメ枠で表示され、
      効果は mod の乗算キー (dmgMul / coinMul / xpMul) と各所の専用フックで効く
    ========================================================= */
 const RARITY = [
-  { name:"コモン",       color:"#cfd8dc", w:50 },
-  { name:"レア",         color:"#57b6ff", w:32 },
-  { name:"エピック",     color:"#c792ff", w:13 },
-  { name:"レジェンダリー", color:"#ffb340", w:5 },
-  { name:"LEGENDARY",    color:"#ffd700", w:2 },
+  { name:"コモン",       en:"COMMON",    color:"#cfd8dc", w:50 },
+  { name:"レア",         en:"RARE",      color:"#57b6ff", w:32 },
+  { name:"エピック",     en:"EPIC",      color:"#c792ff", w:13 },
+  { name:"レジェンダリー", en:"LEGENDARY", color:"#ffb340", w:5 },
+  { name:"ミシック",     en:"MYTHIC",    color:"#ffd700", w:2 },
 ];
 // mod のキー: dmg 攻撃 / def 被ダメ減 / hp 最大HP / regen 回復速度 / regenAlways 常時回復(%/秒)
 // spd 移動 / rate 連射 / coin コイン / xp 経験値 / drop 素材ドロップ / bot 攻撃ボット / cbot 回収ボット
 // elem 元素 / burn 燃焼 / acid 腐食 / frostV 氷結弱点(加算) / shockP 放電率(pt) / crit 会心率(pt) / critd 会心ダメ
 // deep 深さダメ / magnet 吸引 / splash 範囲 / sell 自動売却
-// dmgMul / coinMul / xpMul は「乗算キー」: artMul() が (1+値) を掛け合わせる (LEGENDARY専用)
+// dmgMul / coinMul / xpMul は「乗算キー」: artMul() が (1+値) を掛け合わせる (ミシック専用)
 // special: shield 結界 / zap 連鎖の稲妻 / meteor 隕石 / chestSense 宝箱探知 / mobDrop 星屑の収穫 / revive 不死
 const ARTIFACTS = [
   // ---- コモン (20) ----
-  { id:"st_dmg",  name:"旅人の護石",   rar:0, icon:"◆", desc:"攻撃力 +8%",            mod:{ dmg:.08 } },
-  { id:"st_def",  name:"鉄壁の欠片",   rar:0, icon:"■", desc:"受けるダメージ -5%",    mod:{ def:.05 } },
-  { id:"st_spd",  name:"疾風の羽根",   rar:0, icon:"▲", desc:"移動速度 +10%",         mod:{ spd:.10 } },
-  { id:"st_mag",  name:"磁石の欠片",   rar:0, icon:"⬢", desc:"コイン吸引範囲 +25%",   mod:{ magnet:.25 } },
-  { id:"st_hp",   name:"小さな心臓",   rar:0, icon:"●", desc:"最大HP +12%",           mod:{ hp:.12 } },
-  { id:"st_reg",  name:"再生の雫",     rar:0, icon:"✦", desc:"HP回復速度 +40%",       mod:{ regen:.40 } },
-  { id:"st_coin", name:"商人の小判",   rar:0, icon:"⬟", desc:"コイン +10%",           mod:{ coin:.10 } },
-  { id:"st_xp",   name:"学びの欠片",   rar:0, icon:"♦", desc:"経験値 +10%",           mod:{ xp:.10 } },
-  { id:"st_elem", name:"元素の欠片",   rar:0, icon:"❖", desc:"元素ダメージ +10%",     mod:{ elem:.10 } },
-  { id:"st_drop", name:"掘削の欠片",   rar:0, icon:"♜", desc:"素材ドロップ +10%",     mod:{ drop:.10 } },
-  { id:"st_bot",  name:"ボットの歯車", rar:0, icon:"⚙", desc:"攻撃ボット +10%",       mod:{ bot:.10 } },
-  { id:"st_cbot", name:"回収の歯車",   rar:0, icon:"⚙", desc:"回収ボット +10%",       mod:{ cbot:.10 } },
-  { id:"st_crit", name:"鋭い欠片",     rar:0, icon:"★", desc:"会心率 +3%",            mod:{ crit:3 } },
-  { id:"st_critd",name:"重い欠片",     rar:0, icon:"★", desc:"会心ダメージ +25%",     mod:{ critd:25 } },
-  { id:"st_rate", name:"速射の欠片",   rar:0, icon:"▲", desc:"連射速度 +8%",          mod:{ rate:.08 } },
-  { id:"st_burn", name:"炎の欠片",     rar:0, icon:"◆", desc:"燃焼ダメージ +15%",     mod:{ burn:.15 } },
-  { id:"st_frost",name:"氷の欠片",     rar:0, icon:"♦", desc:"氷結の弱点倍率 +0.1",   mod:{ frostV:.1 } },
-  { id:"st_shock",name:"雷の欠片",     rar:0, icon:"✦", desc:"放電率 +6%",            mod:{ shockP:6 } },
-  { id:"st_acid", name:"酸の欠片",     rar:0, icon:"●", desc:"腐食ダメージ +15%",     mod:{ acid:.15 } },
-  { id:"st_hp2",  name:"巨人の骨",     rar:0, icon:"■", desc:"最大HP +12%",           mod:{ hp:.12 } },
-  // ---- レア (16) ----
-  { id:"r_dmg",   name:"戦神の護石",   rar:1, icon:"◆", desc:"攻撃力 +20%",           mod:{ dmg:.20 } },
-  { id:"r_hp",    name:"不屈の心臓",   rar:1, icon:"●", desc:"最大HP +30%",           mod:{ hp:.30 } },
-  { id:"r_reg",   name:"再生の心臓",   rar:1, icon:"✦", desc:"HP回復 +100%、常時回復 0.3%/秒", mod:{ regen:1.0, regenAlways:.3 } },
-  { id:"r_spd",   name:"疾風の心臓",   rar:1, icon:"▲", desc:"移動速度 +18%、連射 +10%", mod:{ spd:.18, rate:.10 } },
-  { id:"r_coin",  name:"黄金の心臓",   rar:1, icon:"⬟", desc:"コイン +25%",           mod:{ coin:.25 } },
-  { id:"r_xp",    name:"賢者の心臓",   rar:1, icon:"♦", desc:"経験値 +25%",           mod:{ xp:.25 } },
-  { id:"r_elem",  name:"元素の心臓",   rar:1, icon:"❖", desc:"元素ダメージ +25%",     mod:{ elem:.25 } },
-  { id:"r_drop",  name:"豊穣の心臓",   rar:1, icon:"♜", desc:"素材ドロップ +25%",     mod:{ drop:.25 } },
-  { id:"r_bot",   name:"司令の心臓",   rar:1, icon:"⚙", desc:"全ボット +22%",         mod:{ bot:.22, cbot:.22 } },
-  { id:"r_crit",  name:"会心の心臓",   rar:1, icon:"★", desc:"会心率 +6%、会心ダメージ +40%", mod:{ crit:6, critd:40 } },
-  { id:"r_burn",  name:"炎帝の欠片",   rar:1, icon:"◆", desc:"燃焼ダメージ +35%",     mod:{ burn:.35 } },
-  { id:"r_frost", name:"氷帝の欠片",   rar:1, icon:"♦", desc:"氷結の弱点倍率 +0.2",   mod:{ frostV:.2 } },
-  { id:"r_shock", name:"雷帝の欠片",   rar:1, icon:"✦", desc:"放電率 +12%",           mod:{ shockP:12 } },
-  { id:"r_acid",  name:"腐食の心臓",   rar:1, icon:"●", desc:"腐食ダメージ +35%",     mod:{ acid:.35 } },
-  { id:"r_deep",  name:"大地の心臓",   rar:1, icon:"■", desc:"深い場所ほど攻撃 +35%", mod:{ deep:.35 } },
-  { id:"r_shield",name:"結界の欠片",   rar:1, icon:"⬢", desc:"20秒ごとに攻撃を1回防ぐ結界", mod:{}, special:"shield" },
-  // ---- エピック (9) ----
-  { id:"e_dmg",   name:"破壊神の核",   rar:2, icon:"◆", desc:"攻撃力 +40%",           mod:{ dmg:.40 } },
-  { id:"e_phoe",  name:"不死鳥の核",   rar:2, icon:"●", desc:"最大HP +25%、常時回復 1%/秒", mod:{ hp:.25, regenAlways:1.0 } },
-  { id:"e_rate",  name:"時詠みの核",   rar:2, icon:"▲", desc:"連射速度 +25%",         mod:{ rate:.25 } },
-  { id:"e_harv",  name:"星屑の収穫者", rar:2, icon:"♜", desc:"モンスター撃破で看板素材が必ず落ちる。素材ドロップ +15%", mod:{ drop:.15 }, special:"mobDrop" },
-  { id:"e_zap",   name:"連鎖の稲妻",   rar:2, icon:"✦", desc:"命中時12%で近くのブロックへ雷撃 (30%ダメージ)", mod:{}, special:"zap" },
-  { id:"e_meteor",name:"隕石の腕輪",   rar:2, icon:"⬟", desc:"12秒ごとに隕石が落ちる", mod:{}, special:"meteor" },
-  { id:"e_sense", name:"宝箱探知機",   rar:2, icon:"⬢", desc:"ミニマップに宝箱が表示される", mod:{}, special:"chestSense" },
-  { id:"e_coin",  name:"商神の核",     rar:2, icon:"⬟", desc:"コイン +45%、自動売却 +50%", mod:{ coin:.45, sell:.5 } },
-  { id:"e_deep",  name:"深淵の核",     rar:2, icon:"■", desc:"深い場所ほど攻撃 +80%", mod:{ deep:.80 } },
+  { id:"st_dmg",  name:"旅人の護石",   rar:0, icon:"◆", desc:"攻撃力 +15%",           mod:{ dmg:.15 } },
+  { id:"st_def",  name:"鉄壁の欠片",   rar:0, icon:"■", desc:"受けるダメージ -8%、最大HP +5%", mod:{ def:.08, hp:.05 } },
+  { id:"st_spd",  name:"疾風の羽根",   rar:0, icon:"▲", desc:"移動速度 +15%、連射速度 +5%", mod:{ spd:.15, rate:.05 } },
+  { id:"st_mag",  name:"磁石の欠片",   rar:0, icon:"⬢", desc:"コイン吸引範囲 +50%",   mod:{ magnet:.50 } },
+  { id:"st_hp",   name:"小さな心臓",   rar:0, icon:"●", desc:"最大HP +20%",           mod:{ hp:.20 } },
+  { id:"st_reg",  name:"再生の雫",     rar:0, icon:"✦", desc:"HP回復速度 +80%、常時回復 0.2%/秒", mod:{ regen:.80, regenAlways:.2 } },
+  { id:"st_coin", name:"商人の小判",   rar:0, icon:"⬟", desc:"コイン +20%",           mod:{ coin:.20 } },
+  { id:"st_xp",   name:"学びの欠片",   rar:0, icon:"♦", desc:"経験値 +20%",           mod:{ xp:.20 } },
+  { id:"st_elem", name:"元素の欠片",   rar:0, icon:"❖", desc:"元素ダメージ +20%",     mod:{ elem:.20 } },
+  { id:"st_drop", name:"掘削の欠片",   rar:0, icon:"♜", desc:"素材ドロップ +20%",     mod:{ drop:.20 } },
+  { id:"st_bot",  name:"ボットの歯車", rar:0, icon:"⚙", desc:"攻撃ボット +20%",       mod:{ bot:.20 } },
+  { id:"st_cbot", name:"回収の歯車",   rar:0, icon:"⚙", desc:"回収ボット +20%、コイン +5%", mod:{ cbot:.20, coin:.05 } },
+  { id:"st_crit", name:"鋭い欠片",     rar:0, icon:"★", desc:"会心率 +5%、会心ダメージ +15%", mod:{ crit:5, critd:15 } },
+  { id:"st_critd",name:"重い欠片",     rar:0, icon:"★", desc:"会心ダメージ +50%",     mod:{ critd:50 } },
+  { id:"st_rate", name:"速射の欠片",   rar:0, icon:"▲", desc:"連射速度 +15%",         mod:{ rate:.15 } },
+  { id:"st_burn", name:"炎の欠片",     rar:0, icon:"◆", desc:"燃焼ダメージ +30%",     mod:{ burn:.30 } },
+  { id:"st_frost",name:"氷の欠片",     rar:0, icon:"♦", desc:"氷結の弱点倍率 +0.2、元素ダメージ +5%", mod:{ frostV:.2, elem:.05 } },
+  { id:"st_shock",name:"雷の欠片",     rar:0, icon:"✦", desc:"放電率 +10%",           mod:{ shockP:10 } },
+  { id:"st_acid", name:"酸の欠片",     rar:0, icon:"●", desc:"腐食ダメージ +30%",     mod:{ acid:.30 } },
+  { id:"st_hp2",  name:"巨人の骨",     rar:0, icon:"■", desc:"最大HP +20%、受けるダメージ -3%", mod:{ hp:.20, def:.03 } },
+  // ---- レア (15) ----
+  { id:"r_dmg",   name:"戦神の護石",   rar:1, icon:"◆", desc:"攻撃力 +30%",           mod:{ dmg:.30 } },
+  { id:"r_hp",    name:"不屈の心臓",   rar:1, icon:"●", desc:"最大HP +45%、常時回復 0.2%/秒", mod:{ hp:.45, regenAlways:.2 } },
+  { id:"r_reg",   name:"再生の心臓",   rar:1, icon:"✦", desc:"HP回復 +150%、常時回復 0.5%/秒", mod:{ regen:1.5, regenAlways:.5 } },
+  { id:"r_spd",   name:"疾風の心臓",   rar:1, icon:"▲", desc:"移動速度 +25%、連射 +15%", mod:{ spd:.25, rate:.15 } },
+  { id:"r_coin",  name:"黄金の心臓",   rar:1, icon:"⬟", desc:"コイン +40%",           mod:{ coin:.40 } },
+  { id:"r_xp",    name:"賢者の心臓",   rar:1, icon:"♦", desc:"経験値 +40%",           mod:{ xp:.40 } },
+  { id:"r_elem",  name:"元素の心臓",   rar:1, icon:"❖", desc:"元素ダメージ +40%",     mod:{ elem:.40 } },
+  { id:"r_drop",  name:"豊穣の心臓",   rar:1, icon:"♜", desc:"素材ドロップ +40%",     mod:{ drop:.40 } },
+  { id:"r_bot",   name:"司令の心臓",   rar:1, icon:"⚙", desc:"全ボット +35%",         mod:{ bot:.35, cbot:.35 } },
+  { id:"r_crit",  name:"会心の心臓",   rar:1, icon:"★", desc:"会心率 +8%、会心ダメージ +60%", mod:{ crit:8, critd:60 } },
+  { id:"r_burn",  name:"炎帝の欠片",   rar:1, icon:"◆", desc:"燃焼ダメージ +60%",     mod:{ burn:.60 } },
+  { id:"r_frost", name:"氷帝の欠片",   rar:1, icon:"♦", desc:"氷結の弱点倍率 +0.35、元素ダメージ +10%", mod:{ frostV:.35, elem:.10 } },
+  { id:"r_shock", name:"雷帝の欠片",   rar:1, icon:"✦", desc:"放電率 +18%",           mod:{ shockP:18 } },
+  { id:"r_acid",  name:"腐食の心臓",   rar:1, icon:"●", desc:"腐食ダメージ +60%",     mod:{ acid:.60 } },
+  { id:"r_deep",  name:"大地の心臓",   rar:1, icon:"■", desc:"深い場所ほど攻撃 +55%", mod:{ deep:.55 } },
+  // ---- エピック (10) ----
+  { id:"r_shield",name:"結界の欠片",   rar:2, icon:"⬢", desc:"12秒ごとに攻撃を1回防ぐ結界、受けるダメージ -5%", mod:{ def:.05 }, special:"shield" },
+  { id:"e_dmg",   name:"破壊神の核",   rar:2, icon:"◆", desc:"攻撃力 +60%",           mod:{ dmg:.60 } },
+  { id:"e_phoe",  name:"不死鳥の核",   rar:2, icon:"●", desc:"最大HP +40%、常時回復 1.5%/秒", mod:{ hp:.40, regenAlways:1.5 } },
+  { id:"e_rate",  name:"時詠みの核",   rar:2, icon:"▲", desc:"連射速度 +40%",         mod:{ rate:.40 } },
+  { id:"e_harv",  name:"星屑の収穫者", rar:2, icon:"♜", desc:"モンスター撃破で看板素材が必ず落ちる。素材ドロップ +30%", mod:{ drop:.30 }, special:"mobDrop" },
+  { id:"e_zap",   name:"連鎖の稲妻",   rar:2, icon:"✦", desc:"命中時18%で近くのブロックへ雷撃 (50%ダメージ)", mod:{}, special:"zap" },
+  { id:"e_meteor",name:"隕石の腕輪",   rar:2, icon:"⬟", desc:"8秒ごとに隕石が落ち、大ダメージを与える", mod:{}, special:"meteor" },
+  { id:"e_sense", name:"宝箱探知機",   rar:2, icon:"⬢", desc:"ミニマップに宝箱が表示される。コイン +15%、素材ドロップ +15%", mod:{ coin:.15, drop:.15 }, special:"chestSense" },
+  { id:"e_coin",  name:"商神の核",     rar:2, icon:"⬟", desc:"コイン +70%、自動売却 +100%", mod:{ coin:.70, sell:1.0 } },
+  { id:"e_deep",  name:"深淵の核",     rar:2, icon:"■", desc:"深い場所ほど攻撃 +120%", mod:{ deep:1.20 } },
   // ---- レジェンダリー (5) ----
-  { id:"l_sun",   name:"太陽の核",     rar:3, icon:"☀", desc:"攻撃 +35%、元素 +35%、燃焼 +50%", mod:{ dmg:.35, elem:.35, burn:.50 } },
-  { id:"l_tree",  name:"世界樹の核",   rar:3, icon:"●", desc:"最大HP +60%、回復 +150%、常時回復 0.5%/秒", mod:{ hp:.60, regen:1.5, regenAlways:.5 } },
-  { id:"l_end",   name:"終焉の核",     rar:3, icon:"◆", desc:"攻撃範囲 +1、攻撃力 +25%", mod:{ splash:1, dmg:.25 } },
-  { id:"l_revive",name:"不死の核",     rar:3, icon:"✚", desc:"受けるダメージ -15%。倒れても50%でその場に復活", mod:{ def:.15 }, special:"revive" },
-  { id:"l_origin",name:"原初の核",     rar:3, icon:"◉", desc:"攻撃・コイン・経験値・ボット・ドロップ すべて +20%", mod:{ dmg:.20, coin:.20, xp:.20, bot:.20, cbot:.20, drop:.20 } },
-  // ---- LEGENDARY (10) ---- かなり強力。color は固有のテーマカラー (一覧・獲得演出・固有演出で使う)
-  { id:"lg_heart",  name:"惑星の心臓",   rar:4, icon:"♥", color:"#ff5a7a", desc:"全ダメージ ×1.5。4秒ごとに鼓動の衝撃波が広がり、周囲のブロックとモンスターに大ダメージ", mod:{ dmgMul:.5 } },
-  { id:"lg_gold",   name:"黄金の特異点", rar:4, icon:"✸", color:"#ffd60a", desc:"コイン獲得 ×2。画面内のコインが自機へ強力に引き寄せられる", mod:{ coinMul:1 } },
+  { id:"l_sun",   name:"太陽の核",     rar:3, icon:"☀", desc:"攻撃 +50%、元素 +50%、燃焼 +80%、腐食 +50%", mod:{ dmg:.50, elem:.50, burn:.80, acid:.50 } },
+  { id:"l_tree",  name:"世界樹の核",   rar:3, icon:"●", desc:"最大HP +90%、回復 +250%、常時回復 1%/秒", mod:{ hp:.90, regen:2.5, regenAlways:1.0 } },
+  { id:"l_end",   name:"終焉の核",     rar:3, icon:"◆", desc:"攻撃範囲 +1、攻撃力 +40%、連射速度 +15%", mod:{ splash:1, dmg:.40, rate:.15 } },
+  { id:"l_revive",name:"不死の核",     rar:3, icon:"✚", desc:"受けるダメージ -20%。倒れても75%の確率でHP75%でその場に復活", mod:{ def:.20 }, special:"revive" },
+  { id:"l_origin",name:"原初の核",     rar:3, icon:"◉", desc:"攻撃・コイン・経験値・ボット・ドロップ・元素 すべて +35%", mod:{ dmg:.35, coin:.35, xp:.35, bot:.35, cbot:.35, drop:.35, elem:.35 } },
+  // ---- ミシック MYTHIC (10) ---- 最上位。color は固有のテーマカラー (一覧・獲得演出・固有演出で使う)
+  { id:"lg_heart",  name:"惑星の心臓",   rar:4, icon:"♥", color:"#ff5a7a", desc:"全ダメージ ×1.65。4秒ごとに鼓動の衝撃波が広がり、周囲のブロックとモンスターに大ダメージ", mod:{ dmgMul:.65 } },
+  { id:"lg_gold",   name:"黄金の特異点", rar:4, icon:"✸", color:"#ffd60a", desc:"コイン獲得 ×2.5。画面内のコインが自機へ強力に引き寄せられる", mod:{ coinMul:1.5 } },
   { id:"lg_nova",   name:"超新星の核",   rar:4, icon:"✹", color:"#ffa502", desc:"ブロックを50個壊すごとに超新星爆発。大範囲をまとめて破壊する", mod:{} },
-  { id:"lg_gear",   name:"時空の歯車",   rar:4, icon:"◔", color:"#7df0ff", desc:"発射速度 +30%。移動する自機に残像がつく", mod:{ rate:.30 } },
-  { id:"lg_crown",  name:"元素の王冠",   rar:4, icon:"♛", color:"#c792ff", desc:"全元素の付与率 +15%、状態異常ダメージ ×1.5。プリズムのオーラをまとう", mod:{} },
-  { id:"lg_void",   name:"虚無の単眼",   rar:4, icon:"◐", color:"#b06eff", desc:"クリティカル率 +20%、クリティカルダメージは最低でも ×3。紫の特大バーストで炸裂する", mod:{} },
-  { id:"lg_gaia",   name:"大地母神の腕", rar:4, icon:"✿", color:"#57e39a", desc:"ブロック破壊時 25%で、上下左右の隣接ブロックも一緒に砕く", mod:{} },
-  { id:"lg_phoenix",name:"不死鳥の灰",   rar:4, icon:"✜", color:"#ff7b3f", desc:"倒れても全HPで復活し、周囲に大爆発 (45秒に1回)。HP回復速度 ×3", mod:{ regen:2 } },
-  { id:"lg_scepter",name:"星屑の王笏",   rar:4, icon:"⚜", color:"#ffe9a8", desc:"経験値 ×2。レベルアップ時に星が降り注ぎ、全モンスターに大ダメージ", mod:{ xpMul:1 } },
-  { id:"lg_dice",   name:"混沌のサイコロ", rar:4, icon:"⚄", color:"#ff5a4a", desc:"命中時 5%でサイコロが転がり、強撃×5 / コインバースト / 全体凍結 / 大爆発 のどれかが発動", mod:{} },
+  { id:"lg_gear",   name:"時空の歯車",   rar:4, icon:"◔", color:"#7df0ff", desc:"発射速度 +40%。移動する自機に残像がつく", mod:{ rate:.40 } },
+  { id:"lg_crown",  name:"元素の王冠",   rar:4, icon:"♛", color:"#c792ff", desc:"全元素の付与率 +20%、状態異常ダメージ ×1.75。プリズムのオーラをまとう", mod:{} },
+  { id:"lg_void",   name:"虚無の単眼",   rar:4, icon:"◐", color:"#b06eff", desc:"クリティカル率 +25%、クリティカルダメージは最低でも ×3。紫の特大バーストで炸裂する", mod:{} },
+  { id:"lg_gaia",   name:"大地母神の腕", rar:4, icon:"✿", color:"#57e39a", desc:"ブロック破壊時 30%で、上下左右の隣接ブロックも一緒に砕く", mod:{} },
+  { id:"lg_phoenix",name:"不死鳥の灰",   rar:4, icon:"✜", color:"#ff7b3f", desc:"倒れても全HPで復活し、周囲に大爆発 (45秒に1回)。HP回復速度 ×4", mod:{ regen:3 } },
+  { id:"lg_scepter",name:"星屑の王笏",   rar:4, icon:"⚜", color:"#ffe9a8", desc:"経験値 ×2.5。レベルアップ時に星が降り注ぎ、全モンスターに大ダメージ", mod:{ xpMul:1.5 } },
+  { id:"lg_dice",   name:"混沌のサイコロ", rar:4, icon:"⚄", color:"#ff5a4a", desc:"命中時 7%でサイコロが転がり、強撃×5 / コインバースト / 全体凍結 / 大爆発 のどれかが発動", mod:{} },
 ];
 const ART_BY_ID = {};
 for (const a of ARTIFACTS) ART_BY_ID[a.id] = a;
@@ -111,8 +112,8 @@ const CHEST_DEPTHS = [0.35, 0.65, 0.92];
 const chests = [];          // {si, ci, gx, gy, x, y}
 const openedChests = new Set(window.SAVED && SAVED.world && SAVED.world.chests || []);   // 開封済みの宝箱 (セーブに残る)
 let chestsInit = false;
-let artMeteorT = 12, artShieldT = 0, artZapBusy = false;
-// LEGENDARY の継続効果用 (セーブしない)
+let artMeteorT = 8, artShieldT = 0, artZapBusy = false;
+// ミシックの継続効果用 (セーブしない)
 let artHeartT = 4, artPhoenixT = 0, novaArtN = 0, novaBusy = false;
 let diceFxT = 0, diceSettled = 1, diceColor = "#ffffff";
 const playerTrail = [];   // 時空の歯車: 残像用に自機の直近位置を保持 (最大9件、追加確保なしで使い回す)
@@ -173,20 +174,20 @@ function updateArtifacts(dt){
   if (artSpecial("meteor")){
     artMeteorT -= dt;
     if (artMeteorT <= 0){
-      artMeteorT = 12;
+      artMeteorT = 8;
       const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 380;
       const tx = player.x + Math.cos(a) * d, ty = player.y + Math.sin(a) * d;
       const idx = findNearestBlock(tx, ty, 420);
       if (idx >= 0){
         const bx = g2w(idx % D), by = g2w((idx / D) | 0);
-        rings.push({ x: bx, y: by, r: 150, t: performance.now(), color: "255,170,80", dur: 480 });
-        damageRadius(bx, by, 130, shotDamage() * 6);
+        rings.push({ x: bx, y: by, r: 175, t: performance.now(), color: "255,170,80", dur: 480 });
+        damageRadius(bx, by, 160, shotDamage() * 10);
       }
     }
   }
   // 結界の欠片: 20秒で再展開
   if (artShieldT > 0) artShieldT -= dt;
-  // ---- LEGENDARY の継続効果 (タイマーは既存の更新ループに相乗り) ----
+  // ---- ミシックの継続効果 (タイマーは既存の更新ループに相乗り) ----
   if (artPhoenixT > 0) artPhoenixT -= dt;   // 不死鳥の灰: 復活のクールダウン
   if (diceFxT > 0) diceFxT -= dt;           // 混沌のサイコロ: 演出タイマー
   if (artHas("lg_heart") && started){       // 惑星の心臓: 4秒ごとに鼓動の衝撃波
@@ -199,12 +200,12 @@ function updateArtifacts(dt){
   } else if (playerTrail.length) playerTrail.length = 0;
 }
 
-// ---------- LEGENDARY: 発動系の効果と演出 ----------
+// ---------- ミシック: 発動系の効果と演出 ----------
 // 惑星の心臓: 鼓動の衝撃波 (二重のリング + 範囲ダメージ。モンスターにも当たる)
 function heartPulse(){
   rings.push({ x: player.x, y: player.y, r: 300, t: performance.now(), color: "255,90,122", dur: 650 });
   rings.push({ x: player.x, y: player.y, r: 185, t: performance.now(), color: "255,160,180", dur: 480 });
-  rawDamage(() => damageRadius(player.x, player.y, 280, playerDamage() * 4));
+  rawDamage(() => damageRadius(player.x, player.y, 280, playerDamage() * 6));
   shake = Math.max(shake, 0.1);
 }
 // 超新星の核: 50個破壊ごとの大爆発 (虹色の三重リング + 星バースト)
@@ -213,7 +214,7 @@ function supernovaAt(x, y){
   rings.push({ x, y, r: BS * 5.5, t: performance.now(), color: "120,255,140", dur: 600 });
   rings.push({ x, y, r: BS * 4,   t: performance.now(), color: "130,160,255", dur: 500 });
   burstAt(x, y, { accent: "#ffa502", c2: "#ffffff", burst: "star" }, null);
-  damageRadius(x, y, BS * 6, playerDamage() * 12);
+  damageRadius(x, y, BS * 6, playerDamage() * 16);
   shake = Math.max(shake, 0.4); sndBoom();
   toast("超新星爆発！");
 }
@@ -222,7 +223,7 @@ function phoenixBlast(){
   for (let k = 0; k < 3; k++) burstAt(player.x, player.y, { accent: "#ff7b3f", c2: "#ffd60a", burst: "petal" }, null);
   rings.push({ x: player.x, y: player.y, r: 340, t: performance.now(), color: "255,123,63", dur: 620 });
   rings.push({ x: player.x, y: player.y, r: 210, t: performance.now(), color: "255,214,10", dur: 460 });
-  rawDamage(() => damageRadius(player.x, player.y, 320, playerDamage() * 10));
+  rawDamage(() => damageRadius(player.x, player.y, 320, playerDamage() * 12));
   shake = Math.max(shake, 0.35); sndBoom();
 }
 // 星屑の王笏: レベルアップ時に星が降り注ぐ (ビーム + リング + 大ダメージ、同時演出は24体まで)
@@ -232,7 +233,7 @@ function scepterStarfall(){
     if (m.dead) continue;
     beams.push({ x1: m.x + 300, y1: m.y - 900, x2: m.x, y2: m.y, t: performance.now(), w: 4, color: "#ffe9a8", life: 220 });
     rings.push({ x: m.x, y: m.y, r: 90, t: performance.now(), color: "255,233,168", dur: 400 });
-    damageMob(m, playerDamage() * 15, null);
+    damageMob(m, playerDamage() * 20, null);
     if (++n >= 24) break;
   }
   if (n) toast(`星屑の王笏: 星が ${n} 体を貫いた！`);
@@ -284,7 +285,7 @@ function chaosDice(idx, gx, gy, dmg){
   }
 }
 
-// ---------- LEGENDARY: 常時演出の描画 (game.js の draw から自機描画の直後に呼ばれる) ----------
+// ---------- ミシック: 常時演出の描画 (game.js の draw から自機描画の直後に呼ばれる) ----------
 // パーティクルは新規配列を作らず、その場のプリミティブ描画だけ。shadowBlur は使わない
 const DICE_PIPS = { 1:[[0,0]], 2:[[-.45,-.45],[.45,.45]], 3:[[-.45,-.45],[0,0],[.45,.45]], 4:[[-.45,-.45],[.45,-.45],[-.45,.45],[.45,.45]], 5:[[-.45,-.45],[.45,-.45],[0,0],[-.45,.45],[.45,.45]], 6:[[-.45,-.5],[.45,-.5],[-.45,0],[.45,0],[-.45,.5],[.45,.5]] };
 function drawArtifactsFx(now, toScreen){
@@ -364,15 +365,15 @@ let artGetTimer = 0;
 function showArtGet(art){
   const el = $("artGet");
   if (!el) return;
-  const R = RARITY[art.rar], col = art.color || R.color, legend = art.rar === 4;
+  const R = RARITY[art.rar], col = art.color || R.color, mythic = art.rar === 4;
   el.innerHTML = `<div class="ag-rar" style="color:${col}">${R.name} アーティファクト獲得！</div>` +
     `<div class="ag-name"><span class="ag-icon" style="color:${col}">${art.icon}</span>${art.name}</div>` +
     `<div class="ag-desc">${art.desc}</div><div class="ag-count">コレクション ${artOwnedCount()} / ${ARTIFACTS.length}</div>`;
-  el.style.borderColor = legend ? "" : col;   // LEGENDARY は CSS の虹枠が担当するので inline では塗らない
-  el.classList.toggle("legendary", legend);   // LEGENDARY は虹色に光る専用枠
+  el.style.borderColor = mythic ? "" : col;   // ミシックは CSS の虹枠が担当するので inline では塗らない
+  el.classList.toggle("mythic", mythic);      // ミシックは虹色に光る専用枠
   el.classList.add("show");
   clearTimeout(artGetTimer);
-  artGetTimer = setTimeout(() => { el.classList.remove("show"); el.classList.remove("legendary"); }, legend ? 6000 : 4600);
+  artGetTimer = setTimeout(() => { el.classList.remove("show"); el.classList.remove("mythic"); }, mythic ? 6000 : art.rar === 3 ? 5200 : 4600);
 }
 
 // ---------- 管理画面 ----------
@@ -409,11 +410,12 @@ function renderArtifacts(){
     (specials.length ? `<div class="art-sum-line">特殊効果: ${specials.join(" / ")}</div>` : "") +
     `<div class="art-sum-note">宝箱は各衛星に3つ。惑星が再生すると宝箱も戻るので、繰り返し挑戦すればコンプリートできる。</div>`;
   grid.innerHTML = ARTIFACTS.map(a => {
-    const owned = !!state.artifacts[a.id], R = RARITY[a.rar], col = a.color || R.color, legend = a.rar === 4;
-    return `<div class="art-card ${owned ? "" : "locked"}${legend ? " legendary" : ""}"${legend ? "" : ` style="border-color:${owned ? col : "#3a3f46"}"`}>
+    const owned = !!state.artifacts[a.id], R = RARITY[a.rar], col = a.color || R.color, mythic = a.rar === 4;
+    // 枠色はティア色で統一する (未所持でも色で格が分かる)。ミシックだけ CSS の虹枠が担当
+    return `<div class="art-card rar-${a.rar} ${owned ? "" : "locked"}${mythic ? " mythic" : ""}"${mythic ? "" : ` style="border-color:${col}"`}>
       <div class="art-icon" style="color:${owned ? col : "#565d66"}">${owned ? a.icon : "?"}</div>
       <div class="art-main"><div class="art-name" style="color:${owned ? col : "#8a929c"}">${owned ? a.name : "？？？"}</div>
-      <div class="art-rar">${R.name}</div><div class="art-desc">${owned ? a.desc : "まだ見つけていない"}</div></div></div>`;
+      <div class="art-rar" style="color:${col}">${R.name}</div><div class="art-desc">${owned ? a.desc : "まだ見つけていない"}</div></div></div>`;
   }).join("");
 }
 document.addEventListener("DOMContentLoaded", () => {});

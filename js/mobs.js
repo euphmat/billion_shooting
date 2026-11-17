@@ -141,7 +141,7 @@ function mobFire(m, T, baseA){   // パターンに応じて撃つ (baseA = 自�
 function onLevelUpHeal(){ state.hp = playerMaxHP(); }
 function damagePlayer(d){
   if (!started || player.iframes > 0 || state.hp <= 0) return;
-  if (artSpecial("shield") && artShieldT <= 0){ artShieldT = 20; hurtFlash = Math.max(hurtFlash, 0.35); toast("結界が攻撃を防いだ"); return; }   // 結界の欠片
+  if (artSpecial("shield") && artShieldT <= 0){ artShieldT = 12; hurtFlash = Math.max(hurtFlash, 0.35); toast("結界が攻撃を防いだ"); return; }   // 結界の欠片
   d *= (1 - Math.min(0.6, artVal("def"))) * (1 - 0.04 * (state.botArmor || 0));
   { const pfx = dungeonFxAt(w2g(player.x), w2g(player.y)); if (pfx) d *= pfx.hurt; }   // ダンジョン固有効果: 被ダメ倍率   // アーティファクト軽減 × 衛星装甲
   state.hp = Math.max(0, state.hp - d);
@@ -151,7 +151,7 @@ function damagePlayer(d){
       artPhoenixT = 45; state.hp = playerMaxHP(); player.iframes = 2.5; hurtFlash = 0; hudDirty = true;
       phoenixBlast(); toast("不死鳥の灰が燃え上がり、蘇った！"); return;
     }
-    if (artSpecial("revive") && Math.random() < 0.5){ state.hp = Math.round(playerMaxHP() * 0.5); player.iframes = 2; toast("不死の核が蘇らせた！"); return; }   // 不死の核
+    if (artSpecial("revive") && Math.random() < 0.75){ state.hp = Math.round(playerMaxHP() * 0.75); player.iframes = 2; toast("不死の核が蘇らせた！"); return; }   // 不死の核
     respawnPlayer();
   }
 }

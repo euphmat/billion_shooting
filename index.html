@@ -15,8 +15,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BILLION">
-<link rel="stylesheet" href="css/style.css?v=76">
-<link rel="stylesheet" href="css/mobile.css?v=76">
+<link rel="stylesheet" href="css/style.css?v=77">
+<link rel="stylesheet" href="css/mobile.css?v=77">
 </head>
 <body>
 <div id="app">
@@ -54,6 +54,7 @@
         <button id="respecBtn">振り直し</button>
         <button id="treeClose" class="icon-btn" aria-label="閉じる">×</button>
       </div>
+      <div id="treeStats"></div>
       <div id="treeView"><div id="treeWorld"></div></div>
       <div id="treeDetail"></div>
     </div>
@@ -269,21 +270,21 @@
 <div id="tooltip"></div>
 <!-- セーブ (IndexedDB) を読み終えてからゲーム本体を読み込む。
      store.js だけ同期で読み、残りは SaveDB.boot が記述順どおりに実行する -->
-<script src="js/store.js?v=76"></script>
+<script src="js/store.js?v=77"></script>
 <script>
 SaveDB.boot([
-  "js/materials.js?v=76",
-  "js/planet.js?v=76",
-  "js/core.js?v=76",
-  "js/audio.js?v=76",
-  "js/skills.js?v=76",
-  "js/ui.js?v=76",
-  "js/mobs.js?v=76",
-  "js/artifacts.js?v=76",
-  "js/game.js?v=76",
-  "js/skillfx.js?v=76",
-  "js/skilltree.js?v=76",
-  "js/mobile.js?v=76",
+  "js/materials.js?v=77",
+  "js/planet.js?v=77",
+  "js/core.js?v=77",
+  "js/audio.js?v=77",
+  "js/skills.js?v=77",
+  "js/ui.js?v=77",
+  "js/mobs.js?v=77",
+  "js/artifacts.js?v=77",
+  "js/game.js?v=77",
+  "js/skillfx.js?v=77",
+  "js/skilltree.js?v=77",
+  "js/mobile.js?v=77",
 ]);
 </script>
 </body>

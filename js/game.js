@@ -247,27 +247,29 @@ function damageBlock(idx, dmg, splash){
   if (cur <= 0) onBlockBroken(idx); else { damagedMap.set(idx, cur); worldDirty = true; touchBlock(idx); }
   if (top) skillAfterHit(idx, gx, gy, dmg, cur);
   if (top && cur > 0 && curFx){
-    if (curFx.burn && (burns.size < 800 || burns.has(idx))) burns.set(idx, { d: dmg * curFx.burn * burnSetMul(), t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn" });   // 燃焼
-    if (curFx.acid && (burns.size < 800 || burns.has(idx))) burns.set(idx, { d: dmg * curFx.acid * elemMul() * (sk("b_acid") ? 1.5 : 1) * (1 + artVal("acid")), t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" });   // 腐食 (長く溶ける)
-    if (curFx.radiation && (burns.size < 800 || burns.has(idx))) burns.set(idx, { d: dmg * curFx.radiation * elemMul(), t: 4, rad: true, k: "rad" });   // 放射 (壊れると隣へ移る)
+    if (curFx.burn && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * curFx.burn * burnSetMul(), t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn" }); bumpProc("burn"); }   // 燃焼
+    if (curFx.acid && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * curFx.acid * elemMul() * (sk("b_acid") ? 1.5 : 1) * (1 + artVal("acid")), t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" }); bumpProc("acid"); }   // 腐食 (長く溶ける)
+    if (curFx.radiation && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * curFx.radiation * elemMul(), t: 4, rad: true, k: "rad" }); bumpProc("rad"); }   // 放射 (壊れると隣へ移る)
     if (curFx.frost){
       if (sk("b_thermo") && burns.has(idx)){   // 熱衝撃: 燃焼中の氷結で大爆発 (両方消える)
         burns.delete(idx);
         rings.push({ x: g2w(gx), y: g2w(gy), r: BS * 2, t: nowMs, color: "255,150,60", dur: 300 });
         damageBlock(idx, blockMaxHP(gx, gy) * 0.15, 0);
+        bumpProc("thermo");
       } else if (frosts.size < 1500 || frosts.has(idx)){
         const freshFrost = !frosts.has(idx);
         frosts.set(idx, 3 + (sk("b_frost2") ? 2 : 0)); frostGen.set(idx, 0);   // 氷結 (直接当てたものは第0世代)
-        if (freshFrost && sk("b_permafrost")) for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && Math.random() < 0.5 && frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 2); frostGen.set(j, 1); } }   // 永久凍土 (伝播は1世代だけ)
+        bumpProc("frost");
+        if (freshFrost && sk("b_permafrost")) for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && Math.random() < 0.5 && frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 2); frostGen.set(j, 1); bumpProc("frost"); } }   // 永久凍土 (伝播は1世代だけ)
       }
     }
     if (curFx.bomb && !bombSet.has(idx) && bombs.length < 200){ bombSet.add(idx); bombs.push({ idx, t: 1.5, dmg: dmg * curFx.bomb }); }   // 時限爆弾
   }
   if (top && cur > 0 && dfx && dfx.proc && Math.random() < dfx.p){   // ダンジョン固有効果: 状態付与
     const k = dfx.proc === "random" ? ["burn","frost","shock"][Math.random() * 3 | 0] : dfx.proc;
-    if (k === "burn" && burns.size < 800) burns.set(idx, { d: dmg * 0.5, t: 3, k: "burn" });
-    else if (k === "acid" && burns.size < 800) burns.set(idx, { d: dmg * 0.4, t: 4, k: "acid" });
-    else if (k === "frost" && frosts.size < 1500){ frosts.set(idx, 3); frostGen.set(idx, 0); }
+    if (k === "burn" && burns.size < 800){ burns.set(idx, { d: dmg * 0.5, t: 3, k: "burn" }); bumpProc("burn"); }
+    else if (k === "acid" && burns.size < 800){ burns.set(idx, { d: dmg * 0.4, t: 4, k: "acid" }); bumpProc("acid"); }
+    else if (k === "frost" && frosts.size < 1500){ frosts.set(idx, 3); frostGen.set(idx, 0); bumpProc("frost"); }
     else if (k === "bomb" && !bombSet.has(idx) && bombs.length < 200){ bombSet.add(idx); bombs.push({ idx, t: 1.5, dmg: dmg * 2 }); }
     else if (k === "shock"){ for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) damageBlock(j, dmg * 0.3, 0); } }
   }
@@ -1007,7 +1009,7 @@ function frame(now){
   // 距離の比較は2乗のまま行い、平方根は必要なときだけ取る
   const goldSing = artHas("lg_gold");   // 黄金の特異点: 吸引範囲 ×6・吸引力も大幅アップ
   const mr = magnetRange() * (goldSing ? 6 : 1), mr2 = mr * mr, vac = coinBotVacuum(), vac2 = vac * vac, pull = coinBotPull(), touch2 = coinBotTouchR() ** 2;
-  const pPull = goldSing ? 6000 : 1400;
+  const pPull = goldSing ? 9000 : 1400;
   const damp = Math.pow(0.92, dt * 60);   // フレームレートに依らない減衰 (60fps で従来の 0.92)
   for (let i = coinsArr.length - 1; i >= 0; i--){
     const c = coinsArr[i];
