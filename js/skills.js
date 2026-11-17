@@ -380,7 +380,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
     artZapBusy = true;
     try {
       const cand = findNearestBlocks(g2w(gx), g2w(gy), 210, 1, new Set([idx]));
-      if (cand.length){ const j = cand[0]; beams.push({ x1: g2w(gx), y1: g2w(gy), x2: g2w(j % D), y2: g2w((j / D) | 0), t: performance.now(), w: 2, color: "#ffe14d" }); damageBlock(j, dmg * 0.5, 0); }
+      if (cand.length){ const j = cand[0]; beams.push({ x1: g2w(gx), y1: g2w(gy), x2: g2w(j % D), y2: g2w((j / D) | 0), t: performance.now(), w: 2, color: "#ffe14d" }); damageBlock(j, dmg * 0.5, 0); bumpArtProc("e_zap"); }
     } finally { artZapBusy = false; }
   }
   if (curPl && artHas("lg_dice") && Math.random() < 0.07) chaosDice(idx, gx, gy, dmg);   // 混沌のサイコロ: 自機の命中時 7%で発動
@@ -495,6 +495,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
   if (sk("a_meteor") && ++breakN >= (sk("a_meteor2") ? 120 : 300)){ breakN = 0; bumpProc("meteor"); meteors.push({ x, y, t: 0.6, r: BS * 4, dmg: playerDamage() * 10 }); }
   if (artHas("lg_nova") && !novaBusy && ++novaArtN >= 50){ novaArtN = 0; novaBusy = true; try { supernovaAt(x, y); } finally { novaBusy = false; } }   // 超新星の核: 50個破壊ごと
   if (artHas("lg_gaia") && !deep && !shattering && Math.random() < 0.30){   // 大地母神の腕: 隣接ブロックも一緒に砕く (緑の衝撃波)
+    bumpArtProc("lg_gaia");
     shattering = true;
     try { for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) damageBlock(j, blockMaxHP(gx + dx, gy + dy) * 10, 0); } }
     finally { shattering = false; }

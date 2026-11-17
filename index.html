@@ -15,8 +15,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BILLION">
-<link rel="stylesheet" href="css/style.css?v=77">
-<link rel="stylesheet" href="css/mobile.css?v=77">
+<link rel="stylesheet" href="css/style.css?v=78">
+<link rel="stylesheet" href="css/mobile.css?v=78">
 </head>
 <body>
 <div id="app">
@@ -43,6 +43,7 @@
     </div>
     <div id="hpHud"><span class="hp-label">HP</span><div class="hp-track"><div id="hpFill"></div></div><span id="hpText"></span></div>
     <div id="buffBox"></div>
+    <div id="artFeed" aria-hidden="true"></div>
     <!-- スキルツリー (開いている間はゲームが止まる) -->
     <div id="treeOverlay">
       <div class="tree-head">
@@ -270,21 +271,21 @@
 <div id="tooltip"></div>
 <!-- セーブ (IndexedDB) を読み終えてからゲーム本体を読み込む。
      store.js だけ同期で読み、残りは SaveDB.boot が記述順どおりに実行する -->
-<script src="js/store.js?v=77"></script>
+<script src="js/store.js?v=78"></script>
 <script>
 SaveDB.boot([
-  "js/materials.js?v=77",
-  "js/planet.js?v=77",
-  "js/core.js?v=77",
-  "js/audio.js?v=77",
-  "js/skills.js?v=77",
-  "js/ui.js?v=77",
-  "js/mobs.js?v=77",
-  "js/artifacts.js?v=77",
-  "js/game.js?v=77",
-  "js/skillfx.js?v=77",
-  "js/skilltree.js?v=77",
-  "js/mobile.js?v=77",
+  "js/materials.js?v=78",
+  "js/planet.js?v=78",
+  "js/core.js?v=78",
+  "js/audio.js?v=78",
+  "js/skills.js?v=78",
+  "js/ui.js?v=78",
+  "js/mobs.js?v=78",
+  "js/artifacts.js?v=78",
+  "js/game.js?v=78",
+  "js/skillfx.js?v=78",
+  "js/skilltree.js?v=78",
+  "js/mobile.js?v=78",
 ]);
 </script>
 </body>

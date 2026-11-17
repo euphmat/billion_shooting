@@ -238,6 +238,7 @@ function damageBlock(idx, dmg, splash){
     }
     if (e){ e.total += dealt; if (dmgCritFlag) e.crit = true; if (voidHit) e.void = true; }
     if (voidHit){   // 虚無の単眼: 紫のリング。星バーストは壊れた時だけ (頻度を抑える)
+      bumpArtProc("lg_void");
       rings.push({ x: g2w(gx), y: g2w(gy), r: BS * 2.4, t: nowMs, color: "176,110,255", dur: 380 });
       if (cur <= 0) burstAt(g2w(gx), g2w(gy), { accent: "#b06eff", c2: "#e9d5ff", burst: "star" }, null);
     }

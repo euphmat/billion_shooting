@@ -387,15 +387,50 @@ function weaponTileHTML(k){
     <span class="wt-act">${act}</span>
   </div>`;
 }
+/* ---------- 工房: 武器フィルタ (チップで一覧を絞り込む。状態は wFilter = UI 状態のみでセーブしない) ---------- */
+const WFILTERS = [["all", "すべて"], ["unowned", "未製作のみ"], ["craftable", "製作可能のみ"], ["owned", "所持済みのみ"]];
+function weaponFilterMatch(k, f){
+  if (f === "unowned") return !state.weaponsOwned[k];
+  if (f === "craftable") return !state.weaponsOwned[k] && canBuy(buyDef("craft:" + k));
+  if (f === "owned") return !!state.weaponsOwned[k];
+  return true;
+}
+function weaponFilterCounts(){
+  const c = { all: WEAPON_KEYS.length, unowned: 0, craftable: 0, owned: 0 };
+  for (const k of WEAPON_KEYS){
+    if (state.weaponsOwned[k]) c.owned++;
+    else { c.unowned++; if (canBuy(buyDef("craft:" + k))) c.craftable++; }
+  }
+  return c;
+}
+// 製作可能セットの指紋: 残高そのものではなく「作れる武器の集合」だけを見るので、
+// 素材・コインが境界を跨いだ時だけ変わる。renderPanels の署名に入れてフィルタ表示を追従させる
+function craftableSig(){
+  let s = "";
+  for (const k of WEAPON_KEYS) if (!state.weaponsOwned[k] && canBuy(buyDef("craft:" + k))) s += k + ",";
+  return s;
+}
+const WFILTER_EMPTY = {
+  unowned: "未製作の装備はない。全137種コンプリート！",
+  craftable: "今すぐ製作できる装備はない。素材とコインを集めよう。",
+  owned: "所持している装備はまだない。まずは1つ製作しよう。",
+};
 function craftPanelHTML(){
-  let html = `<div class="panel-intro"><b>番号が大きいほど強い</b> (実効DPS +11.5%ずつ)。</div>`;
+  const counts = weaponFilterCounts();
+  let html = `<div class="panel-intro"><b>番号が大きいほど強い</b> (実効DPS +11.5%ずつ)。</div>
+  <div class="filters wfilters">${WFILTERS.map(([f, label]) => `<button class="fchip${wFilter === f ? " on" : ""}" data-wfilter="${f}">${label} <span class="wf-n" data-wfcount="${f}">${counts[f]}</span></button>`).join("")}</div>`;
+  let shown = 0;
   WEAPON_TIERS.forEach((t, ti) => {
-    const tk = WEAPON_KEYS.filter(k => WEAPONS[k].tier === ti);
-    if (!tk.length) return;
-    const have = tk.filter(k => state.weaponsOwned[k]).length;
-    const craftable = tk.filter(k => !state.weaponsOwned[k] && canBuy(buyDef("craft:" + k))).length;
-    html += `<div class="tier-head open static"><span class="th-no">STAGE ${ti + 1}</span><span class="th-name">${t.name}</span><span class="th-note">${t.note}</span>${craftable ? `<span class="th-craft" title="製作できる装備">${craftable}</span>` : ""}<span class="th-count">${have}/${tk.length}</span></div><div class="wgrid">${tk.map(weaponTileHTML).join("")}</div>`;
+    const all = WEAPON_KEYS.filter(k => WEAPONS[k].tier === ti);
+    if (!all.length) return;
+    const tk = all.filter(k => weaponFilterMatch(k, wFilter));
+    if (!tk.length) return;   // フィルタで該当ゼロのステージは見出しごと隠す
+    shown += tk.length;
+    const have = all.filter(k => state.weaponsOwned[k]).length;
+    const craftable = all.filter(k => !state.weaponsOwned[k] && canBuy(buyDef("craft:" + k))).length;
+    html += `<div class="tier-head open static"><span class="th-no">STAGE ${ti + 1}</span><span class="th-name">${t.name}</span><span class="th-note">${t.note}</span>${craftable ? `<span class="th-craft" title="製作できる装備">${craftable}</span>` : ""}<span class="th-count">${have}/${all.length}</span></div><div class="wgrid">${tk.map(weaponTileHTML).join("")}</div>`;
   });
+  if (!shown) html += `<p class="lo-empty">${WFILTER_EMPTY[wFilter] || "該当する装備はない。"}</p>`;
   return html;
 }
 
@@ -723,7 +758,7 @@ function renderPanels(force){
   // 残高依存の表示は refreshAffordability() が DOM を作り替えずに更新する。
   const sig = [state.weapon, JSON.stringify(state.weaponsOwned), JSON.stringify(state.weaponLv), state.bots, state.coinBots, state.botLv,
     JSON.stringify(state.botLoadout), JSON.stringify(state.cbMod), JSON.stringify(state.off), state.lv, Object.keys(state.skills).length, Object.keys(state.seen).length,
-    botSlotSel, matFilter, matSel, matOwnedOnly, JSON.stringify(tierOpen), wQuery, wFilter, wSort, wGroup, wSel, state.botMode, state.cbMode].join("|");
+    botSlotSel, matFilter, matSel, matOwnedOnly, JSON.stringify(tierOpen), wQuery, wFilter, wSort, wGroup, wSel, state.botMode, state.cbMode, craftableSig()].join("|");
   if (sig !== lastPanelSig){ lastPanelSig = sig; for (const k in panelDirty) panelDirty[k] = true; }
   else if (!force && !panelDirty[activeTab]) return;
   if (force) for (const k in panelDirty) panelDirty[k] = true;
@@ -983,6 +1018,7 @@ $("resetBtn").addEventListener("click", () => {
 let updOpen = false;
 // 新しい順。行を足すときは先頭に追加し、core.js の GAME_VERSION を上げる
 const UPDATE_HISTORY = [
+  { v:78, text:"アーティファクトの発動を左上のフィードに表示 (発動カウンタ付き) ・ 工房に武器フィルタを追加 (未製作のみ/製作可能のみ/所持済みのみ)" },
   { v:77, text:"アーティファクト全60種の効果を強化し、レア度を5段階に整理 (コモン/レア/エピック/レジェンダリー/ミシック・枠に色) ・ スキルの発動が見えるように (発動カウンタ/取得前後の合計値/発動中マーク)" },
   { v:76, text:"スキルツリーの詳細を、クリックしたノードの近くに出るポップオーバーに変更" },
   { v:75, text:"レジェンダリーアーティファクト10種を追加 (全60種に) ・ ボットUI大改修 (装備モーダル/まとめ買い) ・ 状態異常をグラフィカルに表示" },

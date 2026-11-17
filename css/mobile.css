@@ -111,6 +111,10 @@ body.pwa-ios-mode .pwa-ios { display:block; }
   #buffBox span { font-size:10px; padding:2px 6px; }
   #buffBox .combo { font-size:16px; }
 
+  /* ---- 発動フィード: ターゲットバー (top:80px〜) の下に小さく ---- */
+  #artFeed { top:calc(150px + env(safe-area-inset-top)); left:calc(7px + env(safe-area-inset-left)); }
+  .art-chip { font-size:10.5px; padding:2px 7px 2px 6px; max-width:184px; }
+
   /* ---- ターゲットバー / トースト ---- */
   #targetBar { top:calc(80px + env(safe-area-inset-top)); width:auto; left:10px; right:10px; max-width:none; transform:none; padding:6px 10px 8px; }
   #targetText { font-size:13px; }
@@ -282,6 +286,8 @@ body.pwa-ios-mode .pwa-ios { display:block; }
   #minimap { width:76px; height:76px; bottom:calc(128px + env(safe-area-inset-bottom)); }
   #targetBar { top:calc(76px + env(safe-area-inset-top)); left:150px; right:150px; }
   #hpHud { top:calc(46px + env(safe-area-inset-top)); }
+  #artFeed { top:calc(74px + env(safe-area-inset-top)); }
+  .art-chip { max-width:150px; }
 }
 
 /* ---------- 細い端末 (〜380px) ---------- */

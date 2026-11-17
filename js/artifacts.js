@@ -107,6 +107,105 @@ function artMul(key){
 function artSpecial(name){ for (const a of ARTIFACTS) if (a.special === name && state.artifacts[a.id]) return true; return false; }
 const artOwnedCount = () => ARTIFACTS.filter(a => state.artifacts[a.id]).length;
 
+// ---------- 発動の見える化 (カウンタ + 左上の発動フィード + 一覧の発動表示) ----------
+// スキルの見える化 (skillProc) と同じ思想: 発動回数はセッション限りで全数数え (セーブしない)、
+// 発動した瞬間は画面左上の DOM フィードに小さなチップで知らせる (キャンバスには描かない)。
+// チップはプール再利用し、同一アーティファクトの連続発動は集約して ×n 表示にする。
+const artProc = {};   // id -> 今セッションの発動回数
+// 離散的に「発動」するアーティファクト (ここに無いものは常時パッシブとして扱う)
+const ART_PROC_IDS = new Set(["r_shield", "e_zap", "e_meteor", "e_harv", "l_revive",
+  "lg_heart", "lg_nova", "lg_gaia", "lg_phoenix", "lg_scepter", "lg_dice", "lg_void"]);
+// mod では表せない常時効果の補足 (一覧の「発動中」表示用)
+const ART_LIVE_NOTE = {
+  lg_crown: "全元素の付与率 +20% ・ 状態異常ダメージ ×1.75",
+  lg_gold: "コインを強力に吸引中",
+  lg_gear: "残像を発生中",
+  e_sense: "ミニマップに宝箱を表示中",
+};
+function bumpArtProc(id){
+  artProc[id] = (artProc[id] || 0) + 1;   // カウンタは間引かず全数数える
+  const a = ART_BY_ID[id];
+  if (a) artFeedShow(a);
+}
+// そのアーティファクトの mod を「攻撃 +60% ・ 連射 +15%」形式に (一覧の発動中表示用)
+function artModText(a){
+  const parts = [];
+  for (const k in a.mod){
+    const v = a.mod[k];
+    if (!v) continue;
+    if (k === "dmgMul" || k === "coinMul" || k === "xpMul") parts.push(MOD_LABEL[k] + " ×" + parseFloat((1 + v).toFixed(2)));
+    else if (k === "crit" || k === "critd" || k === "shockP") parts.push(MOD_LABEL[k] + " +" + Math.round(v) + "%");
+    else if (k === "frostV") parts.push(MOD_LABEL[k] + " +" + v.toFixed(1));
+    else if (k === "regenAlways") parts.push(MOD_LABEL[k] + " +" + v + "%/秒");
+    else if (k === "splash") parts.push(MOD_LABEL[k] + " +" + Math.round(v));
+    else parts.push(MOD_LABEL[k] + " +" + Math.round(v * 100) + "%");
+  }
+  return parts.join(" ・ ");
+}
+
+// ----- 発動フィード (左上に積む DOM チップ。発動時のみ DOM を触る) -----
+const ART_FEED_MAX = 5;      // 同時に出すチップの上限
+const ART_FEED_LIFE = 2600;  // チップの表示時間 (ms)
+const artFeedVisible = new Map();   // id -> chip rec (表示中のみ)
+const artFeedPool = [];             // 使い回すチップ要素 (新規生成はプールが空のときだけ)
+let artFeedBox = null, artFeedSeq = 0;
+function artFeedRec(){
+  if (artFeedPool.length) return artFeedPool.pop();
+  const el = document.createElement("div");
+  el.className = "art-chip";
+  const icon = document.createElement("span"); icon.className = "af-icon";
+  const name = document.createElement("span"); name.className = "af-name";
+  const cnt = document.createElement("span"); cnt.className = "af-cnt";
+  el.appendChild(icon); el.appendChild(name); el.appendChild(cnt);
+  return { el, icon, name, cnt, id: null, n: 0, seq: 0, feedAt: 0, timer: 0, fadeTimer: 0 };
+}
+function artFeedRelease(rec){   // フェードが終わったチップを外してプールへ戻す
+  if (rec.id != null && artFeedVisible.get(rec.id) === rec) artFeedVisible.delete(rec.id);
+  rec.id = null; rec.n = 0;
+  rec.el.classList.remove("show"); rec.el.classList.remove("mythic");
+  if (rec.el.parentNode) rec.el.parentNode.removeChild(rec.el);
+  artFeedPool.push(rec);
+}
+function artFeedExpire(rec){   // 表示時間が切れたらフェードさせ、終わったら手放す
+  rec.el.classList.remove("show");
+  rec.fadeTimer = setTimeout(() => artFeedRelease(rec), 400);
+}
+function artFeedShow(a){
+  if (!artFeedBox){ artFeedBox = $("artFeed"); if (!artFeedBox) return; }
+  const rec = artFeedVisible.get(a.id);
+  if (rec){   // 表示中の同一アーティファクトは集約: ×n を増やし寿命を延ばす (チップは増やさない)
+    rec.n++;
+    if (rec.n > 1) rec.cnt.textContent = "×" + rec.n;
+    const now = Date.now();
+    if (now - rec.feedAt >= 120){   // 寿命延長と並び替えは間引く (発動が頻発しても軽く保つ)
+      rec.feedAt = now; rec.seq = ++artFeedSeq;
+      clearTimeout(rec.timer); clearTimeout(rec.fadeTimer);
+      rec.el.classList.add("show");
+      rec.timer = setTimeout(() => artFeedExpire(rec), ART_FEED_LIFE);
+      artFeedBox.prepend(rec.el);
+    }
+    return;
+  }
+  if (artFeedVisible.size >= ART_FEED_MAX){   // 上限: いちばん古いチップを押し出す
+    let old = null;
+    for (const r of artFeedVisible.values()) if (!old || r.seq < old.seq) old = r;
+    if (old){ clearTimeout(old.timer); clearTimeout(old.fadeTimer); artFeedRelease(old); }
+  }
+  const nr = artFeedRec(), col = a.color || RARITY[a.rar].color;
+  nr.id = a.id; nr.n = 1; nr.seq = ++artFeedSeq; nr.feedAt = Date.now();
+  nr.icon.textContent = a.icon; nr.icon.style.color = col;
+  nr.name.textContent = a.name;
+  nr.cnt.textContent = "";
+  nr.el.classList.toggle("mythic", a.rar === 4);
+  nr.el.style.borderLeftColor = a.rar === 4 ? "" : col;
+  artFeedVisible.set(a.id, nr);
+  artFeedBox.appendChild(nr.el);
+  artFeedBox.prepend(nr.el);
+  void nr.el.offsetWidth;   // 初回だけ: 遷移 (フェードイン) を効かせてから show する
+  nr.el.classList.add("show");
+  nr.timer = setTimeout(() => artFeedExpire(nr), ART_FEED_LIFE);
+}
+
 // ---------- 宝箱 ----------
 const CHEST_DEPTHS = [0.35, 0.65, 0.92];
 const chests = [];          // {si, ci, gx, gy, x, y}
@@ -182,6 +281,7 @@ function updateArtifacts(dt){
         const bx = g2w(idx % D), by = g2w((idx / D) | 0);
         rings.push({ x: bx, y: by, r: 175, t: performance.now(), color: "255,170,80", dur: 480 });
         damageRadius(bx, by, 160, shotDamage() * 10);
+        bumpArtProc("e_meteor");
       }
     }
   }
@@ -203,6 +303,7 @@ function updateArtifacts(dt){
 // ---------- ミシック: 発動系の効果と演出 ----------
 // 惑星の心臓: 鼓動の衝撃波 (二重のリング + 範囲ダメージ。モンスターにも当たる)
 function heartPulse(){
+  bumpArtProc("lg_heart");
   rings.push({ x: player.x, y: player.y, r: 300, t: performance.now(), color: "255,90,122", dur: 650 });
   rings.push({ x: player.x, y: player.y, r: 185, t: performance.now(), color: "255,160,180", dur: 480 });
   rawDamage(() => damageRadius(player.x, player.y, 280, playerDamage() * 6));
@@ -210,6 +311,7 @@ function heartPulse(){
 }
 // 超新星の核: 50個破壊ごとの大爆発 (虹色の三重リング + 星バースト)
 function supernovaAt(x, y){
+  bumpArtProc("lg_nova");
   rings.push({ x, y, r: BS * 7,   t: performance.now(), color: "255,90,90",   dur: 700 });
   rings.push({ x, y, r: BS * 5.5, t: performance.now(), color: "120,255,140", dur: 600 });
   rings.push({ x, y, r: BS * 4,   t: performance.now(), color: "130,160,255", dur: 500 });
@@ -220,6 +322,7 @@ function supernovaAt(x, y){
 }
 // 不死鳥の灰: 復活時の大爆発 (炎の翼のような花弁バースト x3 + 範囲ダメージ)
 function phoenixBlast(){
+  bumpArtProc("lg_phoenix");
   for (let k = 0; k < 3; k++) burstAt(player.x, player.y, { accent: "#ff7b3f", c2: "#ffd60a", burst: "petal" }, null);
   rings.push({ x: player.x, y: player.y, r: 340, t: performance.now(), color: "255,123,63", dur: 620 });
   rings.push({ x: player.x, y: player.y, r: 210, t: performance.now(), color: "255,214,10", dur: 460 });
@@ -236,7 +339,7 @@ function scepterStarfall(){
     damageMob(m, playerDamage() * 20, null);
     if (++n >= 24) break;
   }
-  if (n) toast(`星屑の王笏: 星が ${n} 体を貫いた！`);
+  if (n){ bumpArtProc("lg_scepter"); toast(`星屑の王笏: 星が ${n} 体を貫いた！`); }
 }
 // 混沌のサイコロ: 結果を浮かぶ文字で知らせる (ダメージ数値のプールに相乗り)
 function diceLabel(text, color){
@@ -261,6 +364,7 @@ function freezeAllAround(x, y){
 }
 // 混沌のサイコロ: 4つの結果から1つ (skills.js の命中時フックから呼ばれる)
 function chaosDice(idx, gx, gy, dmg){
+  bumpArtProc("lg_dice");
   const x = g2w(gx), y = g2w(gy), roll = (Math.random() * 4) | 0;
   diceFxT = 0.9; diceSettled = roll + 3;
   if (roll === 0){          // 強撃: その命中を合計×5相当に (残っていなければ近くのブロックへ)
@@ -411,13 +515,26 @@ function renderArtifacts(){
     `<div class="art-sum-note">宝箱は各衛星に3つ。惑星が再生すると宝箱も戻るので、繰り返し挑戦すればコンプリートできる。</div>`;
   grid.innerHTML = ARTIFACTS.map(a => {
     const owned = !!state.artifacts[a.id], R = RARITY[a.rar], col = a.color || R.color, mythic = a.rar === 4;
+    // 発動の見える化: 常時パッシブは「発動中 + 実効値」、発動系は「発動 n回 (このセッション)」
+    let status = "";
+    if (owned){
+      const liveParts = [], mt = artModText(a);
+      if (mt) liveParts.push(mt);
+      if (ART_LIVE_NOTE[a.id]) liveParts.push(ART_LIVE_NOTE[a.id]);
+      if (liveParts.length) status += `<div class="art-live"><span class="art-live-dot"></span>発動中： ${liveParts.join(" ・ ")}</div>`;
+      if (ART_PROC_IDS.has(a.id)) status += `<div class="art-proc">発動 <b>${artProc[a.id] || 0}</b> 回<span class="art-proc-note"> (このセッション)</span></div>`;
+    }
     // 枠色はティア色で統一する (未所持でも色で格が分かる)。ミシックだけ CSS の虹枠が担当
     return `<div class="art-card rar-${a.rar} ${owned ? "" : "locked"}${mythic ? " mythic" : ""}"${mythic ? "" : ` style="border-color:${col}"`}>
       <div class="art-icon" style="color:${owned ? col : "#565d66"}">${owned ? a.icon : "?"}</div>
       <div class="art-main"><div class="art-name" style="color:${owned ? col : "#8a929c"}">${owned ? a.name : "？？？"}</div>
-      <div class="art-rar" style="color:${col}">${R.name}</div><div class="art-desc">${owned ? a.desc : "まだ見つけていない"}</div></div></div>`;
+      <div class="art-rar" style="color:${col}">${R.name}</div><div class="art-desc">${owned ? a.desc : "まだ見つけていない"}</div>${status}</div></div>`;
   }).join("");
+  artPanelSig = artProcSig();
 }
+// 発動回数の署名 (一覧を開いている間の自動更新の判定用)
+function artProcSig(){ let s = ""; for (const id in artProc) s += id + ":" + artProc[id] + ";"; return s; }
+let artPanelSig = "";
 document.addEventListener("DOMContentLoaded", () => {});
 setTimeout(() => {   // ボタンの配線 (スクリプトは body 末尾なので即時でよいが、念のため遅延)
   const btn = $("artBtn"), close = $("artClose");
@@ -427,3 +544,6 @@ setTimeout(() => {   // ボタンの配線 (スクリプトは body 末尾なの
   if (ov) ov.addEventListener("click", e => { if (e.target === ov) closeArtifacts(); });
   updateArtBadge();
 }, 0);
+setInterval(() => {   // 一覧を開いている間、発動回数が変わったら表示を最新化する (閉じている間は何もしない)
+  if (artOpen && artProcSig() !== artPanelSig) renderArtifacts();
+}, 700);

@@ -141,7 +141,7 @@ function mobFire(m, T, baseA){   // パターンに応じて撃つ (baseA = 自�
 function onLevelUpHeal(){ state.hp = playerMaxHP(); }
 function damagePlayer(d){
   if (!started || player.iframes > 0 || state.hp <= 0) return;
-  if (artSpecial("shield") && artShieldT <= 0){ artShieldT = 12; hurtFlash = Math.max(hurtFlash, 0.35); toast("結界が攻撃を防いだ"); return; }   // 結界の欠片
+  if (artSpecial("shield") && artShieldT <= 0){ artShieldT = 12; hurtFlash = Math.max(hurtFlash, 0.35); toast("結界が攻撃を防いだ"); bumpArtProc("r_shield"); return; }   // 結界の欠片
   d *= (1 - Math.min(0.6, artVal("def"))) * (1 - 0.04 * (state.botArmor || 0));
   { const pfx = dungeonFxAt(w2g(player.x), w2g(player.y)); if (pfx) d *= pfx.hurt; }   // ダンジョン固有効果: 被ダメ倍率   // アーティファクト軽減 × 衛星装甲
   state.hp = Math.max(0, state.hp - d);
@@ -151,7 +151,7 @@ function damagePlayer(d){
       artPhoenixT = 45; state.hp = playerMaxHP(); player.iframes = 2.5; hurtFlash = 0; hudDirty = true;
       phoenixBlast(); toast("不死鳥の灰が燃え上がり、蘇った！"); return;
     }
-    if (artSpecial("revive") && Math.random() < 0.75){ state.hp = Math.round(playerMaxHP() * 0.75); player.iframes = 2; toast("不死の核が蘇らせた！"); return; }   // 不死の核
+    if (artSpecial("revive") && Math.random() < 0.75){ state.hp = Math.round(playerMaxHP() * 0.75); player.iframes = 2; toast("不死の核が蘇らせた！"); bumpArtProc("l_revive"); return; }   // 不死の核
     respawnPlayer();
   }
 }
@@ -190,7 +190,7 @@ function damageMob(m, dmg, bl){
   let voidCrit = false;
   if (bl){
     if (bl.crit) dmg *= 2;
-    if (bl.crit && artHas("lg_void")){ dmg *= 1.5; voidCrit = true; }   // 虚無の単眼: モンスターへの会心も合計 ×3
+    if (bl.crit && artHas("lg_void")){ dmg *= 1.5; voidCrit = true; bumpArtProc("lg_void"); }   // 虚無の単眼: モンスターへの会心も合計 ×3
     if (bl.fx && bl.fx.burn){ m.burnT = 3; m.burnD = Math.max(m.burnD, dmg * bl.fx.burn * 0.4); }
     if (bl.fx && bl.fx.frost) m.slowT = Math.max(m.slowT, 2);
   }
@@ -211,7 +211,7 @@ function killMob(m){
     coinsArr.push({ x: m.x, y: m.y, vx: (Math.random() - .5) * 120, vy: (Math.random() - .5) * 120, value: each, chest: false, age: 0 });
   gainXP(Math.round((8 + si * 6) * T.hpMul * (T.xpMul || 1) * (S.fx ? S.fx.xp : 1)));
   if (Math.random() < 0.35 * (S.fx ? S.fx.drop : 1)){ const n = 1 + (Math.random() * 3 | 0); invAdd(S.sig, n); noteDrop(m.x, m.y, MAT[S.sig], n); }
-  if (artSpecial("mobDrop")){ invAdd(S.sig, 1); noteDrop(m.x, m.y - 16, MAT[S.sig], 1); }   // 星屑の収穫者: 必ず落ちる
+  if (artSpecial("mobDrop")){ invAdd(S.sig, 1); noteDrop(m.x, m.y - 16, MAT[S.sig], 1); bumpArtProc("e_harv"); }   // 星屑の収穫者: 必ず落ちる
   m.hp = 0; m.dead = true;
 }
 // 射撃の照準用: (x, y) から rng 以内の最も近いモンスター (ブロックより優先して狙う)
