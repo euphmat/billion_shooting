@@ -858,6 +858,46 @@ $("resetBtn").addEventListener("click", () => {
   if (confirm("セーブを削除して最初からにしますか？")) wipeSave().then(() => location.reload());
 });
 
+/* ---------- アップデート履歴 ---------- */
+let updOpen = false;
+// 新しい順。行を足すときは先頭に追加し、core.js の GAME_VERSION を上げる
+const UPDATE_HISTORY = [
+  { v:74, text:"ファストトラベル (訪問済みダンジョンへ、右下マップから) とアップデート履歴を追加" },
+  { v:73, text:"スタート画面の数を実数に修正 (素材168種・装備137種・スキル150種)" },
+  { v:72, text:"スマホ・PWA対応 (タッチ操作、ホーム画面に追加して全画面プレイ)" },
+  { v:69, text:"発破採掘を追加 (一定数壊すと周囲がまとめて爆砕)" },
+  { v:68, text:"元素付与を全武器対応に再編 (お宝ブロック・連破も追加)" },
+  { v:65, text:"序盤ダンジョン+10と武器見直し (石灰クラッシャー底上げ)" },
+  { v:64, text:"ダンジョン固有効果 (倍率・状態付与) とHUDバナー" },
+  { v:63, text:"幻想ダンジョン+10 (妖精の泉〜世界樹の根源)" },
+  { v:62, text:"惑星内部ダンジョン+10 (骨の回廊〜惑星の心臓)" },
+  { v:61, text:"弾のデザイン一新 (全武器に固有の弾フォームと破壊エフェクト)" },
+  { v:60, text:"武器大改修 (全武器に固有の能力を付与)" },
+  { v:56, text:"ズーム最適化 (ズームイン/アウトの重さを解消)" },
+  { v:55, text:"アクティブスキル廃止 (スキルツリーはパッシブ専用に)" },
+];
+function renderUpdates(){
+  const el = $("updateList"); if (!el) return;
+  el.innerHTML = UPDATE_HISTORY.map((u, i) =>
+    `<div class="upd-row${i === 0 ? " latest" : ""}"><span class="upd-ver">v${u.v}</span><span class="upd-text">${u.text}</span>${i === 0 ? `<span class="upd-new">NEW</span>` : ""}</div>`).join("");
+}
+function updateUpdBadge(){
+  const b = $("updBadge"); if (b) b.style.display = state.lastSeenUpdate < GAME_VERSION ? "block" : "none";
+}
+function openUpdates(){
+  updOpen = true;
+  renderUpdates();
+  $("updateOverlay").classList.add("open");
+  if (state.lastSeenUpdate < GAME_VERSION){ state.lastSeenUpdate = GAME_VERSION; save(); }
+  updateUpdBadge();
+}
+function closeUpdates(){ updOpen = false; $("updateOverlay").classList.remove("open"); }
+$("updateBtn").addEventListener("click", openUpdates);
+$("updateClose").addEventListener("click", closeUpdates);
+$("updateOverlay").addEventListener("click", e => { if (e.target === $("updateOverlay")) closeUpdates(); });
+window.addEventListener("keydown", e => { if (e.key === "Escape") closeUpdates(); });
+updateUpdBadge();
+
 /* ---------- HUD (side panel only) ---------- */
 function setText(el, t){ if (el._t !== t){ el._t = t; el.textContent = t; } }
 function updateHUD(){

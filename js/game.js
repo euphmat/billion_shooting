@@ -151,6 +151,7 @@ function toast(text){
 
 // ---------- ダンジョン固有効果: 入退室の検知と HUD バナー ----------
 let curBodyIdx = -2;   // 前回判定した天体 (bodyAt の返り値)。-2 は未判定
+let ftSilent = false;   // ファストトラベル直後はバナー側のトーストを抑える (移動トーストと重ねない)
 const dfxEl = { box: $("dungeonFx"), name: $("dfxName"), desc: $("dfxDesc"), body: $("dfxBody") };
 function updateDungeonBanner(){
   const b = bodyAt(w2g(player.x), w2g(player.y));
@@ -159,11 +160,13 @@ function updateDungeonBanner(){
   curBodyIdx = b;
   const S = b > 0 ? SATS[b - 1] : null, fx = S ? S.fx : null;
   if (fx){
+    const si = b - 1;
+    if (!state.visitedBodies.includes(si)){ state.visitedBodies.push(si); save(); }   // 訪問記録 (ファストトラベル用)
     dfxEl.name.textContent = fx.name;
     dfxEl.desc.textContent = fx.desc;
     dfxEl.body.textContent = S.name;
     dfxEl.box.classList.add("show");
-    toast(`「${S.name}」 — ${fx.name}`);
+    if (!ftSilent) toast(`「${S.name}」 — ${fx.name}`); ftSilent = false;
   } else {
     dfxEl.box.classList.remove("show");
     if (prevFx) toast("ダンジョンを出た");
@@ -695,7 +698,7 @@ function frame(now){
   nowMs = now;
   updateSkillHUD();
   updateHpHud();
-  if (!started || cleared || treeOpen || artOpen){ draw(now); return; }   // ツリー/アーティファクト画面を開いている間は一時停止
+  if (!started || cleared || treeOpen || artOpen || mapOpen || updOpen){ draw(now); return; }   // ツリー/アーティファクト/マップ/履歴を開いている間は一時停止
   updateDungeonBanner();
 
   // --- timers ---
@@ -2175,6 +2178,111 @@ function drawMinimap(now){
   mm.restore();
   mm.fillStyle = "#000"; mm.fillRect(C - 1.5, C - 1.5, 3, 3);
 }
+
+// ---------- ワールドマップ / ファストトラベル ----------
+// 右下ミニマップのクリックで開く。訪問済みダンジョン (visitedBodies) をクリックすると、
+// その天体の中で掘り開けたセル (ライブブロックなし) へ瞬間移動する
+let mapOpen = false;
+let bigMapMarks = [];
+const bigMapCv = $("bigMap"), bigMapCtx = bigMapCv.getContext("2d");
+const BM_SIZE = 760;
+function openMap(){ mapOpen = true; drawBigMap(); $("mapOverlay").classList.add("open"); }
+function closeMap(){ mapOpen = false; $("mapOverlay").classList.remove("open"); }
+function drawBigMap(){
+  const g = bigMapCtx, scale = BM_SIZE / D, px = gx => gx * scale;
+  g.fillStyle = "#04060a"; g.fillRect(0, 0, BM_SIZE, BM_SIZE);
+  // メイン惑星の輪郭
+  g.beginPath(); g.arc(px(GC), px(GC), R * scale, 0, 7);
+  g.fillStyle = "#0a1524"; g.fill();
+  g.strokeStyle = "rgba(125,184,255,.5)"; g.lineWidth = 1.2; g.stroke();
+  const cur = bodyAt(w2g(player.x), w2g(player.y));
+  bigMapMarks = [];
+  SATS.forEach((S, si) => {
+    const visited = state.visitedBodies.includes(si), col = MAT[S.sig].color;
+    const cx = px(S.cx), cy = px(S.cy);
+    if (S.rect){   // 矩形ダンジョン
+      const x0 = px(S.x0), y0 = px(S.y0), w = Math.max(3, (S.x1 - S.x0) * scale), h = Math.max(3, (S.y1 - S.y0) * scale);
+      g.fillStyle = visited ? col : "#2b2e35"; g.fillRect(x0, y0, w, h);
+      g.strokeStyle = visited ? "rgba(255,255,255,.85)" : "#5b5f68"; g.lineWidth = 1; g.strokeRect(x0, y0, w, h);
+      if (cur === si + 1){ g.strokeStyle = "#ffb340"; g.lineWidth = 1.6; g.strokeRect(x0 - 2.5, y0 - 2.5, w + 5, h + 5); }
+      bigMapMarks.push({ si, x0: x0 - 5, y0: y0 - 5, x1: x0 + w + 5, y1: y0 + h + 5, lx: cx, ly: y0 });
+    } else {       // 円形天体 (衛星・小惑星)
+      const r = Math.max(2.5, S.r * scale);
+      g.beginPath(); g.arc(cx, cy, r, 0, 7);
+      g.fillStyle = visited ? col : "#2b2e35"; g.fill();
+      g.strokeStyle = visited ? "rgba(255,255,255,.85)" : "#5b5f68"; g.lineWidth = 1; g.stroke();
+      if (cur === si + 1){ g.beginPath(); g.arc(cx, cy, r + 2.5, 0, 7); g.strokeStyle = "#ffb340"; g.lineWidth = 1.6; g.stroke(); }
+      bigMapMarks.push({ si, cx, cy, hr: Math.max(11, r), lx: cx, ly: cy - r });
+    }
+  });
+  // ラベルは訪問済みのみ (名前 + 効果名)。未訪問はグレーのマーカーだけ
+  g.textAlign = "center";
+  for (const m of bigMapMarks){
+    if (!state.visitedBodies.includes(m.si)) continue;
+    const S = SATS[m.si];
+    g.font = "bold 11px sans-serif";
+    const tw = g.measureText(S.name).width + 8;
+    g.fillStyle = "rgba(0,0,0,.68)"; g.fillRect(m.lx - tw / 2, m.ly - 15, tw, 13);
+    g.fillStyle = "#fff"; g.fillText(S.name, m.lx, m.ly - 4);
+    if (S.fx){
+      g.font = "9px sans-serif";
+      const fw = g.measureText(S.fx.name).width + 8;
+      g.fillStyle = "rgba(0,0,0,.55)"; g.fillRect(m.lx - fw / 2, m.ly - 1, fw, 11);
+      g.fillStyle = "#ffd9a0"; g.fillText(S.fx.name, m.lx, m.ly + 8);
+    }
+  }
+  // 自機マーカー
+  const pxx = px(player.x / BS + GC), pyy = px(player.y / BS + GC);
+  g.beginPath(); g.arc(pxx, pyy, 4, 0, 7); g.fillStyle = "#fff"; g.fill();
+  g.beginPath(); g.arc(pxx, pyy, 7.5, 0, 7); g.strokeStyle = "#ffb340"; g.lineWidth = 1.6; g.stroke();
+  const mc = $("mapCount"); if (mc) mc.textContent = `訪問済み ${state.visitedBodies.length} / ${SATS.length}`;
+}
+// 着地点探し: 中心から渦巻き状 (チェビシェフ距離のリング順) に、ライブブロックのないセルを探す。
+// 天体内部では blockExists が常に真なので「ライブブロックなし」= 破壊済みセル
+function findLandingCell(S){
+  const inBody = (gx, gy) => S.rect ? (gx >= S.x0 && gx <= S.x1 && gy >= S.y0 && gy <= S.y1)
+                                    : (gx - S.cx) * (gx - S.cx) + (gy - S.cy) * (gy - S.cy) <= S.r2;
+  const free = (gx, gy) => isDestroyed(gy * D + gx) && liveAt(gx, gy) < 0;
+  const maxR = S.rect ? Math.max(S.hw, S.hh) : S.r;
+  const scan = stepFor => {
+    for (let r = 0; r <= maxR; r++){
+      if (r === 0){ if (inBody(S.cx, S.cy) && free(S.cx, S.cy)) return { gx: S.cx, gy: S.cy }; continue; }
+      const st = stepFor(r);
+      for (let dx = -r; dx <= r; dx += st) for (const dy of [-r, r]){ const gx = S.cx + dx, gy = S.cy + dy; if (inBody(gx, gy) && free(gx, gy)) return { gx, gy }; }
+      for (let dy = -r + st; dy <= r - 1; dy += st) for (const dx of [-r, r]){ const gx = S.cx + dx, gy = S.cy + dy; if (inBody(gx, gy) && free(gx, gy)) return { gx, gy }; }
+    }
+    return null;
+  };
+  return scan(r => (r < 40 ? 1 : r < 90 ? 2 : 3)) || scan(() => 1);   // 粗い走査で見つからなければ全セル走査
+}
+function fastTravelTo(si){
+  const S = SATS[si]; if (!S) return false;
+  const cell = findLandingCell(S);
+  if (!cell){ toast("着地できる場所が見つからなかった"); return false; }
+  ftSilent = true;   // 直後のフレームでバナー側トーストと重ねない
+  player.x = g2w(cell.gx); player.y = g2w(cell.gy);
+  player.vx = 0; player.vy = 0;
+  closeMap();
+  toast(`「${S.name}」へファストトラベル！`);
+  return true;
+}
+$("minimap").addEventListener("click", () => openMap());
+bigMapCv.addEventListener("click", e => {
+  const rect = bigMapCv.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (BM_SIZE / rect.width), y = (e.clientY - rect.top) * (BM_SIZE / rect.height);
+  for (let i = bigMapMarks.length - 1; i >= 0; i--){
+    const m = bigMapMarks[i];
+    const hit = m.hr !== undefined ? (x - m.cx) * (x - m.cx) + (y - m.cy) * (y - m.cy) <= m.hr * m.hr
+                                   : (x >= m.x0 && x <= m.x1 && y >= m.y0 && y <= m.y1);
+    if (!hit) continue;
+    if (state.visitedBodies.includes(m.si)) fastTravelTo(m.si);
+    else toast("まだ行ったことのないダンジョンだ");
+    return;
+  }
+});
+$("mapClose").addEventListener("click", closeMap);
+$("mapOverlay").addEventListener("click", e => { if (e.target === $("mapOverlay") || e.target === $("mapWrap")) closeMap(); });
+window.addEventListener("keydown", e => { if (e.key === "Escape" && mapOpen) closeMap(); });
 
 // ---------- boot ----------
 resize(); renderPanels(true); updateHUD();

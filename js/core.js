@@ -28,6 +28,7 @@ function fmtDmg(n){
 // ---------- save / state ----------
 const SAVE_KEY = "billion_shooting_save_v2";
 const OLD_SAVE_KEY = "million_shooting_save_v1";
+const GAME_VERSION = 74;   // 現在のゲームバージョン (アップデート履歴の未読判定に使う)
 const state = {
   coins: 0, totalCoins: 0, destroyed: 0,
   weapon: "handDrill",
@@ -44,9 +45,11 @@ const state = {
   botCore: 0, botArmor: 0,   // 衛星テクノロジー (攻撃ボット兵装コア / 自機の衛星装甲)
   hp: 100,   // 自機HP (最大値はレベルで伸びる: playerMaxHP)
   off: {},   // 停止中の仲間 { bots:true, ... }
+  visitedBodies: [],   // 訪問済みダンジョン (SATS のインデックス。ファストトラベルの解放条件)
+  lastSeenUpdate: 0,   // アップデート履歴を最後に見たバージョン
 };
 const SAVE_FIELDS = ["coins", "totalCoins", "destroyed", "weapon", "weaponsOwned", "weaponLv", "bots", "coinBots", "botLv",
-  "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode"];
+  "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode", "visitedBodies", "lastSeenUpdate"];
 let migrated = false;
 try {
   // 本番の置き場所は IndexedDB (store.js が起動時に読み終えている)。
@@ -78,6 +81,9 @@ state.botLv |= 0; state.bots |= 0; state.coinBots |= 0; state.crafted |= 0;
 state.lv = Math.max(1, state.lv | 0); state.xp = Math.max(0, +state.xp || 0);
 state.coins = Math.max(0, +state.coins || 0); state.totalCoins = Math.max(0, +state.totalCoins || 0);
 if (!Array.isArray(state.botLoadout)) state.botLoadout = [];
+if (!Array.isArray(state.visitedBodies)) state.visitedBodies = [];
+state.visitedBodies = state.visitedBodies.filter(i => Number.isInteger(i) && i >= 0 && i < SATS.length);
+state.lastSeenUpdate = Math.max(0, state.lastSeenUpdate | 0);
 for (const k of Object.keys(state.inv)) if (!MAT[k]) delete state.inv[k];
 // 稼働中の数 (OFFにした種類は0として扱う。所持数 state[k] はそのまま)
 const act = k => state.off[k] ? 0 : state[k];

@@ -189,7 +189,7 @@ function setSheet(open){
     syncBadge("spBadge", "mSpBadge", () => $("treeBtn").classList.contains("has-sp"));
     syncBadge("artBadge", "mArtBadge", s => s.textContent !== "" && s.textContent !== "0");
     const startUp = $("startOverlay").style.display !== "none";
-    const busy = startUp || cleared || treeOpen || artOpen || sheetOpen() || $("settingsOverlay").classList.contains("open");
+    const busy = startUp || cleared || treeOpen || artOpen || sheetOpen() || $("settingsOverlay").classList.contains("open") || $("mapOverlay").classList.contains("open") || $("updateOverlay").classList.contains("open");
     const sig = busy ? "1" : "0";
     if (sig === was) return;
     was = sig;
