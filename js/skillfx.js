@@ -20,6 +20,7 @@ function blast(x, y, r, dmg, color){
 }
 function levelUpFx(){
   sndLevel();
+  if (typeof artHas === "function" && artHas("lg_scepter")) scepterStarfall();   // 星屑の王笏: 星が降り注ぐ
   rings.push({ x: player.x, y: player.y, r: 260, t: performance.now(), color: "255,255,255", dur: 700 });
   let msg = `LEVEL UP!  Lv.${state.lv}  スキルポイント獲得`;
   if (sk("c_bonus")){ const g = state.lv * 60; addCoins(g); msg += `  祝い金 +${fmt(g)}`; }
@@ -188,14 +189,8 @@ function skillsUpdate(dt, fdt, bdt, now){
 // ---------- 描画 (draw() の中、弾の後・ユニットの前) ----------
 function skillsDraw(now, toScreen){
   const px = BS * zoom;
-  // 燃えているブロック / 爆弾
+  // 爆弾 (ブロックの状態異常は game.js の drawStatusFx でスプライト描画する)
   if (px > 4){
-    ctx.strokeStyle = "rgba(255,140,40,.9)"; ctx.lineWidth = 1.5;
-    for (const idx of burns.keys()){
-      const [sx, sy] = toScreen(g2w(idx % D), g2w((idx / D) | 0));
-      if (sx < -px || sy < -px || sx > CW + px || sy > CH + px) continue;
-      ctx.strokeRect(sx - px / 2 + 2, sy - px / 2 + 2, px - 4, px - 4);
-    }
     for (const b of bombs){
       const [sx, sy] = toScreen(g2w(b.idx % D), g2w((b.idx / D) | 0));
       ctx.fillStyle = (now / 120 | 0) % 2 ? "#ff5a46" : "#fff";

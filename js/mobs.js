@@ -147,6 +147,10 @@ function damagePlayer(d){
   state.hp = Math.max(0, state.hp - d);
   player.iframes = 0.45; hurtT = 0; hurtFlash = 1; hudDirty = true;
   if (state.hp <= 0){
+    if (artHas("lg_phoenix") && artPhoenixT <= 0){   // 不死鳥の灰: 全HPで復活 + 周囲に大爆発 (45秒に1回)
+      artPhoenixT = 45; state.hp = playerMaxHP(); player.iframes = 2.5; hurtFlash = 0; hudDirty = true;
+      phoenixBlast(); toast("不死鳥の灰が燃え上がり、蘇った！"); return;
+    }
     if (artSpecial("revive") && Math.random() < 0.5){ state.hp = Math.round(playerMaxHP() * 0.5); player.iframes = 2; toast("不死の核が蘇らせた！"); return; }   // 不死の核
     respawnPlayer();
   }
@@ -183,13 +187,19 @@ function noteMobDmg(m, dmg, crit){
 }
 function damageMob(m, dmg, bl){
   if (m.hp <= 0) return;
+  let voidCrit = false;
   if (bl){
     if (bl.crit) dmg *= 2;
+    if (bl.crit && artHas("lg_void")){ dmg *= 1.5; voidCrit = true; }   // 虚無の単眼: モンスターへの会心も合計 ×3
     if (bl.fx && bl.fx.burn){ m.burnT = 3; m.burnD = Math.max(m.burnD, dmg * bl.fx.burn * 0.4); }
     if (bl.fx && bl.fx.frost) m.slowT = Math.max(m.slowT, 2);
   }
   m.hp -= dmg; m.flashT = 0.09;
   noteMobDmg(m, dmg, !!(bl && bl.crit));
+  if (voidCrit){   // 紫のリング + 特大数字フラグ
+    const e = mobDmgAcc.get(m.id); if (e) e.void = true;
+    rings.push({ x: m.x, y: m.y, r: 70, t: performance.now(), color: "176,110,255", dur: 350 });
+  }
   if (bl && bl.fx) m.lastFx = bl.fx;
   if (m.hp <= 0) killMob(m);
 }

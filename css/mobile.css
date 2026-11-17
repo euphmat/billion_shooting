@@ -240,6 +240,17 @@ body.pwa-ios-mode .pwa-ios { display:block; }
   #treeDetail p { font-size:11.5px; line-height:1.7; margin:7px 0; }
   #artGrid { grid-template-columns:1fr; padding:10px 10px calc(18px + env(safe-area-inset-bottom)); }
   #artSummary { padding:10px 12px 2px; font-size:12px; }
+
+  /* ---- ボット装備モーダル: シートより上に、画面いっぱいで出す ---- */
+  #botEqOverlay { z-index:45; }
+  #botEqBody { padding:10px 10px calc(18px + env(safe-area-inset-bottom)); }
+  #botEqCount { font-size:11px; }
+  .eq-slots { grid-template-columns:1fr 1fr; }
+  .eq-shelf { grid-template-columns:1fr 1fr; }
+  .eq-tile { min-height:84px; }
+  .eq-toolbar .fchip { padding:8px 13px; font-size:11.5px; }
+  .eq-open-btn { padding:12px 11px; min-height:56px; }
+  .bulk-row .wr-btn.bulk { padding:9px 6px; font-size:11.5px; }
   #artGet { min-width:0; left:10px; right:10px; transform:none; max-width:none; padding:13px 16px 11px; }
   #artGet.show { transform:none; }
   #artGet .ag-name { font-size:19px; }
@@ -275,6 +286,7 @@ body.pwa-ios-mode .pwa-ios { display:block; }
 @media (max-width: 380px){
   .mat-grid { grid-template-columns:repeat(3, 1fr); }
   .wgrid, .shelf, .two-col { grid-template-columns:1fr; }
+  .eq-shelf { grid-template-columns:1fr; }
   .stat-grid { grid-template-columns:repeat(2, 1fr); }
   #treeBtn, #artBtn { padding:7px 7px; font-size:10px; }
   #stickZone { width:118px; height:118px; }

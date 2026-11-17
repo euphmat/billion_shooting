@@ -387,6 +387,12 @@ kbd { font-family:inherit; font-size:10px; border:1px solid currentColor; paddin
 #artGet .ag-icon { margin-right:8px; }
 #artGet .ag-desc { font-size:12.5px; opacity:.92; }
 #artGet .ag-count { font-size:11px; opacity:.6; margin-top:6px; }
+/* LEGENDARY (rar:4) 専用枠: 虹色グラデーションの縁取りが流れ、金色に光る */
+.art-card.legendary { border:2px solid transparent; background:linear-gradient(rgba(16,14,8,.96), rgba(16,14,8,.96)) padding-box, linear-gradient(120deg, #ffd700, #ff5a7a, #c792ff, #57b6ff, #57e39a, #ffd700) border-box; background-size:100% 100%, 300% 100%; animation:artLegendShift 3.2s linear infinite; box-shadow:0 0 14px rgba(255,179,64,.35); }
+.art-card.legendary.locked { animation:none; box-shadow:none; opacity:.75; }
+.art-card.legendary .art-rar { color:#ffd700; opacity:1; font-weight:700; letter-spacing:.22em; }
+@keyframes artLegendShift { to { background-position:0 0, 300% 0; } }
+#artGet.legendary { border:2px solid transparent; background:linear-gradient(rgba(8,8,10,.96), rgba(8,8,10,.96)) padding-box, linear-gradient(120deg, #ffd700, #ff5a7a, #c792ff, #57b6ff, #ffd700) border-box; background-size:100% 100%, 300% 100%; animation:artLegendShift 2.4s linear infinite; box-shadow:0 0 34px rgba(255,179,64,.55); }
 #treeOverlay.open { display:flex; }
 .tree-head { display:flex; align-items:center; gap:16px; padding:8px 12px; border-bottom:1px solid #fff; flex:none; }
 .tree-head h3 { font-size:15px; letter-spacing:.3em; }
@@ -529,6 +535,71 @@ kbd { font-family:inherit; font-size:10px; border:1px solid currentColor; paddin
 .lo-row .down { color:#ff8a8a; font-size:11px; white-space:nowrap; }
 .lo-state { font-size:10px; opacity:.6; white-space:nowrap; }
 .lo-empty { font-size:11px; opacity:.7; line-height:1.7; }
+
+/* ---------- ボットUI改善: 買えない理由 / 効果プレビュー / 編成アクション ---------- */
+.buy-reason { display:block; color:#f87171; font-size:10.5px; line-height:1.5; }
+.buy-reason:empty { display:none; }
+.wt-sub.gain-line { color:#57e39a; }
+.bt-dps { font-size:15px; font-weight:bold; font-variant-numeric:tabular-nums; line-height:1.25; }
+.bt-dps .bt-lv { font-size:10.5px; color:#ffd24d; margin-left:6px; font-weight:normal; }
+.bot-tile.none .wt-name { color:#999; }
+.shelf-base { color:#777; font-size:9.5px; }
+.lo-bar { display:flex; gap:6px; margin:-4px 0 12px; }
+.lo-act { flex:1; display:flex; flex-direction:column; align-items:center; gap:1px; background:#0a0a0a; color:#fff; border:1px solid #555; padding:7px 8px; font:inherit; font-size:12.5px; font-weight:bold; cursor:pointer; }
+.lo-act span { font-size:10px; color:#999; font-weight:normal; }
+.lo-act:hover:not(:disabled) { border-color:#fff; }
+.lo-act:disabled { opacity:.35; cursor:default; }
+.fleet-bar { box-shadow:inset 3px 0 0 var(--accent); }
+
+/* ---------- ボット装備モーダル / まとめ買い / 買えるタイルの発光 (UIUX第2弾) ---------- */
+#botEqOverlay { position:absolute; inset:0; display:none; flex-direction:column; background:rgba(0,0,0,.94); z-index:8; }
+#botEqOverlay.open { display:flex; }
+#botEqBody { flex:1; overflow-y:auto; padding:12px 14px 20px; scrollbar-width:thin; scrollbar-color:#666 #000; }
+#botEqBody::-webkit-scrollbar { width:5px; }
+#botEqBody::-webkit-scrollbar-thumb { background:#666; }
+#botEqCount { color:#ffd9a0; font-size:12px; letter-spacing:.08em; white-space:nowrap; }
+/* ボット画面の最上部: 装備モーダルを開く大きなボタン */
+.eq-open-btn {
+  display:flex; align-items:center; gap:10px; width:100%; margin-bottom:9px; padding:9px 11px;
+  background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.02)); color:#fff;
+  border:1px solid #fff; font:inherit; cursor:pointer; text-align:left;
+  box-shadow:0 0 14px rgba(255,255,255,.16); transition:all .12s;
+}
+.eq-open-btn:hover { background:#fff; color:#000; }
+.eq-open-btn:hover .eqb-sub { color:#333; }
+.eq-open-btn .icon-badge { width:38px; height:38px; }
+.eq-open-btn .icon-badge svg { width:22px; height:22px; }
+.eqb-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+.eqb-title { font-size:15px; font-weight:bold; letter-spacing:.12em; }
+.eqb-sub { font-size:10.5px; color:#aaa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.eqb-arrow { font-size:22px; line-height:1; opacity:.75; flex:none; }
+/* モーダル内: ガイド / セクション見出し / ツールバー / グリッド */
+.eq-guide { font-size:12px; line-height:1.65; border:1px dashed #444; background:#0a0a0a; padding:8px 11px; margin-bottom:2px; color:#ccc; }
+.eq-guide.done { border:1px solid #57e39a; color:#bff0c8; background:rgba(87,227,154,.08); }
+.eq-sec { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin:14px 0 7px; padding-bottom:4px; border-bottom:1px solid #333; }
+.eq-sec b { font-size:13.5px; letter-spacing:.16em; }
+.eq-sec span { font-size:11px; color:#999; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.eq-grid { display:grid; gap:7px; }
+.eq-slots { grid-template-columns:repeat(auto-fill, minmax(175px, 1fr)); }
+.eq-shelf { grid-template-columns:repeat(auto-fill, minmax(215px, 1fr)); }
+.eq-bar { margin:10px 0 0; }
+.eq-toolbar { display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin:0 0 9px; }
+.eq-toolbar .wlab { font-size:10.5px; color:#999; }
+.eq-wsp { flex:1; }
+.eq-tile { min-height:92px; cursor:pointer; }
+.eq-tile .icon-badge { width:30px; height:30px; }
+.eq-tile .icon-badge svg { width:18px; height:18px; }
+/* 装備した瞬間のフラッシュ */
+.flash { animation:eqFlash 1.2s ease-out; }
+@keyframes eqFlash {
+  0%, 55% { border-color:#57e39a; box-shadow:0 0 0 2px #57e39a, 0 0 22px rgba(87,227,154,.6); }
+  100% { box-shadow:0 0 0 0 rgba(87,227,154,0); }
+}
+/* 今買えるタイルは緑に光る (残高が変わると refreshAffordability が付け替える) */
+.btile.afford { border-color:rgba(87,227,154,.6); box-shadow:0 0 12px rgba(87,227,154,.15); }
+/* まとめ買いボタン */
+.bulk-row .wr-btn.bulk { font-size:11px; padding:5px 6px; color:#ffd9a0; border-color:#6b5a2a; }
+.bulk-row .wr-btn.bulk:hover:not(:disabled) { background:#ffd60a; border-color:#ffd60a; color:#000; }
 
 /* =========================================================
    v30: 素材クラフト経済 / 4タブ (工房・攻撃ボット・回収ボット・素材)

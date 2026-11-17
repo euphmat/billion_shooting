@@ -28,6 +28,7 @@ const dmgEntryPool = [];
 const MAX_BEAMS = 300, MAX_RINGS = 120, MAX_LABELS = 24;   // 演出の上限 (超えたら古いものから消す)
 const MAX_DMG_LABELS = 42, DMG_LABEL_TTL = 650;   // ダメージ数値の上限と表示時間(ms)
 let dmgCritFlag = false;   // いま処理中の命中がクリティカルか (弾の命中経路が立てる)
+let dmgVoidFlag = false;   // 虚無の単眼のクリティカルか (紫の特大ダメージ数字 + バースト用)
 const MAT_LABEL_FONT = fs => `700 ${fs}px "Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif`;
 const DMG_FONT = fs => `800 ${fs}px ui-monospace,"SF Mono",Menlo,Consolas,monospace`;
 const DMG_GRID_X = [0, -1, 1, 0, -1, 1, 0, -1], DMG_GRID_Y = [0, 1, 1, 2, 3, 3, 4, 5];   // ダメージ同士が重ならないための配置格子 (列, 行)
@@ -218,6 +219,8 @@ function damageBlock(idx, dmg, splash){
   if (top) dmg = skillHitMods(idx, gx, gy, dmg, hp);
   const dfx = top ? dungeonFxAt(gx, gy) : null;   // ダンジョン固有効果
   if (dfx){ dmg *= dfx.dmg; if (dfx.crit && Math.random() < dfx.crit){ dmg *= 2; dmgCritFlag = true; } }
+  const voidHit = top && dmgVoidFlag;   // 虚無の単眼の会心 (skillHitMods か弾の経路が立てる)。読んだら消費する
+  if (top) dmgVoidFlag = false;
   let cur = hp - dmg;
   if (top && cur > 0 && sk("a_execute") && cur <= blockMaxHP(gx, gy) * 0.1) cur = 0;   // 処刑
   if (top && cur > 0 && sk("b_zero") && frosts.has(idx) && cur <= blockMaxHP(gx, gy) * 0.1) cur = 0;   // 絶対零度: 氷結中は残り1割で砕ける
@@ -229,11 +232,15 @@ function damageBlock(idx, dmg, splash){
     if (!e){
       if (dmgAcc.size < 96){
         e = dmgEntryPool.pop() || {};
-        e.x = g2w(gx); e.y = g2w(gy); e.total = 0; e.crit = false; e.max = hp;
+        e.x = g2w(gx); e.y = g2w(gy); e.total = 0; e.crit = false; e.void = false; e.max = hp;
         dmgAcc.set(idx, e);
       }
     }
-    if (e){ e.total += dealt; if (dmgCritFlag) e.crit = true; }
+    if (e){ e.total += dealt; if (dmgCritFlag) e.crit = true; if (voidHit) e.void = true; }
+    if (voidHit){   // 虚無の単眼: 紫のリング。星バーストは壊れた時だけ (頻度を抑える)
+      rings.push({ x: g2w(gx), y: g2w(gy), r: BS * 2.4, t: nowMs, color: "176,110,255", dur: 380 });
+      if (cur <= 0) burstAt(g2w(gx), g2w(gy), { accent: "#b06eff", c2: "#e9d5ff", burst: "star" }, null);
+    }
   }
   flashes.set(idx, nowMs);
   dmgDepth++;
@@ -698,7 +705,7 @@ function frame(now){
   nowMs = now;
   updateSkillHUD();
   updateHpHud();
-  if (!started || cleared || treeOpen || artOpen || mapOpen || updOpen){ draw(now); return; }   // ツリー/アーティファクト/マップ/履歴を開いている間は一時停止
+  if (!started || cleared || treeOpen || artOpen || mapOpen || updOpen || botEqOpen){ draw(now); return; }   // ツリー/アーティファクト/マップ/履歴/ボット装備を開いている間は一時停止
   updateDungeonBanner();
 
   // --- timers ---
@@ -952,8 +959,9 @@ function frame(now){
       curCoinMul = bl.coinMul || 1; novaLeft = bl.nova || 0;
       const hitDmg = bl.dmg;
       dmgCritFlag = !!bl.crit;
+      dmgVoidFlag = !!bl.crit && artHas("lg_void");   // 虚無の単眼: 武器の会心も紫の特大数字にする
       const over = damageBlock(idx, bl.dmg, bl.splash);
-      dmgCritFlag = false;
+      dmgCritFlag = false; dmgVoidFlag = false;
       curCoinMul = 1; novaLeft = 0; curFx = null; curCarry = false;
       if (bl.split){   // 分裂: 周囲のブロックへ破片
         const neigh = [];
@@ -997,14 +1005,16 @@ function frame(now){
 
   // --- coins (player magnet / coin-bot vacuum, yellow) ---
   // 距離の比較は2乗のまま行い、平方根は必要なときだけ取る
-  const mr = magnetRange(), mr2 = mr * mr, vac = coinBotVacuum(), vac2 = vac * vac, pull = coinBotPull(), touch2 = coinBotTouchR() ** 2;
+  const goldSing = artHas("lg_gold");   // 黄金の特異点: 吸引範囲 ×6・吸引力も大幅アップ
+  const mr = magnetRange() * (goldSing ? 6 : 1), mr2 = mr * mr, vac = coinBotVacuum(), vac2 = vac * vac, pull = coinBotPull(), touch2 = coinBotTouchR() ** 2;
+  const pPull = goldSing ? 6000 : 1400;
   const damp = Math.pow(0.92, dt * 60);   // フレームレートに依らない減衰 (60fps で従来の 0.92)
   for (let i = coinsArr.length - 1; i >= 0; i--){
     const c = coinsArr[i];
     let collected = false;
     const dx = player.x - c.x, dy = player.y - c.y, d2 = dx * dx + dy * dy;
     c.age = (c.age || 0) + dt;
-    if (d2 < mr2){ const d = Math.sqrt(d2) || 1; c.vx += dx / d * 1400 * dt; c.vy += dy / d * 1400 * dt; }
+    if (d2 < mr2){ const d = Math.sqrt(d2) || 1; c.vx += dx / d * pPull * dt; c.vy += dy / d * pPull * dt; }
     if (d2 < 676) collected = true;
     if (!collected){
       for (const cb of coinBots){
@@ -1062,9 +1072,9 @@ function flushDmgLabels(){
       d.x = e.x + DMG_GRID_X[slot] * minDx;
       d.y = e.y - DMG_GRID_Y[slot] * minDy;
       d.text = fmtDmg(e.total);
-      d.crit = e.crit;
-      d.fs = e.crit ? 19 : e.total >= e.max * 0.35 ? 15 : 13;
-      d.color = e.crit ? "#ffa726" : "#ffffff";   // 金色は廃止。通常=白、クリティカル=オレンジ
+      d.crit = e.crit; d.void = !!e.void;
+      d.fs = e.void ? 24 : e.crit ? 19 : e.total >= e.max * 0.35 ? 15 : 13;
+      d.color = e.void ? "#c77dff" : e.crit ? "#ffa726" : "#ffffff";   // 金色は廃止。通常=白、クリティカル=オレンジ、虚無の単眼=紫・特大
       d.vy = 26 + (h >> 4) % 19;   // 上昇速度にもばらつきを持たせ、浮かぶ間にも離れていく
       d.t = nowMs;
       dmgLabels.push(d);
@@ -1086,9 +1096,9 @@ function flushDmgLabels(){
       d.x = m.x + ((m.id * 37) % 13) - 6;
       d.y = m.y - m.type.r - 6;
       d.text = fmtDmg(e.total);
-      d.crit = e.crit;
-      d.fs = e.crit ? 19 : 15;
-      d.color = e.crit ? "#ffa726" : "#ffffff";
+      d.crit = e.crit; d.void = !!e.void;
+      d.fs = e.void ? 23 : e.crit ? 19 : 15;
+      d.color = e.void ? "#c77dff" : e.crit ? "#ffa726" : "#ffffff";
       d.vy = 30 + (m.id * 13) % 17;
       d.t = nowMs;
       dmgLabels.push(d); n++;
@@ -1544,6 +1554,7 @@ function draw(now){
   bots.forEach((b, bi) => { const wk = botWeaponAt(bi); attackBotShape(b.x, b.y, b.angle, wk ? WEAPONS[wk].accent : null); });
   coinBots.forEach((cb, i) => coinBotShape(cb.x, cb.y, cb.angle, now / 350 + i * 1.7));
   ship(player.x, player.y, player.angle, 1);
+  drawArtifactsFx(now, toScreen);   // LEGENDARY の常時演出 (残像 / オーラ / きらめき / サイコロ)
 
   // range rings
   const [pcx, pcy] = toScreen(player.x, player.y);
@@ -1713,6 +1724,115 @@ function updateBlockLayer(now, step, gx0, gy0, gx1, gy1){
   }
   return eff;
 }
+// ---------- 状態異常スプライト (負荷対策: 全て事前にオフスクリーン canvas へ描いておき、描画時は drawImage で貼るだけ) ----------
+// アニメーションは全ブロック共通のグローバル位相 (時刻によるフレーム切り替え) のみ。ブロック毎のタイマー・乱数は持たない。
+const STFX_S = 48;   // スプライト解像度 (BS=24 の2倍)
+let STFX = null;
+const stfxRnd = seed => { let s = seed >>> 0; return () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; };
+function stfxMake(paint){
+  const c = document.createElement("canvas"); c.width = c.height = STFX_S;
+  paint(c.getContext("2d"), STFX_S);
+  return c;
+}
+function statusSprites(){
+  if (STFX) return STFX;
+  const S = STFX_S;
+  // 氷結: 水色の膜 + 白い結晶 + 霜のフチ
+  const frost = stfxMake(g => {
+    const rnd = stfxRnd(1234567);
+    g.fillStyle = "rgba(155,218,255,.34)"; g.fillRect(0, 0, S, S);
+    g.fillStyle = "rgba(225,246,255,.28)"; g.fillRect(5, 5, S - 10, S - 10);
+    g.strokeStyle = "rgba(255,255,255,.55)"; g.lineWidth = 2;
+    for (let i = 0; i < 7; i++){   // 結晶の枝
+      const x = 6 + rnd() * (S - 12), y = 6 + rnd() * (S - 12), a = rnd() * 6.283, l = 5 + rnd() * 7;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
+      g.moveTo(x, y); g.lineTo(x + Math.cos(a + 2.4) * l * 0.6, y + Math.sin(a + 2.4) * l * 0.6);
+      g.moveTo(x, y); g.lineTo(x + Math.cos(a - 2.4) * l * 0.6, y + Math.sin(a - 2.4) * l * 0.6); g.stroke();
+    }
+    g.fillStyle = "rgba(255,255,255,.85)";   // きらめき
+    for (let i = 0; i < 3; i++){ const x = 8 + rnd() * (S - 16), y = 8 + rnd() * (S - 16); g.fillRect(x - 1, y - 3, 2, 6); g.fillRect(x - 3, y - 1, 6, 2); }
+    g.strokeStyle = "rgba(255,255,255,.9)"; g.lineWidth = 3; g.strokeRect(1.5, 1.5, S - 3, S - 3);   // 霜のフチ
+  });
+  // 炎上: 3フレーム (下部の炎のギザギザが位相で切り替わる)
+  const burn = [0, 1, 2].map(f => stfxMake(g => {
+    const rnd = stfxRnd(777 + f * 131);
+    g.fillStyle = "rgba(255,84,12,.26)"; g.fillRect(0, 0, S, S);
+    const tongue = (x0, w, h, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(x0, S); g.lineTo(x0 + w / 2, S - h); g.lineTo(x0 + w, S); g.closePath(); g.fill(); };
+    for (let x = -4; x < S; x += 9){ const h = 14 + rnd() * 16; tongue(x, 11, h, "rgba(255,110,0,.75)"); tongue(x + 2.5, 6, h * 0.55, "rgba(255,205,70,.9)"); }
+    g.fillStyle = "rgba(255,190,80,.9)";   // 火の粉
+    for (let i = 0; i < 4; i++){ const x = 4 + rnd() * (S - 8), y = 6 + rnd() * (S * 0.45); g.beginPath(); g.arc(x, y, 1.4 + rnd() * 1.4, 0, 7); g.fill(); }
+  }));
+  // 酸: 2フレーム (泡の位置が切り替わる)
+  const acid = [0, 1].map(f => stfxMake(g => {
+    const rnd = stfxRnd(4242 + f * 977);
+    g.fillStyle = "rgba(105,225,60,.24)"; g.fillRect(0, 0, S, S);
+    g.fillStyle = "rgba(140,240,90,.45)";   // 上からの垂れ
+    for (let i = 0; i < 3; i++){ const x = 6 + rnd() * (S - 14), l = 10 + rnd() * 14; g.fillRect(x, 0, 3.5, l); }
+    for (let i = 0; i < 9; i++){   // 泡の斑点
+      const x = 5 + rnd() * (S - 10), y = 5 + rnd() * (S - 10), r = 2 + rnd() * 4.5;
+      g.beginPath(); g.arc(x, y, r, 0, 7);
+      if (rnd() < 0.5){ g.fillStyle = "rgba(170,255,120,.4)"; g.fill(); } else { g.strokeStyle = "rgba(200,255,160,.85)"; g.lineWidth = 1.6; g.stroke(); }
+    }
+  }));
+  // 放射: 2フレーム (濃さが脈動) + 三つ葉マーク
+  const rad = [0, 1].map(f => stfxMake(g => {
+    g.fillStyle = f ? "rgba(195,255,70,.26)" : "rgba(195,255,70,.15)"; g.fillRect(0, 0, S, S);
+    g.fillStyle = f ? "rgba(220,255,95,.95)" : "rgba(220,255,95,.7)";
+    const cx = S / 2, cy = S / 2;
+    g.beginPath(); g.arc(cx, cy, 3.2, 0, 7); g.fill();
+    for (let k = 0; k < 3; k++){
+      const a = -Math.PI / 2 + k * (Math.PI * 2 / 3);
+      g.beginPath(); g.moveTo(cx + Math.cos(a - 0.52) * 5.5, cy + Math.sin(a - 0.52) * 5.5);
+      g.arc(cx, cy, 14, a - 0.52, a + 0.52); g.closePath(); g.fill();
+    }
+  }));
+  // 過負荷 (帯電): 2フレーム (稲妻が左右に揺れる)
+  const overload = [0, 1].map(f => stfxMake(g => {
+    g.fillStyle = "rgba(255,220,80,.10)"; g.fillRect(0, 0, S, S);
+    const dx = f ? 3 : -2;
+    g.beginPath();
+    g.moveTo(27 + dx, 6); g.lineTo(15 + dx, 27); g.lineTo(22 + dx, 27); g.lineTo(19 + dx, 42); g.lineTo(33 + dx, 20); g.lineTo(25 + dx, 20);
+    g.closePath();
+    g.fillStyle = "rgba(255,228,70,.95)"; g.fill();
+    g.strokeStyle = "rgba(255,160,0,.9)"; g.lineWidth = 1.5; g.stroke();
+  }));
+  // 残り火: 薄い橙の膜 + 下部の熾き
+  const ember = stfxMake(g => {
+    const rnd = stfxRnd(999331);
+    g.fillStyle = "rgba(255,100,20,.15)"; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 6; i++){
+      const x = 4 + rnd() * (S - 8), y = S - 4 - rnd() * 10, r = 1.6 + rnd() * 2.4;
+      g.fillStyle = rnd() < 0.4 ? "rgba(255,215,120,.95)" : "rgba(255,140,45,.85)";
+      g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+  });
+  return (STFX = { frost, burn, acid, rad, overload, ember });
+}
+// 状態異常の描画 (drawBlocks 内、画面内ブロックのみ)。優先順位: 氷結 > burns (炎上/酸/放射) > 過負荷 > 残り火、重なりは最大2枚 (2枚目は右下に小さく)
+function drawStatusFx(now, toSX, toSY, sz, gx0, gy0, gx1, gy1){
+  if (!burns.size && !frosts.size && !embers.size && !overloads.size) return;
+  const SP = statusSprites();
+  const burnCv = SP.burn[(now / 140 | 0) % 3], acidCv = SP.acid[(now / 320 | 0) % 2],
+        radCv = SP.rad[(now / 480 | 0) % 2], ovCv = SP.overload[(now / 180 | 0) % 2];
+  const burnSprite = b => b.k === "acid" ? acidCv : b.k === "rad" ? radCv : burnCv;
+  // 状態が1カテゴリだけなら重なりは起きない: 記録を省略して直接描く
+  if ((!!burns.size) + (!!frosts.size) + (!!overloads.size) + (!!embers.size) === 1){
+    if (frosts.size) for (const idx of frosts.keys()){ const rx = idx % D, ry = (idx / D) | 0; if (rx < gx0 || rx > gx1 || ry < gy0 || ry > gy1 || isDestroyed(idx)) continue; ctx.drawImage(SP.frost, toSX(rx), toSY(ry), sz, sz); }
+    else if (burns.size) for (const [idx, b] of burns){ const rx = idx % D, ry = (idx / D) | 0; if (rx < gx0 || rx > gx1 || ry < gy0 || ry > gy1 || isDestroyed(idx)) continue; ctx.drawImage(burnSprite(b), toSX(rx), toSY(ry), sz, sz); }
+    else if (overloads.size) for (const idx of overloads.keys()){ const rx = idx % D, ry = (idx / D) | 0; if (rx < gx0 || rx > gx1 || ry < gy0 || ry > gy1 || isDestroyed(idx)) continue; ctx.drawImage(ovCv, toSX(rx), toSY(ry), sz, sz); }
+    else for (const idx of embers.keys()){ const rx = idx % D, ry = (idx / D) | 0; if (rx < gx0 || rx > gx1 || ry < gy0 || ry > gy1 || isDestroyed(idx)) continue; ctx.drawImage(SP.ember, toSX(rx), toSY(ry), sz, sz); }
+    return;
+  }
+  // 複数カテゴリ: 重なりは前段の Map への has 判定だけで数える (追加の記録 Map を持たない)。最大2枚、2枚目は sz が十分大きい時だけ右下に小さく
+  const badge = sz >= 14, s2 = sz * 0.55;
+  const draw1 = (idx, cv) => { const rx = idx % D, ry = (idx / D) | 0; if (rx < gx0 || rx > gx1 || ry < gy0 || ry > gy1 || isDestroyed(idx)) return; ctx.drawImage(cv, toSX(rx), toSY(ry), sz, sz); };
+  const draw2 = (idx, cv) => { if (!badge) return; const rx = idx % D, ry = (idx / D) | 0; if (rx < gx0 || rx > gx1 || ry < gy0 || ry > gy1 || isDestroyed(idx)) return; ctx.drawImage(cv, toSX(rx) + sz - s2, toSY(ry) + sz - s2, s2, s2); };
+  for (const idx of frosts.keys()) draw1(idx, SP.frost);
+  for (const idx of burns.keys()){ const cv = burnSprite(burns.get(idx)); if (frosts.has(idx)) draw2(idx, cv); else draw1(idx, cv); }
+  for (const idx of overloads.keys()){ const prior = (frosts.has(idx) ? 1 : 0) + (burns.has(idx) ? 1 : 0); if (prior === 0) draw1(idx, ovCv); else if (prior === 1) draw2(idx, ovCv); }
+  for (const idx of embers.keys()){ const prior = (frosts.has(idx) ? 1 : 0) + (burns.has(idx) ? 1 : 0) + (overloads.has(idx) ? 1 : 0); if (prior === 0) draw1(idx, SP.ember); else if (prior === 1) draw2(idx, SP.ember); }
+}
+
 function drawBlocks(now, camX, camY, px, step, gx0, gy0, gx1, gy1){
   step = updateBlockLayer(now, step, gx0, gy0, gx1, gy1);
   const L = blockLayer, cell = px * step;
@@ -1786,15 +1906,8 @@ function drawBlocks(now, camX, camY, px, step, gx0, gy0, gx1, gy1){
     ctx.fillRect(toSX(rx), toSY(ry), sz, sz);
   }
   if (flashes.size > 200) flashes.clear();
-  // --- 氷結 (薄い水色の膜) ---
-  if (frosts.size){
-    ctx.fillStyle = "rgba(170,230,255,.45)";
-    for (const idx of frosts.keys()){
-      const rx = idx % D, ry = (idx / D) | 0;
-      if (rx < gx0 || rx > gx1 || ry < gy0 || ry > gy1 || isDestroyed(idx)) continue;
-      ctx.fillRect(toSX(rx), toSY(ry), sz, sz);
-    }
-  }
+  // --- 状態異常 (氷結/炎上/酸/放射/過負荷/残り火: プリレンダ済みスプライトを貼るだけ) ---
+  drawStatusFx(now, toSX, toSY, sz, gx0, gy0, gx1, gy1);
 
   // --- ブロックの継ぎ目 (1本のパスでまとめて引く。惑星の外 = 宇宙・大気には引かない) ---
   const x0 = toSX(gx0), x1 = toSX(gx1 + 1), y0 = toSY(gy0), y1 = toSY(gy1 + 1);

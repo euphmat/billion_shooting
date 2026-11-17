@@ -230,7 +230,7 @@ const canLearn = n => !sk(n.id) && skillUnlocked(n) && spLeft() >= n.cost;
 const levelDmgMul = () => 1 + 0.015 * (state.lv - 1);
 const blockXP = (gx, gy) => Math.max(1, Math.round(Math.sqrt(blockMaxHP(gx, gy) / 5)));
 function gainXP(n){
-  state.xp += n * (1 + artVal("xp"));
+  state.xp += n * (1 + artVal("xp")) * artMul("xpMul");   // 星屑の王笏: 経験値 ×2 (乗算キー)
   while (state.xp >= xpNeed(state.lv)){
     state.xp -= xpNeed(state.lv); state.lv++;
     if (typeof onLevelUpHeal === "function") onLevelUpHeal();   // レベルアップでHP全回復
@@ -248,18 +248,19 @@ const playerRate = () => (sk("a_rapid") ? 1.08 : 1) * (sk("a_rapid2") ? 1.2 : 1)
 const crewRate   = () => (sk("d_rate") ? 1.15 : 1) * (sk("d_rate2") ? 1.25 : 1);
 // 素材ドロップ倍率 (装備の触媒効果はヒット時に別に掛かる)
 const matDropMul = () => (1 + artVal("drop")) * (1 + (sk("c_vein") ? 0.15 : 0)) * (sk("e_master") ? 2 : 1) * (sk("e_master2") ? 2 : 1) * (sk("e_god") ? 3 : 1);
-const elemMul    = () => (sk("b_elem") ? 1.2 : 1) * (1 + artVal("elem"));   // 元素の心得: 状態異常ダメージ
+const elemMul    = () => (sk("b_elem") ? 1.2 : 1) * (1 + artVal("elem")) * (artHas("lg_crown") ? 1.5 : 1);   // 元素の心得: 状態異常ダメージ / 元素の王冠: ×1.5
 const burnSetMul = () => elemMul() * (sk("b_burn") ? 1.5 : 1) * (sk("b_plasma") ? 2 : 1) * (1 + artVal("burn"));   // 燃焼の付与倍率
 
 // ---------- 元素付与 (スキルツリー): どの武器でも状態異常が乗る ----------
 function elemChances(){
   const all = sk("b_kindling") ? 0.05 : 0;   // 元素活性: 全ての付与率アップ
+  const crown = artHas("lg_crown") ? 0.15 : 0;   // 元素の王冠: 全元素の付与率 +15% (絶対値)
   return {
-    burn:  (sk("b_burn")  ? 0.08 : 0) + all,
-    frost: (sk("b_frost") ? 0.08 : 0) + all,
-    acid:  (sk("b_acid")  ? 0.08 : 0) + all,
-    rad:   (sk("b_radio") ? 0.05 : 0) + all,
-    shock: (sk("b_shock") ? 0.08 : 0) + (sk("b_tesla") ? 0.08 : 0) + all,
+    burn:  (sk("b_burn")  ? 0.08 : 0) + all + crown,
+    frost: (sk("b_frost") ? 0.08 : 0) + all + crown,
+    acid:  (sk("b_acid")  ? 0.08 : 0) + all + crown,
+    rad:   (sk("b_radio") ? 0.05 : 0) + all + crown,
+    shock: (sk("b_shock") ? 0.08 : 0) + (sk("b_tesla") ? 0.08 : 0) + all + crown,
   };
 }
 // 自機の命中時に呼ばれる。装備の特性とは独立に、スキル由来の状態異常を付ける
@@ -312,7 +313,7 @@ function rawDamage(fn){ dmgDepth++; try { fn(); } finally { dmgDepth--; } }
 
 // 全ての攻撃に掛かる倍率。毎フレーム gMul に入れておき、命中時はそれを使う
 function globalDmgMul(){
-  let m = levelDmgMul() * (1 + artVal("dmg"));
+  let m = levelDmgMul() * (1 + artVal("dmg")) * artMul("dmgMul");   // 惑星の心臓: 全ダメージ ×1.5 (乗算キー)
   if (sk("a_train")) m *= 1.06;
   if (sk("a_combo")) m *= 1 + Math.min(30, combo) * 0.005;
   if (sk("a_warm"))  m *= 1 + 0.2 * heat;
@@ -329,7 +330,9 @@ function skillHitMods(idx, gx, gy, dmg, hp){
   let m = gMul;
   const max = blockMaxHP(gx, gy);
   if (hp >= max && sk("a_first")) m *= 1.2;
-  { const ac = (sk("a_crit") ? 0.06 : 0) + artVal("crit") / 100; if (ac > 0 && Math.random() < ac) m *= (sk("a_critx") ? 3 : 2) + artVal("critd") / 100; }   // 会心 (スキル+アーティファクト合算)
+  { const voidEye = artHas("lg_void");   // 虚無の単眼: 会心率 +20%、会心ダメは最低でも ×3、専用演出フラグを立てる
+    const ac = (sk("a_crit") ? 0.06 : 0) + artVal("crit") / 100 + (voidEye ? 0.20 : 0);
+    if (ac > 0 && Math.random() < ac){ let cm = (sk("a_critx") ? 3 : 2) + artVal("critd") / 100; if (voidEye){ cm = Math.max(cm, 3); dmgVoidFlag = true; } m *= cm; } }   // 会心 (スキル+アーティファクト合算)
   if (sk("a_deep")) m *= 1 + (sk("a_deep2") ? 2.0 : 1.0) * blockDepth(gx, gy);
   if (artVal("deep")) m *= 1 + artVal("deep") * blockDepth(gx, gy);   // アーティファクト: 深さダメ
   if (sk("a_abyss") && blockDepth(gx, gy) >= 0.5) m *= 1.25;
@@ -360,6 +363,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
       if (cand.length){ const j = cand[0]; beams.push({ x1: g2w(gx), y1: g2w(gy), x2: g2w(j % D), y2: g2w((j / D) | 0), t: performance.now(), w: 2, color: "#ffe14d" }); damageBlock(j, dmg * 0.3, 0); }
     } finally { artZapBusy = false; }
   }
+  if (curPl && artHas("lg_dice") && Math.random() < 0.05) chaosDice(idx, gx, gy, dmg);   // 混沌のサイコロ: 自機の命中時 5%で発動
   if (cur < 0 && dmg < 1e300 && !curCarry && sk("a_overkill")){   // 弾・照射は damageBlock の余剰引き継ぎで強化される
     let carry = -cur, cx = gx, cy = gy;
     for (let k = 0; k < 6 && carry > 0; k++){
@@ -408,7 +412,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
 
 // ---------- 撃破時 ----------
 function coinSkillMul(){
-  let m = 1 + artVal("coin");
+  let m = (1 + artVal("coin")) * artMul("coinMul");   // 黄金の特異点: コイン ×2 (乗算キー)
   if (sk("c_merchant")) m *= 1.10;
   if (sk("c_king")) m *= 1.3;
   if (sk("c_bonus2")) m *= 1.2;
@@ -465,6 +469,13 @@ function skillOnBreak(idx, gx, gy, kind, rare){
     finally { shattering = false; }
   }
   if (sk("a_meteor") && ++breakN >= (sk("a_meteor2") ? 120 : 300)){ breakN = 0; meteors.push({ x, y, t: 0.6, r: BS * 4, dmg: playerDamage() * 10 }); }
+  if (artHas("lg_nova") && !novaBusy && ++novaArtN >= 50){ novaArtN = 0; novaBusy = true; try { supernovaAt(x, y); } finally { novaBusy = false; } }   // 超新星の核: 50個破壊ごと
+  if (artHas("lg_gaia") && !deep && !shattering && Math.random() < 0.25){   // 大地母神の腕: 隣接ブロックも一緒に砕く (緑の衝撃波)
+    shattering = true;
+    try { for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) damageBlock(j, blockMaxHP(gx + dx, gy + dy) * 10, 0); } }
+    finally { shattering = false; }
+    rings.push({ x, y, r: BS * 1.8, t: performance.now(), color: "90,220,120", dur: 320 });
+  }
   if (sk("e_reso") && !resonating){   // 鉱脈共鳴: 隣の同じ素材も一緒に削れる
     const pw = 0.2, dirs = N4, mi = materialAt(gx, gy);
     resonating = true;
