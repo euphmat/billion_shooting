@@ -2304,6 +2304,18 @@ const bigMapCv = $("bigMap"), bigMapCtx = bigMapCv.getContext("2d");
 const BM_SIZE = 760;
 function openMap(){ mapOpen = true; drawBigMap(); $("mapOverlay").classList.add("open"); }
 function closeMap(){ mapOpen = false; $("mapOverlay").classList.remove("open"); }
+// 拡大マップのラベル重なり解消: 既に置いたラベルと重なる場合は下へ14pxずつずらす (最大4段・56px)。
+// ずらすのは描画位置だけで、クリック判定 (bigMapMarks) は変わらない。重なりがなければ dy=0 で従来通り。
+function mapLabelShift(box, placed){
+  let dy = 0;
+  while (dy < 56){
+    const y0 = box.y0 + dy, y1 = box.y1 + dy;
+    if (!placed.some(p => box.x0 < p.x1 && p.x0 < box.x1 && y0 < p.y1 && p.y0 < y1)) break;
+    dy += 14;
+  }
+  placed.push({ x0: box.x0, x1: box.x1, y0: box.y0 + dy, y1: box.y1 + dy });
+  return dy;
+}
 function drawBigMap(){
   const g = bigMapCtx, scale = BM_SIZE / D, px = gx => gx * scale;
   g.fillStyle = "#04060a"; g.fillRect(0, 0, BM_SIZE, BM_SIZE);
@@ -2333,18 +2345,26 @@ function drawBigMap(){
   });
   // ラベルは訪問済みのみ (名前 + 効果名)。未訪問はグレーのマーカーだけ
   g.textAlign = "center";
+  const placedLabels = [];
   for (const m of bigMapMarks){
     if (!state.visitedBodies.includes(m.si)) continue;
     const S = SATS[m.si];
     g.font = "bold 11px sans-serif";
     const tw = g.measureText(S.name).width + 8;
-    g.fillStyle = "rgba(0,0,0,.68)"; g.fillRect(m.lx - tw / 2, m.ly - 15, tw, 13);
-    g.fillStyle = "#fff"; g.fillText(S.name, m.lx, m.ly - 4);
+    let fw = 0;
     if (S.fx){
       g.font = "9px sans-serif";
-      const fw = g.measureText(S.fx.name).width + 8;
-      g.fillStyle = "rgba(0,0,0,.55)"; g.fillRect(m.lx - fw / 2, m.ly - 1, fw, 11);
-      g.fillStyle = "#ffd9a0"; g.fillText(S.fx.name, m.lx, m.ly + 8);
+      fw = g.measureText(S.fx.name).width + 8;
+    }
+    const hw = Math.max(tw, fw) / 2;
+    const ly = m.ly + mapLabelShift({ x0: m.lx - hw, x1: m.lx + hw, y0: m.ly - 15, y1: m.ly + (S.fx ? 10 : -2) }, placedLabels);
+    g.font = "bold 11px sans-serif";
+    g.fillStyle = "rgba(0,0,0,.68)"; g.fillRect(m.lx - tw / 2, ly - 15, tw, 13);
+    g.fillStyle = "#fff"; g.fillText(S.name, m.lx, ly - 4);
+    if (S.fx){
+      g.font = "9px sans-serif";
+      g.fillStyle = "rgba(0,0,0,.55)"; g.fillRect(m.lx - fw / 2, ly - 1, fw, 11);
+      g.fillStyle = "#ffd9a0"; g.fillText(S.fx.name, m.lx, ly + 8);
     }
   }
   // 自機マーカー
