@@ -223,19 +223,23 @@ const recipeChips = (rec, small) => `<div class="recipe">${Object.keys(rec).map(
 const canPay = (coins, mats) => state.coins >= coins && (!mats || invHas(mats));
 
 /* ---------- 武器強化の「素材代用払い」 ----------
-   強化のコイン部分は、手持ち素材を 1個 = 1コイン として代用払いできる (素材を優先し、不足分だけコインで払う)。
+   強化のコイン部分は、その武器の製作レシピに使われている素材だけを 1個 = 1コイン として代用払いできる
+   (素材を優先し、不足分だけコインで払う)。製作レシピに無い素材は、その武器の強化には1個も使えない。
    要求素材は先に差し引き、その購入では代用プールから除外する (二重計上しない)。
-   代用素材は所持数の多い順に使い、同数なら素材の並び順 (MAT_KEYS) で安定させる。
+   代用素材はプール内で所持数の多い順に使い、同数なら素材の並び順 (MAT_KEYS) で安定させる。
    購入可否・買えない理由・支払い実行・内訳表示はすべてこのプラン計算を通す (二重実装しない) */
-function matSubPlan(coins, mats){
+function matSubPlan(coins, mats, subMats){
   const req = mats || {};
   const plan = { subs: [], subTotal: 0, coinsPay: coins, short: 0, ok: false };
   if (!invHas(req)) return plan;   // 要求素材が揃っていない (coinsPay は名目値のまま)
   let rest = coins;
   if (rest > 0){
+    const allow = subMats ? new Set(subMats) : null;   // 代用できるのは製作素材だけ (空配列 = 代用不可)
     const pool = [];
     for (let i = 0; i < MAT_KEYS.length; i++){
-      const k = MAT_KEYS[i], free = invOf(k) - (req[k] || 0);
+      const k = MAT_KEYS[i];
+      if (allow && !allow.has(k)) continue;
+      const free = invOf(k) - (req[k] || 0);
       if (free > 0) pool.push({ k, i, free, have: invOf(k) });
     }
     pool.sort((a, b) => b.have - a.have || a.i - b.i);   // 所持数降順 → 並び順で安定
@@ -251,13 +255,13 @@ function matSubPlan(coins, mats){
   plan.ok = plan.short === 0;                     // 実質所持 (コイン + 代用可能素材) で払えるか
   return plan;
 }
-// buyDef の結果からプランを引く (素材代用が効く購入 = 武器強化だけ)
-const matSubPlanFor = d => d && d.matSub ? matSubPlan(d.coins, d.mats) : null;
-// 内訳表示: 「素材払い: ○○ ×n 他m種 = Xコイン分 + コイン Y」(代用が無い時は空文字)
+// buyDef の結果からプランを引く (素材代用が効く購入 = 武器強化だけ。代用プールは d.subMats = 製作素材)
+const matSubPlanFor = d => d && d.matSub ? matSubPlan(d.coins, d.mats, d.subMats) : null;
+// 内訳表示: 「製作素材払い: ○○ ×n 他m種 = Xコイン分 + コイン Y」(代用が無い時は空文字)
 function matSubText(plan){
   if (!plan || plan.subTotal <= 0) return "";
   const first = plan.subs[0];
-  let s = `素材払い: ${MAT[first.k].name} ×${fmt(first.n)}`;
+  let s = `製作素材払い: ${MAT[first.k].name} ×${fmt(first.n)}`;
   if (plan.subs.length > 1) s += ` 他${plan.subs.length - 1}種`;
   s += ` = ${fmt(plan.subTotal)}コイン分`;
   if (plan.coinsPay > 0) s += ` + コイン ${fmt(plan.coinsPay)}`;
@@ -296,7 +300,7 @@ function buyDefRaw(dataBuy){
       } }; }
     case "equip": return { coins:0, ok:!!state.weaponsOwned[arg], apply(){ state.weapon = arg; clearBotWeapon(arg); } };
     case "wupgrade": if (!WEAPONS[arg]) return null;
-      return { coins:WEAPON_UP_COST(arg), mats:WEAPON_UP_MATS(arg), matSub:true, ok:!!state.weaponsOwned[arg], apply(){ state.weaponLv[arg] = weaponLvOf(arg) + 1; } };
+      return { coins:WEAPON_UP_COST(arg), mats:WEAPON_UP_MATS(arg), matSub:true, subMats:Object.keys(WEAPONS[arg].recipe), ok:!!state.weaponsOwned[arg], apply(){ state.weaponLv[arg] = weaponLvOf(arg) + 1; } };
     case "bot":   return { coins:BOT_COST(state.bots), mats:BOT_RECIPE(state.bots), ok:state.bots < BOT_MAX, apply(){ state.bots++; syncBots(); } };
     case "coinbot": return { coins:COINBOT_COST(state.coinBots), mats:COINBOT_RECIPE(state.coinBots), ok:state.coinBots < COINBOT_MAX, apply(){ state.coinBots++; syncCoinBots(); } };
     case "bupgrade": return { coins:BOT_UP_COST(), mats:BOT_UP_MATS(), ok:state.bots > 0, apply(){ state.botLv++; } };
@@ -311,7 +315,7 @@ function buyDefRaw(dataBuy){
 }
 const canBuy = d => {
   if (!d || !d.ok) return false;
-  if (d.matSub) return matSubPlan(d.coins, d.mats).ok;   // 武器強化: 実質所持 (コイン+代用素材) で判定
+  if (d.matSub) return matSubPlan(d.coins, d.mats, d.subMats).ok;   // 武器強化: 実質所持 (コイン+製作素材の代用分) で判定
   return canPay(d.coins, d.mats);
 };
 // 買えない理由 (ボット系タイルでボタンの下に赤字で出す。買える時は空文字)
@@ -324,9 +328,9 @@ function buyReason(dataBuy){
     return BUY_NEED[dataBuy] || "条件を満たしていない";
   }
   if (d.matSub){
-    // 武器強化: 要求素材が不足なら素材不足、そうでなければ実質所持 (コイン+全素材換算) での不足分を出す
+    // 武器強化: 要求素材が不足なら素材不足、そうでなければ実質所持 (コイン+製作素材換算) での不足分を出す
     if (d.mats) for (const k in d.mats){ const lack = d.mats[k] - invOf(k); if (lack > 0) return `${MAT[k].name} が不足 (あと ${fmt(lack)})`; }
-    const p = matSubPlan(d.coins, d.mats);
+    const p = matSubPlan(d.coins, d.mats, d.subMats);
     return `コイン・素材が不足 (あと ${fmt(p.short)})`;
   }
   if (state.coins < d.coins) return `コイン不足 (あと ${fmt(d.coins - state.coins)})`;
@@ -954,7 +958,7 @@ function applyBuy(dataBuy){
 }
 function doBuy(dataBuy){
   if (!applyBuy(dataBuy)){ sndFail(); return false; }
-  if (lastMatSubPlan && lastMatSubPlan.subTotal > 0) toast(`素材払い ${fmt(lastMatSubPlan.subTotal)} コイン分で強化した`);
+  if (lastMatSubPlan && lastMatSubPlan.subTotal > 0) toast(`製作素材払い ${fmt(lastMatSubPlan.subTotal)} コイン分で強化した`);
   sndBuy(); save(); renderPanels(true); updateHUD();
   return true;
 }
@@ -1125,6 +1129,7 @@ $("resetBtn").addEventListener("click", () => {
 let updOpen = false;
 // 新しい順。行を足すときは先頭に追加し、core.js の GAME_VERSION を上げる
 const UPDATE_HISTORY = [
+  { v:86, text:"素材払いに使える素材を、その武器の製作に使う素材だけに限定した (内訳表示も「製作素材払い」に変更)" },
   { v:85, text:"コインの色が額面で10段階に変わるようにした (銅→赤銅→銀→プラチナ→金→濃金→エメラルド→サファイア→アメジスト→虹・合体で段階が上がるとリング表示)" },
   { v:84, text:"落ちたコインが密集すると合体して大きなコインになるようにした (総額はそのまま・額が大きいほど豪華に・描画も軽く)" },
   { v:83, text:"素材で支払う時は強化ボタンにも素材のアイコンを表示するようにした (全額素材払いではコイン表示なし・混合払いは両方表示)" },

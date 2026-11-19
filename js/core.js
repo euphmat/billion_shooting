@@ -28,7 +28,7 @@ function fmtDmg(n){
 // ---------- save / state ----------
 const SAVE_KEY = "billion_shooting_save_v2";
 const OLD_SAVE_KEY = "million_shooting_save_v1";
-const GAME_VERSION = 85;   // 現在のゲームバージョン (アップデート履歴の未読判定に使う)
+const GAME_VERSION = 86;   // 現在のゲームバージョン (アップデート履歴の未読判定に使う)
 const state = {
   coins: 0, totalCoins: 0, destroyed: 0,
   weapon: "handDrill",
@@ -469,9 +469,9 @@ function WEAPON_UP_MATS(k){
   for (const m of keys) out[m] = Math.ceil(w.recipe[m] * 0.2 * Math.pow(1.25, lv));
   return out;
 }
-// 武器強化は素材代用払い (ui.js の matSubPlan) が効くので、判定も実質所持に合わせる
+// 武器強化は素材代用払い (ui.js の matSubPlan) が効くので、判定も実質所持に合わせる (代用できるのは製作素材だけ)
 const canUpgradeWeapon = k => state.weaponsOwned[k] && invHas(WEAPON_UP_MATS(k)) &&
-  (typeof matSubPlan === "function" ? matSubPlan(WEAPON_UP_COST(k), WEAPON_UP_MATS(k)).ok : state.coins >= WEAPON_UP_COST(k));
+  (typeof matSubPlan === "function" ? matSubPlan(WEAPON_UP_COST(k), WEAPON_UP_MATS(k), Object.keys(WEAPONS[k].recipe)).ok : state.coins >= WEAPON_UP_COST(k));
 
 // ---------- 攻撃ボット (製造: コイン + 素材) ----------
 const BOT_MAX = 12, COINBOT_MAX = 8;
