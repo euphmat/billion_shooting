@@ -66,6 +66,12 @@ const ICONS = {
   rights:      `<path d="M6.5 21V4" stroke-linecap="round"/><path d="M6.5 4.6c3-1.8 5 1.4 9 .2v5.2c-4 1.2-6-2-9-.2" stroke-linejoin="round"/><path d="M3 21h18" stroke-linecap="round"/><path d="M14.5 21 17 16.8 19.5 21" stroke-linejoin="round"/>`,
   automine:    `<path d="M4.5 19.5 14 10" stroke-linecap="round"/><path d="M9.2 3.8c4.6.4 8.2 3.4 9.8 8.2C15.4 9 12.2 7.4 9.2 7z" stroke-linejoin="round"/><circle cx="19" cy="19" r="1.5"/><circle cx="12.2" cy="20.2" r="1.5"/><path d="M15.8 13.2 18 17.5M13.4 14.8l-.6 3.6" stroke-linecap="round"/>`,
   stareater:   `<path d="M12 2.8l2 5.3 5.6.5-4.3 3.7 1.4 5.5L12 14.6l-4.7 3.2 1.4-5.5L4.4 8.6 10 8.1z" stroke-linejoin="round"/><path d="M12 .8v3M12 20.2v3M.8 12h3M20.2 12h3" stroke-linecap="round"/>`,
+  // --- 究極専用アイコン (5種) ---
+  ultdestroy:  `<circle cx="12" cy="12" r="6.8"/><path d="M8.2 10.2l2.4 1.8-1 2.6M15.8 10l-2 2 1.2 2.4" stroke-linejoin="round"/><path d="M4.5 4.5l15 15M19.5 4.5l-15 15" stroke-linecap="round"/>`,
+  ultbigbang:  `<circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="8.6" stroke-dasharray="2.5 3"/><path d="M12 0.8v2.2M12 21v2.2M0.8 12H3M21 12h2.2M4.2 4.2l1.6 1.6M19.8 4.2l-1.6 1.6M4.2 19.8l1.6-1.6M19.8 19.8l-1.6-1.6" stroke-linecap="round"/>`,
+  ultgold:     `<path d="M6.5 8.5c-2.2 0-4 1.6-4 3.5s1.8 3.5 4 3.5c3.8 0 7-7 10.5-7 2.2 0 4 1.6 4 3.5s-1.8 3.5-4 3.5c-3.5 0-6.7-7-10.5-7z" stroke-linejoin="round"/><circle cx="12" cy="18" r="2.6"/><path d="M10.8 18h2.4M12 16.8v2.4" stroke-linecap="round"/><path d="M19.5 1.6l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z" stroke-linejoin="round"/>`,
+  ultmothership:`<path d="M21.5 12 16 8.8H8.5L4 6.8l1.2 5.2L4 17.2l4.5-2H16z" stroke-linejoin="round"/><path d="M8.5 8.8v6.4M13 9.5v5" stroke-linecap="round"/><circle cx="18.2" cy="12" r="1.3" fill="currentColor" stroke="none"/><path d="M2.2 9.8v4.4" stroke-linecap="round"/>`,
+  ultdevour:   `<path d="M12 2.8l2 5.3 5.6.5-4.3 3.7 1.4 5.5L12 14.6l-4.7 3.2 1.4-5.5L4.4 8.6 10 8.1z" stroke-linejoin="round"/><path d="M12 10.1a1.9 1.9 0 1 1-1.9 1.9" stroke-linecap="round"/>`,
   drill:   `<path d="M7 4h10l-5 17z" stroke-linejoin="round"/><path d="M8.2 8.5l7.2 2M9.6 13l4.4 1.5" stroke-linecap="round"/>`,
   rare:    `<path d="M6 4h12l4 5.5L12 21 2 9.5z" stroke-linejoin="round"/><path d="M2 9.5h20M9 4l-2 5.5L12 21l5-11.5L15 4"/>`,
   double:  `<path d="M4 9h11M4 15h11" stroke-linecap="round"/><path d="M14 6.5 19 9l-5 2.5M14 12.5 19 15l-5 2.5" stroke-linejoin="round"/>`,
@@ -1199,6 +1205,7 @@ $("resetBtn").addEventListener("click", () => {
 let updOpen = false;
 // 新しい順。行を足すときは先頭に追加し、core.js の GAME_VERSION を上げる
 const UPDATE_HISTORY = [
+  { v:89, text:"究極スキル5種を追加 (各1000SP): 惑星消滅プロトコル (全ダメ×3＋45秒ごとに半径24を消し飛ばす消滅砲撃) / ビッグバン元素炉 (付与率+50pt・状態ダメ×5・元素新星) / 無限黄金郷 (コイン×5・XP×3・素材×3・黄金化×100) / 惑星破壊艦隊 (巨大母艦の惑星破壊ビーム・全ボット×3) / 星喰い・真 (半径3追加破壊＋解体波)。そしてエンディング実装: 主惑星のブロックを全て壊すとシネマティックとエンディング画面が流れ、タイトルにクリアバッジが付く (その後もエンドレスで遊べる)" },
   { v:88, text:"工房の最上部に「一括強化 (強い順)」ボタンを追加 (強い武器から順に、買える限りまとめて強化・見込み回数つき)" },
   { v:87, text:"コイン同士の引き合う力を付けた (約4ブロック以内のコインが寄り集まって合体しやすくなった)" },
   { v:86, text:"素材払いに使える素材を、その武器の製作に使う素材だけに限定した (内訳表示も「製作素材払い」に変更)" },
@@ -1257,7 +1264,7 @@ function updateHUD(){
   setText($("sidePct"), pct.toFixed(5) + "%");
   if (bar._w !== w){ bar._w = w; bar.style.width = w; }
   setText($("sideDestroyed"), "破壊 " + fmt(state.destroyed));
-  setText($("sideRemain"), "残り " + fmt(alive));
+  setText($("sideRemain"), "残り " + fmt(mainAlive));   // 主惑星の残数 (alive は全天体の合算なので、惑星の残りはこちらが正しい)
   setText($("sideCoins"), fmt(state.coins));
 }
 

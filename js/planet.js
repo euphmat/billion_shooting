@@ -19,6 +19,13 @@ const D  = GC * 2 + 1;            // grid width / height (14801)
 const R2 = R * R;
 const TARGET_TOTAL = 100_000_000;
 let alive = TARGET_TOTAL;
+// 主惑星だけの残数 (エンディング判定用)。alive は全天体の破壊で減る歴史的な合算なので、
+// 主惑星のセル (円盤内。内部ダンジョンのセルも主惑星の一部として数える) だけを別に数える
+let mainAlive = TARGET_TOTAL;
+const isMainCell = (gx, gy) => {
+  const dx = gx - GC, dy = gy - GC, d2 = dx * dx + dy * dy;
+  return d2 <= R2 && (d2 < REMOVED_MIN_D2 || !removedSet.has(gy * D + gx));
+};
 
 // --- 円の縁の端数調整: 最も外側の数千個を「存在しない」ことにして総数を一致させる ---
 const removedSet = new Set();
@@ -79,6 +86,23 @@ function markDestroyed(idx){
   const w = S.world;
   if (!w) return;
   if (typeof w.alive === "number") alive = Math.max(0, Math.min(TARGET_TOTAL, w.alive));
+  if (typeof w.mainAlive === "number") mainAlive = Math.max(0, Math.min(TARGET_TOTAL, w.mainAlive));
+  else if (S.chunks){
+    // mainAlive の無い旧セーブ: 破壊ビットマップから主惑星の破壊数を1回だけ数え直す
+    // (行ごとにバイト単位で popcount するので 1億セルでも一瞬で終わる)
+    const POP = new Uint8Array(256); for (let i = 1; i < 256; i++) POP[i] = POP[i >> 1] + (i & 1);
+    let destroyedMain = 0;
+    for (let dy = -R; dy <= R; dy++){
+      const gy = GC + dy, dxm = Math.floor(Math.sqrt(R2 - dy * dy));
+      const i0 = gy * D + (GC - dxm), i1 = gy * D + (GC + dxm);
+      const b0 = i0 >> 3, b1 = i1 >> 3;
+      if (b0 === b1){ destroyedMain += POP[destroyedBits[b0] & (0xff << (i0 & 7)) & (0xff >>> (7 - (i1 & 7)))]; continue; }
+      destroyedMain += POP[destroyedBits[b0] & (0xff << (i0 & 7))];
+      for (let b = b0 + 1; b < b1; b++) destroyedMain += POP[destroyedBits[b]];
+      destroyedMain += POP[destroyedBits[b1] & (0xff >>> (7 - (i1 & 7)))];
+    }
+    mainAlive = Math.max(0, TARGET_TOTAL - destroyedMain);
+  }
   if (w.ix && w.hp) for (let i = 0; i < w.ix.length; i++) damagedMap.set(w.ix[i], w.hp[i]);
 })();
 

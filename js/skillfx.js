@@ -111,12 +111,60 @@ const burstSprs = {
   acid: burstSprite("rgba(120,255,90,.9)", "rgba(80,220,60,.7)"),
   rad: burstSprite("rgba(157,107,255,.9)", "rgba(140,80,255,.7)"),
   spark: burstSprite("rgba(125,249,255,.95)", "rgba(125,249,255,.7)"),
+  annihilation: burstSprite("rgba(255,255,255,.98)", "rgba(255,244,200,.9)"),   // 消滅砲撃 (究極): 純白
+  diswave: burstSprite("rgba(255,170,80,.95)", "rgba(255,210,130,.85)"),        // 解体波 (究極): 橙白
+  planetbeam: burstSprite("rgba(125,249,255,.95)", "rgba(190,250,255,.85)"),    // 惑星破壊ビーム (究極): 青白
 };
+// 惑星破壊艦隊の母艦: オービタル (104px) より遥かに大きい 240px の弩級艦 (鼻は +x 方向)。
+// 多層装甲 + 側部ポッド + 金のトリム + 発光コアストリップで「重さ」を出す
+const mothershipSpr = makeSprite(240, (g, S) => {
+  const cx = S / 2, cy = S / 2;
+  const eng = g.createRadialGradient(cx - 82, cy, 0, cx - 82, cy, 36);
+  eng.addColorStop(0, "rgba(160,240,255,.75)"); eng.addColorStop(1, "rgba(160,240,255,0)");
+  g.fillStyle = eng; g.beginPath(); g.arc(cx - 82, cy, 36, 0, 7); g.fill();
+  const hull = g.createLinearGradient(0, cy - 34, 0, cy + 34);
+  hull.addColorStop(0, "#0d1420"); hull.addColorStop(0.5, "#3d5a76"); hull.addColorStop(1, "#0a0f16");
+  g.fillStyle = hull; g.strokeStyle = "#9fd8ff"; g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(cx + 96, cy); g.lineTo(cx + 52, cy - 20); g.lineTo(cx + 8, cy - 30); g.lineTo(cx - 52, cy - 26);
+  g.lineTo(cx - 84, cy - 12); g.lineTo(cx - 84, cy + 12); g.lineTo(cx - 52, cy + 26); g.lineTo(cx + 8, cy + 30);
+  g.lineTo(cx + 52, cy + 20); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = "#22364c"; g.strokeStyle = "#7df9ff"; g.lineWidth = 1.6;
+  for (const sgn of [-1, 1]){
+    g.beginPath(); g.moveTo(cx + 30, cy + sgn * 30); g.lineTo(cx - 30, cy + sgn * 38); g.lineTo(cx - 62, cy + sgn * 30); g.lineTo(cx - 20, cy + sgn * 22); g.closePath(); g.fill(); g.stroke();
+  }
+  g.strokeStyle = "rgba(255,214,10,.75)"; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(cx + 60, cy - 13); g.lineTo(cx - 40, cy - 18); g.moveTo(cx + 60, cy + 13); g.lineTo(cx - 40, cy + 18); g.stroke();
+  g.strokeStyle = "rgba(125,249,255,.5)"; g.lineWidth = 1.2;
+  for (const off of [-44, -16, 16, 44]){ g.beginPath(); g.moveTo(cx + off, cy - 24); g.lineTo(cx + off, cy + 24); g.stroke(); }
+  const core = g.createLinearGradient(cx - 60, 0, cx + 70, 0);
+  core.addColorStop(0, "rgba(125,249,255,0)"); core.addColorStop(0.5, "#dff6ff"); core.addColorStop(1, "rgba(125,249,255,0)");
+  g.fillStyle = core; g.fillRect(cx - 60, cy - 3.5, 130, 7);
+  const cg = g.createRadialGradient(cx + 18, cy, 0, cx + 18, cy, 16);
+  cg.addColorStop(0, "#ffffff"); cg.addColorStop(0.4, "#7df9ff"); cg.addColorStop(1, "rgba(125,249,255,0)");
+  g.fillStyle = cg; g.beginPath(); g.arc(cx + 18, cy, 16, 0, 7); g.fill();
+  g.fillStyle = "#486581"; g.strokeStyle = "#dff6ff"; g.lineWidth = 1.4;
+  g.beginPath(); g.arc(cx + 34, cy - 16, 8, 0, 7); g.fill(); g.stroke();
+  g.beginPath(); g.arc(cx + 34, cy + 16, 8, 0, 7); g.fill(); g.stroke();
+});
+// 消滅砲撃の破片: 岩片スプライト (2種)
+const shardSprs = [0, 1].map(() => makeSprite(24, (g, S) => {
+  const cx = S / 2, cy = S / 2;
+  g.fillStyle = "#5a4632"; g.strokeStyle = "#8a6f4d"; g.lineWidth = 1.2;
+  g.beginPath();
+  for (let k = 0; k < 5; k++){ const a = k / 5 * Math.PI * 2 + Math.random() * 0.5, r = 5 + Math.random() * 6, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r; k ? g.lineTo(x, y) : g.moveTo(x, y); }
+  g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = "rgba(255,190,90,.85)"; g.fillRect(cx - 1.5, cy - 1.5, 3, 3);
+}));
 
 // ---------- 奥義: 毎フレーム処理 ----------
 const funnels = [], orbitals = [];
 const dimFx = [], goldParts = [];   // dimFx: {x, y, t, kind, dur?} バースト演出 / goldParts: 金貨パーティクル
 let planetT = 30, fleetT = 10, coreFrostT = 0, goldTrailT = 0, funCount = -1, orbCount = -1;
+// ---------- 究極: 実行時状態 ----------
+let annihT = 45, whiteFlash = 0;   // 消滅砲撃のタイマー / 画面フラッシュの残量 (1→0)
+const mothership = { ang: 0, x: 0, y: 0, fireT: 3, flash: 0 };   // 惑星破壊艦隊の母艦
+const debrisParts = [];   // 消滅砲撃の破片 {x, y, vx, vy, t, life, rot, vr, s, spr}
 function capstoneUpdate(dt, bdt, now){
   // 原初元素炉: 氷結中ブロックへ追加ダメージ (最大HP 1%/秒。数が多い時は間隔を伸ばして集約)
   if (sk("b_core") && frosts.size){
@@ -159,7 +207,7 @@ function capstoneUpdate(dt, bdt, now){
     f.trail.push({ x: f.x, y: f.y }); if (f.trail.length > 4) f.trail.shift();
     if (f.flash > 0) f.flash -= bdt;
     f.fireT -= bdt;
-    if (f.fireT <= 0){ f.fireT = 0.4; if (shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * (gf ? 2 : 1), null, true)) f.flash = 0.06; }   // 間隔 0.4s × 1発 = 自機DPSの約15%/基
+    if (f.fireT <= 0){ f.fireT = 0.4; if (shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * (gf ? 2 : 1) * (sk("d_ultimate") ? 3 : 1), null, true)) f.flash = 0.06; }   // 間隔 0.4s × 1発 = 自機DPSの約15%/基 / 惑星破壊艦隊 (究極): ×3
   }
   // オービタルボット: 大きく周回し、最も硬い対象へ徹甲レーザー (太ビーム + 着弾スパーク)
   const wantOrb = gf ? 2 : sk("d_orbital") ? 1 : 0;
@@ -174,7 +222,7 @@ function capstoneUpdate(dt, bdt, now){
     o.fireT -= bdt;
     if (o.fireT <= 0){
       o.fireT = 2.4;
-      const range = atkRange() * 1.3, dmg = playerDPS() * 0.40 * 2.4 * (gf ? 2 : 1);
+      const range = atkRange() * 1.3, dmg = playerDPS() * 0.40 * 2.4 * (gf ? 2 : 1) * (sk("d_ultimate") ? 3 : 1);   // 惑星破壊艦隊 (究極): ×3
       let bIdx = -1, bHard = 0;
       for (const i of findNearestBlocks(player.x, player.y, range, 14)){ const mh = blockMaxHP(i % D, (i / D) | 0); if (mh > bHard){ bHard = mh; bIdx = i; } }
       let bMob = null;
@@ -195,7 +243,7 @@ function capstoneUpdate(dt, bdt, now){
     if (fleetT <= 0){
       fleetT = 10; bumpProc("fleetburst");
       skillFeed("grandfleet", "艦隊総攻撃", "🛸", "#57e39a");
-      for (const f of funnels){ for (let k = 0; k < 3; k++) shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * 2 * 1.5, null, true); f.flash = 0.09; }
+      for (const f of funnels){ for (let k = 0; k < 3; k++) shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * 2 * 1.5 * (sk("d_ultimate") ? 3 : 1), null, true); f.flash = 0.09; }   // 惑星破壊艦隊 (究極): ×3
     }
   }
   // 大富豪の蓄財: 金の雨 (イベント消費) / 無限財宝: 移動中の金の軌跡
@@ -217,6 +265,84 @@ function capstoneUpdate(dt, bdt, now){
   }
   // バースト演出の寿命
   for (let i = dimFx.length - 1; i >= 0; i--){ dimFx[i].t += dt; if (dimFx[i].t >= (dimFx[i].dur || 0.45)) dimFx.splice(i, 1); }
+  ultimateUpdate(dt, bdt, now);
+}
+
+// ---------- 究極: 毎フレーム処理 ----------
+function ultimateUpdate(dt, bdt, now){
+  if (novaCd > 0) novaCd -= dt;   // 元素新星のクールダウン (skills.js)
+  processBreakQueue();            // 全破壊キュー: 1フレーム上限ぶんだけ処理
+  if (whiteFlash > 0) whiteFlash = Math.max(0, whiteFlash - dt * 1.6);
+  for (let i = debrisParts.length - 1; i >= 0; i--){
+    const p = debrisParts[i]; p.t += dt;
+    if (p.t >= p.life){ debrisParts.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 130 * dt; p.rot += p.vr * dt;
+  }
+  // 惑星消滅プロトコル: 45秒ごとに消滅砲撃
+  if (sk("a_ultimate")){
+    annihT -= dt;
+    if (annihT <= 0){ annihT = 45; fireAnnihilation(now); }
+  }
+  // 惑星破壊艦隊: 巨大母艦が自機をゆっくり周回し、3秒ごとに最も密集した地点へ惑星破壊ビーム
+  if (sk("d_ultimate")){
+    mothership.ang -= bdt * 0.22;
+    mothership.x = player.x + Math.cos(mothership.ang) * 235;
+    mothership.y = player.y + Math.sin(mothership.ang) * 235;
+    if (mothership.flash > 0) mothership.flash -= bdt;
+    mothership.fireT -= dt;
+    if (mothership.fireT <= 0){
+      mothership.fireT = 3;
+      const tp = mothershipTarget();
+      if (tp){
+        bumpProc("planetbeam");
+        skillFeed("planetbeam", "惑星破壊ビーム", "🛸", "#7df9ff");
+        beams.push({ x1: mothership.x, y1: mothership.y, x2: tp.x, y2: tp.y, t: now, w: 20, color: "#7df9ff", life: 300 });
+        beams.push({ x1: mothership.x, y1: mothership.y, x2: tp.x, y2: tp.y, t: now, w: 7, color: "#ffffff", life: 300 });
+        rings.push({ x: tp.x, y: tp.y, r: BS * 8.5, t: now, color: "125,249,255", dur: 550 });
+        dimFx.push({ x: tp.x, y: tp.y, t: 0, kind: "planetbeam", dur: 0.55 });
+        rawDamage(() => damageRadius(tp.x, tp.y, BS * 8, playerDPS() * 50));
+        mothership.flash = 0.18;
+        sndBoom();
+      } else mothership.fireT = 0.6;
+    }
+  }
+}
+// 消滅砲撃: 白い太光柱 + 多重リング + 純白バースト + 画面フラッシュ + 破片。
+// ブロックはHP無視で全破壊キューへ、範囲内のモンスターは即死 (シェイクは使わない)
+function fireAnnihilation(now){
+  bumpProc("annihilation");
+  skillFeed("annihilation", "消滅砲撃", "💥", "#ffffff");
+  beams.push({ x1: player.x, y1: player.y - 2400, x2: player.x, y2: player.y, t: now, w: 44, color: "rgba(255,255,255,.95)", life: 420 });
+  beams.push({ x1: player.x, y1: player.y - 2400, x2: player.x, y2: player.y, t: now, w: 18, color: "#ffe9a8", life: 420 });
+  beams.push({ x1: player.x, y1: player.y - 2400, x2: player.x, y2: player.y, t: now, w: 6, color: "#ffffff", life: 420 });
+  rings.push({ x: player.x, y: player.y, r: BS * 24, t: now, color: "255,255,255", dur: 800 });
+  rings.push({ x: player.x, y: player.y, r: BS * 16, t: now, color: "255,233,168", dur: 650 });
+  rings.push({ x: player.x, y: player.y, r: BS * 8, t: now, color: "255,255,255", dur: 500 });
+  dimFx.push({ x: player.x, y: player.y, t: 0, kind: "annihilation", dur: 0.7 });
+  whiteFlash = 1;
+  for (let k = 0; k < 46 && debrisParts.length < 160; k++){
+    const a = Math.random() * Math.PI * 2, sp = 120 + Math.random() * 420;
+    debrisParts.push({ x: player.x, y: player.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60, t: 0, life: 0.9 + Math.random() * 0.7, rot: Math.random() * 6.3, vr: (Math.random() - 0.5) * 10, s: 5 + Math.random() * 9, spr: (Math.random() * 2) | 0 });
+  }
+  const rr = BS * 24;
+  for (const m of mobs) if (!m.dead && Math.hypot(m.x - player.x, m.y - player.y) <= rr) damageMob(m, (m.hp + m.maxHp) * 10 + 1e6, null);   // 範囲内のモンスターは即死
+  queueDestroyCircle(w2g(player.x), w2g(player.y), 24);
+  sndBoom();
+}
+// 母艦の照準: 自機周辺の候補点 (ブロック群・モンスター) を半径4セルのブロック密度で採点し、最も密集した地点を選ぶ
+function mothershipTarget(){
+  const cand = [];
+  for (const i of findNearestBlocks(player.x, player.y, 1100, 16)) cand.push(blockPos(i));
+  for (const m of mobs) if (!m.dead && Math.hypot(m.x - player.x, m.y - player.y) <= 1100) cand.push({ x: m.x, y: m.y });
+  let best = null, bestScore = -1;
+  for (const c of cand){
+    const cgx = w2g(c.x), cgy = w2g(c.y);
+    let s = 0;
+    for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++)
+      if (dx * dx + dy * dy <= 16 && liveAt(cgx + dx, cgy + dy) >= 0) s++;
+    if (s > bestScore){ bestScore = s; best = c; }
+  }
+  return best;
 }
 
 // ---------- 奥義: 描画 (skillsDraw の先頭 = 自機より下の層) ----------
@@ -230,7 +356,7 @@ function capstoneDraw(now, toScreen){
   for (const d of dimFx){   // 次元崩壊は回転させて歪み感を出す
     const spr = burstSprs[d.kind]; if (!spr) continue;
     const dur = d.dur || 0.45, p = Math.min(1, d.t / dur);
-    const base = d.kind === "planet" ? 360 : d.kind === "spark" ? 95 : 175;
+    const base = d.kind === "annihilation" ? 560 : d.kind === "diswave" ? 430 : d.kind === "planetbeam" ? 400 : d.kind === "planet" ? 360 : d.kind === "spark" ? 95 : 175;
     const size = base * (0.35 + 0.75 * p) * zoom;
     const [sx, sy] = toScreen(d.x, d.y);
     ctx.save(); ctx.translate(sx, sy); if (d.kind === "dimension") ctx.rotate(p * 1.4);
@@ -241,6 +367,18 @@ function capstoneDraw(now, toScreen){
     const size = 15 * zoom, sq = Math.abs(Math.cos(p.rot));
     ctx.save(); ctx.translate(sx, sy); ctx.globalAlpha = Math.min(1, (p.life - p.t) / 0.25);
     ctx.drawImage(coinSpr, -size / 2, -size / 2, Math.max(2, size * (0.25 + 0.75 * sq)), size); ctx.restore();
+  }
+  if (sk("d_ultimate")){   // 母艦: 進行方向 (接線) を向いてゆっくり周回。発射時は船体が発光する
+    const [sx, sy] = toScreen(mothership.x, mothership.y), size = 150 * zoom;
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(mothership.ang - Math.PI / 2);
+    ctx.drawImage(mothershipSpr, -size / 2, -size / 2, size, size);
+    if (mothership.flash > 0){ ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.min(1, mothership.flash / 0.18) * 0.8; ctx.drawImage(mothershipSpr, -size / 2, -size / 2, size, size); }
+    ctx.restore();
+  }
+  for (const p of debrisParts){   // 消滅砲撃の破片 (回転しながら飛散し、寿命で薄れる)
+    const [sx, sy] = toScreen(p.x, p.y), size = p.s * 2 * zoom;
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(p.rot); ctx.globalAlpha = Math.min(1, (p.life - p.t) / 0.3);
+    ctx.drawImage(shardSprs[p.spr], -size / 2, -size / 2, size, size); ctx.restore();
   }
   for (const f of funnels){   // トレイル → 本体 (進行方向を向く) → マズルフラッシュ
     for (let k = 0; k < f.trail.length; k++){

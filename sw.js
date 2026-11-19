@@ -6,7 +6,7 @@
    ・それ以外の同一オリジンはキャッシュ優先 + 裏で更新 (stale-while-revalidate)
    ※ セーブデータは IndexedDB なので、キャッシュを消しても消えない
    ========================================================= */
-const V = "v88";                       // index.html の ?v= と合わせる
+const V = "v89";                       // index.html の ?v= と合わせる
 const CACHE = "billion-shooting-" + V;
 
 const SHELL = [

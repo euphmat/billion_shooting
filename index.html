@@ -15,8 +15,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BILLION">
-<link rel="stylesheet" href="css/style.css?v=88">
-<link rel="stylesheet" href="css/mobile.css?v=88">
+<link rel="stylesheet" href="css/style.css?v=89">
+<link rel="stylesheet" href="css/mobile.css?v=89">
 </head>
 <body>
 <div id="app">
@@ -126,10 +126,11 @@
          ブロックを壊すと<b>コインと素材</b>が手に入る。素材は全168種、地層ごとに違う。<br>
          <span class="b-long">集めた素材とコインで、右の工房で装備 (全137種) を<b>製作・強化</b>しよう。</span>
          <span class="b-short">集めた素材とコインで、<b>工房</b>ボタンから装備 (全137種) を製作・強化しよう。</span><br>
-         ブロックを壊すとレベルアップ。<span class="b-long">T キーで</span><span class="b-short">SKILL ボタンで</span>スキルツリー (全165種) を開こう。<br>
+         ブロックを壊すとレベルアップ。<span class="b-long">T キーで</span><span class="b-short">SKILL ボタンで</span>スキルツリー (全170種) を開こう。<br>
          <span class="note">音が出ます。開始ボタンを押すと効果音が有効になります。</span></p>
       <button class="bigbtn" id="startBtn">START</button>
       <button class="ghostbtn" id="startInstallBtn" hidden>▼ アプリとしてインストール</button>
+      <div id="clearBadge" class="clear-badge" hidden>★ 惑星破壊達成</div>
     </div>
     <!-- ================= スマホ用の操作系 (CSS でスマホのときだけ表示) ================= -->
     <div id="stickZone">
@@ -160,10 +161,19 @@
       </button>
     </nav>
 
+    <!-- エンディング演出 (惑星の崩壊シネマティック)。クリック / Esc でスキップ -->
+    <div id="cineOverlay">
+      <canvas id="cineCanvas"></canvas>
+      <div id="cineHint">クリック / Esc でスキップ</div>
+    </div>
     <div id="clearOverlay" class="overlay">
-      <h1>PLANET DESTROYED!</h1>
-      <p id="clearStats"></p>
-      <button class="bigbtn" id="restartBtn">もう一度遊ぶ</button>
+      <h1>BILLION<br>SHOOTING</h1>
+      <div class="end-decl">惑星破壊完了</div>
+      <p class="end-sub">1億ブロックの惑星「地球」は、消滅した。</p>
+      <div id="clearStats"></div>
+      <p class="end-credit">BILLION SHOOTING — Thank you for playing</p>
+      <button class="bigbtn" id="backBtn">ゲームに戻る</button>
+      <button class="ghostbtn" id="restartBtn">最初から遊ぶ (セーブ消去)</button>
     </div>
   </div>
 
@@ -304,21 +314,21 @@
 <div id="tooltip"></div>
 <!-- セーブ (IndexedDB) を読み終えてからゲーム本体を読み込む。
      store.js だけ同期で読み、残りは SaveDB.boot が記述順どおりに実行する -->
-<script src="js/store.js?v=88"></script>
+<script src="js/store.js?v=89"></script>
 <script>
 SaveDB.boot([
-  "js/materials.js?v=88",
-  "js/planet.js?v=88",
-  "js/core.js?v=88",
-  "js/audio.js?v=88",
-  "js/skills.js?v=88",
-  "js/ui.js?v=88",
-  "js/mobs.js?v=88",
-  "js/artifacts.js?v=88",
-  "js/game.js?v=88",
-  "js/skillfx.js?v=88",
-  "js/skilltree.js?v=88",
-  "js/mobile.js?v=88",
+  "js/materials.js?v=89",
+  "js/planet.js?v=89",
+  "js/core.js?v=89",
+  "js/audio.js?v=89",
+  "js/skills.js?v=89",
+  "js/ui.js?v=89",
+  "js/mobs.js?v=89",
+  "js/artifacts.js?v=89",
+  "js/game.js?v=89",
+  "js/skillfx.js?v=89",
+  "js/skilltree.js?v=89",
+  "js/mobile.js?v=89",
 ]);
 </script>
 </body>

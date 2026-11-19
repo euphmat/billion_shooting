@@ -34,11 +34,11 @@ const tv = { x: 0, y: 0, s: 0 };   // パン / ズーム
 let selId = null, hoverId = null, treeBuilt = false;
 function buildTree(){
   let lines = "", nodes = "", labels = "";
-  for (let d = 1; d <= 11; d++) lines += `<circle cx="${TREE_C}" cy="${TREE_C}" r="${treeRadius(d)}" class="t-ring"/>`;
+  for (let d = 1; d <= 12; d++) lines += `<circle cx="${TREE_C}" cy="${TREE_C}" r="${treeRadius(d)}" class="t-ring"/>`;
   for (const n of SKILLS){
     const px = n.parent ? n.parent.x : TREE_C, py = n.parent ? n.parent.y : TREE_C;
     lines += `<line data-ln="${n.id}" x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${n.x.toFixed(1)}" y2="${n.y.toFixed(1)}" style="--c:${n.br.color}"/>`;
-    nodes += `<button class="tn${n.depth >= 8 ? " cap" : ""}${n.slot >= 30 ? " apex" : ""}" data-id="${n.id}" style="left:${n.x.toFixed(1)}px;top:${n.y.toFixed(1)}px;--c:${n.br.color}">${skillSVG(n)}${n.cost > 1 ? `<i class="tn-cost">${n.cost}</i>` : ""}</button>`;
+    nodes += `<button class="tn${n.depth >= 8 ? " cap" : ""}${n.slot >= 33 ? " apex ultimate" : n.slot >= 30 ? " apex" : ""}" data-id="${n.id}" style="left:${n.x.toFixed(1)}px;top:${n.y.toFixed(1)}px;--c:${n.br.color}">${skillSVG(n)}${n.cost > 1 ? `<i class="tn-cost">${n.cost}</i>` : ""}</button>`;
   }
   for (const br of BRANCHES){
     const r = treeRadius(6) + 78, x = TREE_C + Math.cos(br.ang) * r, y = TREE_C + Math.sin(br.ang) * r;
@@ -85,7 +85,7 @@ function probeStats(){
     critX: Math.max((sk("a_critx") ? 3 : 2) + artVal("critd") / 100, artHas("lg_void") ? 3 : 0),
     rate: playerRate(), bot: botMul(), crate: crewRate(),
     elem: elemMul(), burnD: burnSetMul(), drop: matDropMul(), speed: playerSpeed(),
-    coin: coinMulStatic(), xp: (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1), vacuum: magnetRange(),
+    coin: coinMulStatic(), xp: (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1) * (sk("c_ultimate") ? 3 : 1), vacuum: magnetRange(),
     bots: botCount(), cbots: coinBotCount(),
     ec_burn: ec.burn, ec_frost: ec.frost, ec_acid: ec.acid, ec_rad: ec.rad, ec_shock: ec.shock,
   };
@@ -156,6 +156,9 @@ const SKILL_PROC = {
   c_tycoon: [["tycoon", "大当たり"]],
   d_grandfleet: [["fleetburst", "艦隊総攻撃"]],
   e_automine: [["automine", "自動採掘"]], e_stareater: [["stareater", "星喰いの一撃"]],
+  a_ultimate: [["annihilation", "消滅砲撃"]], b_ultimate: [["elemnova", "元素新星"]],
+  c_ultimate: [["goldify", "黄金化"]], d_ultimate: [["planetbeam", "惑星破壊ビーム"]],
+  e_ultimate: [["devour", "星喰い・真"], ["diswave", "解体波"]],
 };
 function skillProcLines(n){
   if (!sk(n.id)) return "";
@@ -188,11 +191,11 @@ function renderTreeStats(){
   const el = $("treeStats");
   if (!el) return;
   const t = elemTotals(), P = skillProc;
-  const sig = [t.burn, t.frost, t.acid, t.rad, t.shock, elemMul(), P.burn, P.frost, P.acid, P.rad, P.shock, P.blast, P.chain, P.treasure, P.dimension, P.planetkiller, P.chainreact, P.tycoon, P.fleetburst, P.automine, P.stareater].join("|");
+  const sig = [t.burn, t.frost, t.acid, t.rad, t.shock, elemMul(), P.burn, P.frost, P.acid, P.rad, P.shock, P.blast, P.chain, P.treasure, P.dimension, P.planetkiller, P.chainreact, P.tycoon, P.fleetburst, P.automine, P.stareater, P.annihilation, P.elemnova, P.goldify, P.planetbeam, P.devour, P.diswave].join("|");
   if (sig === treeStatsSig) return;
   treeStatsSig = sig;
   const pct = v => (v * 100).toFixed(v > 0 && v < 0.1 ? 1 : 0) + "%";
-  const procs = [["blast", "発破"], ["chain", "連破"], ["treasure", "お宝出現"], ["treasureBreak", "お宝破壊"], ["firestorm", "火炎嵐"], ["icebreak", "氷砕"], ["thermo", "熱衝撃"], ["meteor", "隕石"], ["bolt", "落雷"], ["quake", "地震"], ["jackpot", "JACKPOT"], ["dimension", "次元崩壊"], ["planetkiller", "軌道砲撃"], ["chainreact", "連鎖反応"], ["tycoon", "大当たり"], ["fleetburst", "一斉射撃"], ["automine", "自動採掘"], ["stareater", "星喰い"]]
+  const procs = [["blast", "発破"], ["chain", "連破"], ["treasure", "お宝出現"], ["treasureBreak", "お宝破壊"], ["firestorm", "火炎嵐"], ["icebreak", "氷砕"], ["thermo", "熱衝撃"], ["meteor", "隕石"], ["bolt", "落雷"], ["quake", "地震"], ["jackpot", "JACKPOT"], ["dimension", "次元崩壊"], ["planetkiller", "軌道砲撃"], ["chainreact", "連鎖反応"], ["tycoon", "大当たり"], ["fleetburst", "一斉射撃"], ["automine", "自動採掘"], ["stareater", "星喰い"], ["annihilation", "消滅砲撃"], ["elemnova", "元素新星"], ["goldify", "黄金化"], ["planetbeam", "惑星破壊ビーム"], ["devour", "星喰い・真"], ["diswave", "解体波"]]
     .filter(([k]) => P[k] > 0).map(([k, l]) => `${l} <b>${P[k]}回</b>`).join(" ・ ");
   el.innerHTML = `<span class="ts-group"><b class="ts-title">発動状況</b>元素付与率 (${WEAPONS[state.weapon].name}) 燃焼 <b>${pct(t.burn)}</b> ・ 氷結 <b>${pct(t.frost)}</b> ・ 腐食 <b>${pct(t.acid)}</b> ・ 放射 <b>${pct(t.rad)}</b> ・ 放電 <b>${pct(t.shock)}</b> ／ 状態異常ダメージ <b>×${elemMul().toFixed(2)}</b></span>`
     + `<span class="ts-group">付与回数 燃焼 <b>${P.burn}回</b> ・ 氷結 <b>${P.frost}回</b> ・ 腐食 <b>${P.acid}回</b> ・ 放射 <b>${P.rad}回</b> ・ 放電 <b>${P.shock}回</b>${procs ? ` ／ ${procs}` : ""}</span>`;
@@ -216,7 +219,7 @@ function renderDetail(){
     : sp < n.cost ? `<div class="td-state">スキルポイントが足りない (あと ${n.cost - sp})</div>` : "";
   $("treeDetail").innerHTML = `<div class="td-top" style="--c:${n.br.color}">
       <div class="td-icon">${skillSVG(n)}</div>
-      <div><h4>${n.name}</h4><div class="td-meta">${n.br.name} ・ ${n.slot >= 30 ? "奥義 ・ " : ""}パッシブ</div></div>
+      <div><h4>${n.name}</h4><div class="td-meta">${n.br.name} ・ ${n.slot >= 33 ? "究極 ・ " : n.slot >= 30 ? "奥義 ・ " : ""}パッシブ</div></div>
       <button class="td-close" id="tdClose" aria-label="閉じる">×</button>
     </div>
     <p>${n.desc}</p>

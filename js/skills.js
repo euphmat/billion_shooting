@@ -1,10 +1,10 @@
 "use strict";
 /* =========================================================
-   skills.js - レベル / 経験値 / スキルツリーのマスターデータ (全165種)
+   skills.js - レベル / 経験値 / スキルツリーのマスターデータ (全170種)
    と、ダメージ・コイン・撃破に割り込むパッシブ効果
 
    - レベルアップごとにスキルポイント +1 (5レベルごとにさらに +1)、全ダメージ +1.5%
-   - スキルは5系統 x 33種 (通常30種 + 全開放者向けの奥義3種)。各系統は同じ形の木 (TOPO) で、親を習得すると子が解放される
+   - スキルは5系統 x 34種 (通常30種 + 奥義3種 + 究極1種)。各系統は同じ形の木 (TOPO) で、親を習得すると子が解放される
    - 効果は全て sk("id") で「習得しているか」を見るだけ。振り直しても状態が壊れない
    - 1000時間級の放置を見据え、個々の倍率は控えめに。積み重ねで効いてくる
    - スキルは全てパッシブ (常時発動)。毎フレーム処理は skillfx.js、画面は skilltree.js
@@ -18,14 +18,15 @@ const BRANCHES = [
   { key:"e", name:"採掘", en:"EXCAVATION",  color:"#f2a65a", sub:"素材・お宝・連破・発破" },
 ];
 // 各系統共通の木の形: TOPO[i] = i番目のスキルの親 (-1 = 系統の入口)
-const TOPO = [-1, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 11, 13, 14, 16, 18, 19, 20, 21, 23, 25, 29, 30, 31];   // スロット30-32 = 奥義 (最深ノード29から直線に伸びる)
+const TOPO = [-1, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 11, 13, 14, 16, 18, 19, 20, 21, 23, 25, 29, 30, 31, 32];   // スロット30-32 = 奥義、33 = 究極 (最深ノード29から直線に伸びる)
 const COST_BY_DEPTH = [0, 1, 1, 2, 3, 4, 6, 8, 10];   // 深い (強い) スキルほど高コスト
-// 奥義だけは深さコストを使わず、100単位の個別コスト (全開放ユーザーの受け皿)
+// 奥義・究極だけは深さコストを使わず、個別コスト (奥義は100単位、究極は一律1000)
 const COST_OVERRIDE = { a_apex: 100, a_dimension: 200, a_planetkiller: 300,
   b_singularity: 100, b_chainreaction: 200, b_core: 300,
   c_eldorado: 100, c_tycoon: 200, c_philosopher: 300,
   d_funnel: 100, d_orbital: 200, d_grandfleet: 300,
-  e_rights: 100, e_automine: 200, e_stareater: 300 };
+  e_rights: 100, e_automine: 200, e_stareater: 300,
+  a_ultimate: 1000, b_ultimate: 1000, c_ultimate: 1000, d_ultimate: 1000, e_ultimate: 1000 };
 const REQ_LV_OLD = { 5: 15, 6: 25 }, REQ_LV_NEW = { 5: 18, 6: 28, 7: 40, 8: 55 };   // 深いスキルにはLv条件
 
 // [id, 名前, アイコン, 説明]
@@ -64,6 +65,7 @@ const SKILL_SRC = {
     ["a_apex",    "殲滅プロトコル",     "apex",    "【奥義】全ダメージ +50%、会心率 +10%。破壊の極致が自機に宿る。"],
     ["a_dimension","次元崩壊砲",        "dimension","【奥義】自機の命中時8%で次元崩壊が起き、対象と周囲に800%ダメージの紫の爆発。"],
     ["a_planetkiller","惑星殺し・極",   "planetkiller","【奥義】全ダメージ ×1.5。さらに30秒ごとに軌道砲撃が、画面内の全てのブロックとモンスターを焼き払う。"],
+    ["a_ultimate","惑星消滅プロトコル","ultdestroy","【究極】全ダメージ ×3。さらに45秒ごとに消滅砲撃が、自機の周囲 半径24セルのブロックをHP無視で消し飛ばし、範囲内のモンスターを即死させる。惑星は、もう消えるしかない。"],
   ],
   b: [
     ["b_elem",    "元素付与",     "flame",   "どの武器でも元素が宿る。命中時10%でランダムな元素 (炎・氷・雷・酸) を付与。状態異常ダメージ +20%。"],
@@ -99,6 +101,7 @@ const SKILL_SRC = {
     ["b_singularity","元素特異点", "elemsing","【奥義】全元素の付与率 +25%、状態異常ダメージ ×2。元素が一点に凝縮する。"],
     ["b_chainreaction","五色連鎖反応","chainreaction","【奥義】状態異常を付与した時15%で元素爆発：周囲に状態異常ダメージの300%を与え、その状態異常が周囲へ伝播する。"],
     ["b_core",    "原初元素炉",   "elemcore", "【奥義】全元素の付与率さらに +25%、状態異常ダメージ ×1.5。状態異常中のブロックは毎秒さらに崩れていく。自機に虹色のオーラが宿る。"],
+    ["b_ultimate","ビッグバン元素炉","ultbigbang","【究極】全元素の付与率 +50%、状態異常ダメージ ×5。さらに状態異常の付与時25%で元素新星が炸裂し、半径6セルへ状態異常ダメージ×10の爆発と、その状態異常の伝播を起こす。"],
   ],
   c: [
     ["c_merchant","商才",             "coin",    "獲得コイン +10%。"],
@@ -134,6 +137,7 @@ const SKILL_SRC = {
     ["c_eldorado",   "黄金郷",         "eldorado","【奥義】コイン ×2、素材ドロップ率 +50%。伝説の黄金郷が開かれる。"],
     ["c_tycoon",     "大富豪の蓄財",   "tycoon",  "【奥義】コインを拾うたび3%で大当たり：その獲得の20倍のコインが、金色の雨と共に降り注ぐ。"],
     ["c_philosopher","無限財宝",       "philosopher","【奥義】コイン・経験値・素材が全て ×1.5 (他と累積)。コイン吸引範囲 ×3。自機に金色の軌跡が残る。"],
+    ["c_ultimate","無限黄金郷",       "ultgold",  "【究極】コイン ×5、経験値 ×3、素材 ×3。さらにブロック破壊時5%で黄金化し、そのブロックの落とすコインが ×100 になり、金色に輝いて壊れる。"],
   ],
   d: [
     ["d_boost",   "ブースター",       "speed",   "移動速度 +15%。"],
@@ -169,6 +173,7 @@ const SKILL_SRC = {
     ["d_funnel",    "ファンネル展開",   "funnel",  "【奥義】ファンネル4基が自機の周囲に出現し、公転しながら最寄りの敵を自動射撃する (1基あたり自機DPSの約15%)。"],
     ["d_orbital",   "オービタルボット", "orbitalbot","【奥義】攻撃ボットとは別の軌道ボット1基が自機を大きく周回し、いちばん硬い敵へ徹甲レーザーを撃ち込む (自機DPSの約40%)。"],
     ["d_grandfleet","艦隊総攻撃",       "grandfleet","【奥義】ファンネル8基・オービタルボット2基に増強し、全ボット威力 ×2。さらに10秒ごとに全ファンネル一斉射撃。"],
+    ["d_ultimate","惑星破壊艦隊",       "ultmothership","【究極】巨大母艦が自機の周囲をゆっくり周回し、3秒ごとに最もブロック/敵が密集した地点へ惑星破壊ビーム (半径8セル・自機DPS×50)。全ボット/ファンネル/オービタルの威力 ×3。"],
   ],
   e: [
     ["e_mine",    "採掘学",         "drill",   "素材ドロップが15%の確率で +1。掘る楽しさは、まず量から。"],
@@ -204,11 +209,12 @@ const SKILL_SRC = {
     ["e_rights",  "惑星採掘権",         "rights",  "【奥義】ブロック破壊時の素材 +100%、お宝ブロックの出現率 ×2。惑星そのものが掘り放題になる。"],
     ["e_automine","自動採掘網",         "automine","【奥義】ブロックを壊すと20%で周囲3x3を追加で削る。発破採掘とは別系統で、重なって発動することもある。"],
     ["e_stareater","星喰い",            "stareater","【奥義】100個破壊ごとに星喰いの一撃：破壊地点から十字4方向を最大20セル貫通破壊する。さらに連破の継続率と発破の頻度が上がる。"],
+    ["e_ultimate","星喰い・真",         "ultdevour","【究極】ブロック破壊時25%で周囲 半径3セルを追加で全破壊。さらに25個破壊ごとに解体波が 半径10セルを全破壊する。星は、喰らい尽くされるためにある。"],
   ],
 };
 
 // ---------- 木の組み立て (座標は放射状レイアウト) ----------
-const TREE_SIZE = 2560, TREE_C = TREE_SIZE / 2;   // 奥義 (depth 9-11) の半径 1190 が収まるよう 1960 → 2560 に拡張 (既存ノードの角度・半径は不変)
+const TREE_SIZE = 2800, TREE_C = TREE_SIZE / 2;   // 奥義 (depth 9-11) の半径 1190 → 究極 (depth 12) の半径 1295 が収まるよう拡張 (既存ノードの角度・半径は不変)
 const treeRadius = depth => 140 + (depth - 1) * 105;
 const SKILLS = [], SKILL = {};
 (function buildSkills(){
@@ -252,7 +258,7 @@ const canLearn = n => !sk(n.id) && skillUnlocked(n) && spLeft() >= n.cost;
 const levelDmgMul = () => 1 + 0.015 * (state.lv - 1);
 const blockXP = (gx, gy) => Math.max(1, Math.round(Math.sqrt(blockMaxHP(gx, gy) / 5)));
 function gainXP(n){
-  state.xp += n * (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1);   // 星屑の王笏: 経験値 ×2 (乗算キー) / 無限財宝: ×1.5
+  state.xp += n * (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1) * (sk("c_ultimate") ? 3 : 1);   // 星屑の王笏: 経験値 ×2 (乗算キー) / 無限財宝: ×1.5 / 無限黄金郷 (究極): ×3
   while (state.xp >= xpNeed(state.lv)){
     state.xp -= xpNeed(state.lv); state.lv++;
     if (typeof onLevelUpHeal === "function") onLevelUpHeal();   // レベルアップでHP全回復
@@ -269,15 +275,15 @@ const coinBotCount = () => act("coinBots") + (sk("d_drone") ? 1 : 0) + cbLv("rep
 const playerRate = () => (sk("a_rapid") ? 1.08 : 1) * (sk("a_rapid2") ? 1.2 : 1) * (1 + artVal("rate"));
 const crewRate   = () => (sk("d_rate") ? 1.15 : 1) * (sk("d_rate2") ? 1.25 : 1);
 // 素材ドロップ倍率 (装備の触媒効果はヒット時に別に掛かる)
-const matDropMul = () => (1 + artVal("drop")) * (1 + (sk("c_vein") ? 0.15 : 0)) * (sk("e_master") ? 2 : 1) * (sk("e_master2") ? 2 : 1) * (sk("e_god") ? 3 : 1) * (sk("c_eldorado") ? 1.5 : 1) * (sk("c_philosopher") ? 1.5 : 1) * (sk("e_rights") ? 2 : 1);
-const elemMul    = () => (sk("b_elem") ? 1.2 : 1) * (1 + artVal("elem")) * (artHas("lg_crown") ? 1.75 : 1) * (sk("b_singularity") ? 2 : 1) * (sk("b_core") ? 1.5 : 1);   // 元素の心得: 状態異常ダメージ / 元素の王冠: ×1.75 / 特異点: ×2 / 原初元素炉: ×1.5
+const matDropMul = () => (1 + artVal("drop")) * (1 + (sk("c_vein") ? 0.15 : 0)) * (sk("e_master") ? 2 : 1) * (sk("e_master2") ? 2 : 1) * (sk("e_god") ? 3 : 1) * (sk("c_eldorado") ? 1.5 : 1) * (sk("c_philosopher") ? 1.5 : 1) * (sk("e_rights") ? 2 : 1) * (sk("c_ultimate") ? 3 : 1);   // 無限黄金郷 (究極): 素材 ×3
+const elemMul    = () => (sk("b_elem") ? 1.2 : 1) * (1 + artVal("elem")) * (artHas("lg_crown") ? 1.75 : 1) * (sk("b_singularity") ? 2 : 1) * (sk("b_core") ? 1.5 : 1) * (sk("b_ultimate") ? 5 : 1);   // 元素の心得: 状態異常ダメージ / 元素の王冠: ×1.75 / 特異点: ×2 / 原初元素炉: ×1.5 / ビッグバン元素炉 (究極): ×5
 const burnSetMul = () => elemMul() * (sk("b_burn") ? 1.5 : 1) * (sk("b_plasma") ? 2 : 1) * (1 + artVal("burn"));   // 燃焼の付与倍率
 
 // ---------- 元素付与 (スキルツリー): どの武器でも状態異常が乗る ----------
 function elemChances(){
   const all = sk("b_kindling") ? 0.05 : 0;   // 元素活性: 全ての付与率アップ
   const crown = artHas("lg_crown") ? 0.20 : 0;   // 元素の王冠: 全元素の付与率 +20% (絶対値)
-  const apex = (sk("b_singularity") ? 0.25 : 0) + (sk("b_core") ? 0.25 : 0);   // 奥義: 特異点 +25pt / 原初元素炉 +25pt (累積で +50pt)
+  const apex = (sk("b_singularity") ? 0.25 : 0) + (sk("b_core") ? 0.25 : 0) + (sk("b_ultimate") ? 0.50 : 0);   // 奥義: 特異点 +25pt / 原初元素炉 +25pt / 究極: ビッグバン元素炉 +50pt
   return {
     burn:  (sk("b_burn")  ? 0.08 : 0) + all + crown + apex,
     frost: (sk("b_frost") ? 0.08 : 0) + all + crown + apex,
@@ -302,7 +308,8 @@ function elemTotals(){
 
 // ---------- 発動カウンタ (セッション内のみ・セーブしない。「本当に発動しているか」の見える化用) ----------
 const skillProc = { burn: 0, frost: 0, acid: 0, rad: 0, shock: 0, thermo: 0, bolt: 0, firestorm: 0, icebreak: 0, meteor: 0, treasure: 0, treasureBreak: 0, chain: 0, blast: 0, quake: 0, jackpot: 0,
-  dimension: 0, planetkiller: 0, chainreact: 0, tycoon: 0, fleetburst: 0, automine: 0, stareater: 0 };
+  dimension: 0, planetkiller: 0, chainreact: 0, tycoon: 0, fleetburst: 0, automine: 0, stareater: 0,
+  annihilation: 0, elemnova: 0, goldify: 0, planetbeam: 0, devour: 0, diswave: 0 };
 function bumpProc(k){ skillProc[k]++; }
 // 奥義の大きな発動は、アーティファクトと同じ左上フィード (#artFeed) に名前を出す (チップのプール・集約は artifacts.js 側)
 function skillFeed(key, name, icon, color){
@@ -316,9 +323,9 @@ function infuseElements(idx, gx, gy, dmg){
   let kind = null;
   if (sk("b_elem") && Math.random() < 0.10) kind = ["burn", "frost", "acid"][(Math.random() * 3) | 0];   // 元素付与: ランダムに1つ (雷は放電判定側)
   const roll = k => kind === k || (ec[k] > 0 && Math.random() < ec[k]);
-  if (roll("burn") && (burns.size < 800 || burns.has(idx))){ const bd = dmg * 0.15 * burnSetMul(); burns.set(idx, { d: bd, t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn", g: 0 }); bumpProc("burn"); chainReact(idx, gx, gy, "burn", bd); }
-  if (roll("acid") && (burns.size < 800 || burns.has(idx))){ const ad = dmg * 0.3 * elemMul() * (sk("b_acid") ? 1.5 : 1) * (1 + artVal("acid")); burns.set(idx, { d: ad, t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" }); bumpProc("acid"); chainReact(idx, gx, gy, "acid", ad); }
-  if (ec.rad > 0 && Math.random() < ec.rad && (burns.size < 800 || burns.has(idx))){ const rd = dmg * 0.3 * elemMul(); burns.set(idx, { d: rd, t: 4, rad: true, k: "rad" }); bumpProc("rad"); chainReact(idx, gx, gy, "rad", rd); }
+  if (roll("burn") && (burns.size < 800 || burns.has(idx))){ const bd = dmg * 0.15 * burnSetMul(); burns.set(idx, { d: bd, t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn", g: 0 }); bumpProc("burn"); chainReact(idx, gx, gy, "burn", bd); elemNova(idx, gx, gy, "burn", bd); }
+  if (roll("acid") && (burns.size < 800 || burns.has(idx))){ const ad = dmg * 0.3 * elemMul() * (sk("b_acid") ? 1.5 : 1) * (1 + artVal("acid")); burns.set(idx, { d: ad, t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" }); bumpProc("acid"); chainReact(idx, gx, gy, "acid", ad); elemNova(idx, gx, gy, "acid", ad); }
+  if (ec.rad > 0 && Math.random() < ec.rad && (burns.size < 800 || burns.has(idx))){ const rd = dmg * 0.3 * elemMul(); burns.set(idx, { d: rd, t: 4, rad: true, k: "rad" }); bumpProc("rad"); chainReact(idx, gx, gy, "rad", rd); elemNova(idx, gx, gy, "rad", rd); }
   if (roll("frost")){
     if (sk("b_thermo") && burns.has(idx)){   // 熱衝撃: 燃焼中の氷結で大爆発 (両方消える)
       burns.delete(idx);
@@ -329,7 +336,7 @@ function infuseElements(idx, gx, gy, dmg){
       const freshFrost = !frosts.has(idx);
       frosts.set(idx, 3 + (sk("b_frost2") ? 2 : 0)); frostGen.set(idx, 0);
       bumpProc("frost");
-      if (freshFrost) chainReact(idx, gx, gy, "frost", dmg * 0.3 * elemMul());
+      if (freshFrost){ chainReact(idx, gx, gy, "frost", dmg * 0.3 * elemMul()); elemNova(idx, gx, gy, "frost", dmg * 0.3 * elemMul()); }
       if (freshFrost && sk("b_permafrost")) for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && Math.random() < 0.5 && frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 2); frostGen.set(j, 1); bumpProc("frost"); } }   // 永久凍土
     }
   }
@@ -359,6 +366,35 @@ function chainReact(idx, gx, gy, kind, baseD){
   } finally { chainReacting = false; }
 }
 
+// 元素新星 (究極 b_ultimate): 状態異常の付与時 25% で半径6セルの元素爆発 — 状態異常ダメージ×10 + その状態異常を伝播 (世代上限つき)。
+// 再入ガード + クールダウン (0.12秒) で、付与が集中しても1フレームに何度も炸裂しないようにする
+let elemNoving = false, novaCd = 0;
+function elemNova(idx, gx, gy, kind, baseD){
+  if (!sk("b_ultimate") || elemNoving || novaCd > 0 || Math.random() >= 0.25) return;
+  elemNoving = true; novaCd = 0.12;
+  try {
+    bumpProc("elemnova");
+    const x = g2w(gx), y = g2w(gy);
+    rings.push({ x, y, r: BS * 6.5, t: performance.now(), color: ELEM_RGB[kind] || "255,255,255", dur: 520 });
+    rings.push({ x, y, r: BS * 3.2, t: performance.now(), color: "255,255,255", dur: 380 });
+    dimFx.push({ x, y, t: 0, kind, dur: 0.6 });
+    skillFeed("elemnova", "元素新星", "💥", "#ff8a5c");
+    sndBoom();
+    for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++){
+      if (dx * dx + dy * dy > 36) continue;
+      const j = liveAt(gx + dx, gy + dy);
+      if (j < 0 || j === idx) continue;
+      damageBlock(j, baseD * 10, 0);
+      if (kind === "frost"){ if (frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 2); frostGen.set(j, 2); } }   // 伝播した氷結は世代2 (それ以上広がらない)
+      else if (burns.size < 800 || burns.has(j)){
+        if (kind === "burn") burns.set(j, { d: baseD, t: 2, k: "burn", g: 3 });   // 燃え移りは世代上限 (g=3) で打ち切り
+        else if (kind === "acid") burns.set(j, { d: baseD, t: 2, k: "acid" });
+        else burns.set(j, { d: baseD, t: 2, rad: true, k: "rad" });
+      }
+    }
+  } finally { elemNoving = false; }
+}
+
 // ---------- 実行時の状態 (セーブしない) ----------
 let treeOpen = false;
 let combo = 0, comboT = 0, heat = 0, heatT = 0, gMul = 1, nearClose = false;
@@ -371,6 +407,7 @@ let shattering = false;    // 破砕のダメージを与えている最中か (
 let resonating = false, firestorming = false, blasting = false;    // 共鳴/火炎嵐/発破の処理中か (再入防止)
 let chainReacting = false, automining = false, stareating = false;   // 連鎖反応/自動採掘網/星喰いの処理中か (再入防止)
 let starN = 0;                  // 星喰い: 前回の一撃から壊した数
+let devourN = 0;                // 星喰い・真 (究極): 解体波までの破壊数 (キュー由来の破壊は数えない)
 const vuln = new Map();
 const embers = new Map(), overloads = new Map();   // 残り火 / 過負荷 (残り秒数)    // 弱点露出: idx -> 重ねた回数
 const burns = new Map();   // 燃焼 / 腐食 / 放射: idx -> {d: 毎秒ダメージ, t: 残り秒, rad: 放射 (壊れると隣へ移る)}
@@ -387,12 +424,42 @@ const liveAt = (gx, gy) => (blockExists(gx, gy) && !isDestroyed(gy * D + gx)) ? 
 // 余波扱い (スキル補正なし) でダメージを与える
 function rawDamage(fn){ dmgDepth++; try { fn(); } finally { dmgDepth--; } }
 
+// ---------- 全破壊キュー (究極スキル用) ----------
+// 消滅砲撃 / 星喰い・真 の「HP無視の全破壊」は即時実行せずキューに積み、毎フレーム上限ぶんだけ処理する。
+// これで半径24セル級の一括破壊でも1フレームに処理が集中せず、連破/発破/自動採掘網と重なっても暴走しない。
+// キュー由来の破壊 (fromBreakQueue) は星喰い・真の抽選/カウンタ対象にしない (自己増殖の防止)。
+const breakQueue = []; let breakQHead = 0, fromBreakQueue = false;
+const BREAKQ_CAP = 8000, BREAKQ_PER_FRAME = 400;
+function queueDestroyIdx(j){ if (breakQueue.length - breakQHead < BREAKQ_CAP) breakQueue.push(j); }
+function queueDestroyCircle(gx, gy, r){
+  const r2 = r * r;
+  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++){
+    if (dx * dx + dy * dy > r2) continue;
+    const j = liveAt(gx + dx, gy + dy);
+    if (j >= 0) queueDestroyIdx(j);
+  }
+}
+function processBreakQueue(){
+  if (breakQHead >= breakQueue.length){ if (breakQueue.length){ breakQueue.length = 0; breakQHead = 0; } return; }
+  let n = Math.min(BREAKQ_PER_FRAME, breakQueue.length - breakQHead);
+  fromBreakQueue = true;
+  try {
+    while (n-- > 0){
+      const j = breakQueue[breakQHead++];
+      if (!isDestroyed(j)) damageBlock(j, blockMaxHP(j % D, (j / D) | 0) * 100, 0);   // HP無視の全破壊 (報酬・連鎖は通常の破壊経路)
+    }
+  } finally { fromBreakQueue = false; }
+  if (breakQHead >= breakQueue.length){ breakQueue.length = 0; breakQHead = 0; }
+  else if (breakQHead > 4096){ breakQueue.splice(0, breakQHead); breakQHead = 0; }
+}
+
 // 全ての攻撃に掛かる倍率。毎フレーム gMul に入れておき、命中時はそれを使う
 function globalDmgMul(){
   let m = levelDmgMul() * (1 + artVal("dmg")) * artMul("dmgMul");   // 惑星の心臓: 全ダメージ ×1.5 (乗算キー)
   if (sk("a_train")) m *= 1.06;
   if (sk("a_apex")) m *= 1.5;   // 殲滅プロトコル (奥義)
   if (sk("a_planetkiller")) m *= 1.5;   // 惑星殺し・極 (奥義)
+  if (sk("a_ultimate")) m *= 3;   // 惑星消滅プロトコル (究極)
   if (sk("a_combo")) m *= 1 + Math.min(30, combo) * 0.005;
   if (sk("a_warm"))  m *= 1 + 0.2 * heat;
   if (sk("d_cruise") && player.moving) m *= 1.12;
@@ -508,6 +575,7 @@ function coinMulStatic(){
   if (sk("c_combo")) m *= 1 + Math.min(20, Math.floor(combo / 10)) * 0.02;
   if (sk("c_eldorado")) m *= 2;   // 黄金郷 (奥義)
   if (sk("c_philosopher")) m *= 1.5;   // 無限財宝 (奥義)
+  if (sk("c_ultimate")) m *= 5;   // 無限黄金郷 (究極)
   if (sk("c_bonus3")) m *= 1.25;
   if (sk("c_king3")) m *= 1.2;
   return m;
@@ -666,6 +734,23 @@ function skillOnBreak(idx, gx, gy, kind, rare){
     } finally { stareating = false; }
     rings.push({ x, y, r: BS * 4, t: performance.now(), color: "255,176,96", dur: 550 });
     sndBoom();
+  }
+  // --- 星喰い・真 (究極): 破壊時 25% で周囲 半径3セルを追加全破壊 + 25個ごとに解体波 (どちらも全破壊キュー経由) ---
+  if (sk("e_ultimate") && !fromBreakQueue){
+    if (Math.random() < 0.25){
+      bumpProc("devour");
+      rings.push({ x, y, r: BS * 3.4, t: performance.now(), color: "255,190,90", dur: 380 });
+      queueDestroyCircle(gx, gy, 3);
+    }
+    if (++devourN >= 25){
+      devourN = 0; bumpProc("diswave");
+      skillFeed("diswave", "解体波", "🌀", "#ffb060");
+      rings.push({ x, y, r: BS * 10.5, t: performance.now(), color: "255,176,96", dur: 650 });
+      rings.push({ x, y, r: BS * 6, t: performance.now(), color: "255,255,255", dur: 450 });
+      dimFx.push({ x, y, t: 0, kind: "diswave", dur: 0.6 });
+      queueDestroyCircle(gx, gy, 10);
+      sndBoom();
+    }
   }
 }
 // 発破採掘の発動間隔 (星喰い習得で ×0.7 に短縮、下限 5)

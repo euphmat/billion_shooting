@@ -28,7 +28,7 @@ function fmtDmg(n){
 // ---------- save / state ----------
 const SAVE_KEY = "billion_shooting_save_v2";
 const OLD_SAVE_KEY = "million_shooting_save_v1";
-const GAME_VERSION = 88;   // 現在のゲームバージョン (アップデート履歴の未読判定に使う)
+const GAME_VERSION = 89;   // 現在のゲームバージョン (アップデート履歴の未読判定に使う)
 const state = {
   coins: 0, totalCoins: 0, destroyed: 0,
   weapon: "handDrill",
@@ -48,9 +48,11 @@ const state = {
   off: {},   // 停止中の仲間 { bots:true, ... }
   visitedBodies: [],   // 訪問済みダンジョン (SATS のインデックス。ファストトラベルの解放条件)
   lastSeenUpdate: 0,   // アップデート履歴を最後に見たバージョン
+  endingSeen: false,   // エンディング (主惑星の破壊完了) を見たか。自動再生は1回だけ
+  playTime: 0,   // 累計プレイ時間 (秒)。エンディングの統計表示用
 };
 const SAVE_FIELDS = ["coins", "totalCoins", "destroyed", "weapon", "weaponsOwned", "weaponLv", "bots", "coinBots", "botLv",
-  "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "atkMuted", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode", "visitedBodies", "lastSeenUpdate"];
+  "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "atkMuted", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode", "visitedBodies", "lastSeenUpdate", "endingSeen", "playTime"];
 let migrated = false;
 try {
   // 本番の置き場所は IndexedDB (store.js が起動時に読み終えている)。
@@ -85,6 +87,8 @@ if (!Array.isArray(state.botLoadout)) state.botLoadout = [];
 if (!Array.isArray(state.visitedBodies)) state.visitedBodies = [];
 state.visitedBodies = state.visitedBodies.filter(i => Number.isInteger(i) && i >= 0 && i < SATS.length);
 state.lastSeenUpdate = Math.max(0, state.lastSeenUpdate | 0);
+state.endingSeen = !!state.endingSeen;
+state.playTime = Math.max(0, +state.playTime || 0);
 for (const k of Object.keys(state.inv)) if (!MAT[k]) delete state.inv[k];
 // 稼働中の数 (OFFにした種類は0として扱う。所持数 state[k] はそのまま)
 const act = k => state.off[k] ? 0 : state[k];
@@ -492,7 +496,7 @@ const COINBOT_RECIPE = n => COINBOT_MATS[Math.min(n, COINBOT_MATS.length - 1)];
 const BOT_UP_MATS_LIST = ["copperOre", "ironOre", "titaniumOre", "tungstenOre", "diamond", "iridium", "stellarIron", "adamant", "singularityShard"];
 const BOT_UP_COST = () => niceRound(150 * Math.pow(1.55, state.botLv));
 const BOT_UP_MATS = () => { const o = {}; o[BOT_UP_MATS_LIST[Math.min(BOT_UP_MATS_LIST.length - 1, Math.floor(state.botLv / 5))]] = Math.ceil(20 * Math.pow(1.18, state.botLv % 5 + Math.floor(state.botLv / 5) * 2)); return o; };
-const botMul = () => (1 + 0.12 * state.botLv) * crewMul() * (sk("d_bot") ? 1.3 : 1) * (1 + (typeof artVal === "function" ? artVal("bot") : 0)) * (1 + 0.25 * (state.botCore || 0)) * (sk("d_grandfleet") ? 2 : 1);   // 艦隊総攻撃 (奥義): 全ボット威力 ×2
+const botMul = () => (1 + 0.12 * state.botLv) * crewMul() * (sk("d_bot") ? 1.3 : 1) * (1 + (typeof artVal === "function" ? artVal("bot") : 0)) * (1 + 0.25 * (state.botCore || 0)) * (sk("d_grandfleet") ? 2 : 1) * (sk("d_ultimate") ? 3 : 1);   // 艦隊総攻撃 (奥義): 全ボット威力 ×2 / 惑星破壊艦隊 (究極): ×3
 // ---------- 衛星テクノロジー (ボット強化) ----------
 const BOT_CORE_MAX = 5, BOT_ARMOR_MAX = 5;
 const BOT_CORE_MATS  = [{ magmalite:60 }, { permaice:60, toxicite:40 }, { prismore:70 }, { voltore:70, duneglass:40 }, { novalite:90 }];
