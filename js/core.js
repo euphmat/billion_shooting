@@ -28,7 +28,7 @@ function fmtDmg(n){
 // ---------- save / state ----------
 const SAVE_KEY = "billion_shooting_save_v2";
 const OLD_SAVE_KEY = "million_shooting_save_v1";
-const GAME_VERSION = 84;   // 現在のゲームバージョン (アップデート履歴の未読判定に使う)
+const GAME_VERSION = 85;   // 現在のゲームバージョン (アップデート履歴の未読判定に使う)
 const state = {
   coins: 0, totalCoins: 0, destroyed: 0,
   weapon: "handDrill",
