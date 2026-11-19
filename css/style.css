@@ -23,6 +23,14 @@ img, canvas, svg { -webkit-user-drag:none; }
   box-shadow:0 0 6px rgba(255,214,10,.55);
 }
 .coin-dot-lg { width:13px; height:13px; }
+/* 素材アイコン (mat-chip の <i> と同じ色チップ表現。強化ボタンの素材払い表示に使う) */
+.mat-dot {
+  display:inline-block; width:10px; height:10px; flex:none;
+  background:var(--mc); border:1px solid rgba(255,255,255,.45); vertical-align:-1px; margin-right:5px;
+}
+.buy-btn:disabled .mat-dot, .wr-btn:disabled .mat-dot { opacity:.4; }
+.cost .cost-more { font-size:10px; opacity:.8; margin-left:4px; }
+.cost > .coin-dot:not(:first-child) { margin-left:6px; }
 
 /* ---------- left : main (残り全部) ---------- */
 #main { flex:1 1 auto; min-width:0; position:relative; border-right:1px solid #fff; overflow:hidden; }

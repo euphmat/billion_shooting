@@ -265,6 +265,24 @@ function matSubText(plan){
 }
 const matSubHTML = dataBuy => `<span class="matsub-line" data-matsub="${dataBuy}">${matSubText(matSubPlanFor(buyDef(dataBuy)))}</span>`;
 
+/* ---------- 武器強化ボタンのコスト表示 ----------
+   代用払いが発生する時はコインアイコンだと「コインを払う」ように見えるので、
+   主たる代用素材 (消費数が最大のもの) のアイコン + 消費数を主表示にする。
+   複数種に渡る場合は「他n種」、混合払いは後ろにコインアイコン + 残額を併記し、
+   全額素材払いならコインアイコンは一切出さない。詳細は .matsub-line の内訳行に任せる。
+   data-upcost を付け、refreshAffordability で所持数の変化に合わせてライブ更新する */
+function upCostHTML(d){
+  const plan = matSubPlanFor(d);
+  if (!plan || plan.subTotal <= 0) return costHTML(d ? d.coins : 0);
+  const main = plan.subs.reduce((a, b) => b.n > a.n ? b : a);
+  const m = MAT[main.k];
+  let s = `<span class="cost"><i class="mat-dot" style="--mc:${m.color}" title="${m.name}"></i>${fmt(main.n)}`;
+  if (plan.subs.length > 1) s += `<span class="cost-more">他${plan.subs.length - 1}種</span>`;
+  if (plan.coinsPay > 0) s += `<i class="coin-dot"></i>${fmt(plan.coinsPay)}`;
+  return s + "</span>";
+}
+const upCostSpan = (dataBuy, d) => `<span data-upcost="${dataBuy}">${upCostHTML(d)}</span>`;
+
 /* ---------- 購入 / 製作の定義 ----------
    data-buy="kind:arg" ごとに { coins, mats, ok, apply } を返す。ボタンの有効化判定と実行の両方で使う */
 function buyDefRaw(dataBuy){
@@ -363,7 +381,7 @@ function weaponCardHTML(k, w){
   } else {
     const d = buyDef("wupgrade:" + k);
     body = `<div class="sbadges" style="border-top:none;padding-top:0"><span class="sbadge">Lv <b>${lv} → ${lv + 1}</b></span><span class="sbadge up">威力 +8%</span></div>${recipeChips(d.mats, true)}${matSubHTML("wupgrade:" + k)}
-      <div class="btn-row">${eq ? `<button class="buy-btn" disabled><span>装備中</span></button>` : `<button class="equip-btn" data-buy="equip:${k}">装備する</button>`}<button class="buy-btn" data-buy="wupgrade:${k}" ${canBuy(d) ? "" : "disabled"}><span>強化</span>${costHTML(d.coins)}</button></div>`;
+      <div class="btn-row">${eq ? `<button class="buy-btn" disabled><span>装備中</span></button>` : `<button class="equip-btn" data-buy="equip:${k}">装備する</button>`}<button class="buy-btn" data-buy="wupgrade:${k}" ${canBuy(d) ? "" : "disabled"}><span>強化</span>${upCostSpan("wupgrade:" + k, d)}</button></div>`;
   }
   const m = w.mat ? MAT[w.mat] : null;
   return `<div class="card${eq ? " equipped-card" : ""}${craftable ? " craftable" : ""}" style="--accent:${w.accent}" title="${w.desc.replace(/"/g, "")}">
@@ -404,7 +422,7 @@ function nextActionHTML(nk){
       ${cardTop(cur.icon, cur.accent, cur.name, `<span class="badge solid">強化</span>`, cur.tag)}
       <div class="sbadges"><span class="sbadge">Lv <b>${lv} → ${lv + 1}</b></span><span class="sbadge up">威力 +8%</span></div>
       ${recipeChips(d.mats, true)}${matSubHTML("wupgrade:" + state.weapon)}
-      <button class="buy-btn" data-buy="wupgrade:${state.weapon}" ${canBuy(d) ? "" : "disabled"}><span>強化する</span>${costHTML(d.coins)}</button></div>`;
+      <button class="buy-btn" data-buy="wupgrade:${state.weapon}" ${canBuy(d) ? "" : "disabled"}><span>強化する</span>${upCostSpan("wupgrade:" + state.weapon, d)}</button></div>`;
   }
   const w = WEAPONS[nk], d = buyDef("craft:" + nk), ok = canBuy(d), rel = w.power / cur.power;
   let got = 0, tot = 0;
@@ -447,7 +465,7 @@ function weaponTileHTML(k){
   const st = eq ? `<span class="wt-st eq">装備中</span>` : craftable ? `<span class="wt-st go">製作可</span>` : owned ? `<span class="wt-st own">Lv.${weaponLvOf(k)}</span>` : `<span class="wt-st dim">未所持</span>`;
   let act;
   if (!owned){ const d = buyDef("craft:" + k); act = `<button class="wr-btn buy" data-buy="craft:${k}" ${canBuy(d) ? "" : "disabled"}>製作 ${costHTML(d.coins)}</button>`; }
-  else { const d = buyDef("wupgrade:" + k); act = `${eq ? "" : `<button class="wr-btn" data-buy="equip:${k}">装備</button>`}<button class="wr-btn buy" data-buy="wupgrade:${k}" data-tip="buy:wupgrade:${k}" ${canBuy(d) ? "" : "disabled"}>強化 ${costHTML(d.coins)}</button>`; }
+  else { const d = buyDef("wupgrade:" + k); act = `${eq ? "" : `<button class="wr-btn" data-buy="equip:${k}">装備</button>`}<button class="wr-btn buy" data-buy="wupgrade:${k}" data-tip="buy:wupgrade:${k}" ${canBuy(d) ? "" : "disabled"}>強化 ${upCostSpan("wupgrade:" + k, d)}</button>`; }
   return `<div class="wtile${eq ? " eq" : ""}${craftable ? " craftable" : ""}" style="--accent:${w.accent}" data-tip="weapon:${k}">
     <span class="wt-top"><span class="icon-badge sm" style="color:${w.accent};border-color:${w.accent};background:${w.accent}14">${iconSVG(w.icon)}</span><span class="wt-no">No.${String(w.no).padStart(2, "0")}</span>${st}</span>
     <span class="wt-name">${w.name}</span>
@@ -756,7 +774,7 @@ function matDetailHTML(m){
       let out = "";
       if (rows.length) out += `<div class="recipe-head">使い道 — そのまま使える</div>` + rows.map(u => {
         const d = buyDef(u.buy), ok = canBuy(d);
-        return `<div class="use-row" style="--accent:${u.color}">${iconBadge(u.icon, u.color)}<div class="ur-main"><div class="ur-name">${u.name}</div><div class="ur-sub">${u.kind} ・ ${m.name} x${u.need}</div></div><span class="ur-need${have >= u.need ? "" : " lack"}">所持 ${fmt(have)}</span>${u.equip && state.weapon !== u.equip ? `<button class="wr-btn" data-buy="equip:${u.equip}">装備</button>` : ""}<button class="buy-btn sm" data-buy="${u.buy}" ${ok ? "" : "disabled"}><span>${u.label}</span>${costHTML(d ? d.coins : 0)}</button></div>`;
+        return `<div class="use-row" style="--accent:${u.color}">${iconBadge(u.icon, u.color)}<div class="ur-main"><div class="ur-name">${u.name}</div><div class="ur-sub">${u.kind} ・ ${m.name} x${u.need}</div></div><span class="ur-need${have >= u.need ? "" : " lack"}">所持 ${fmt(have)}</span>${u.equip && state.weapon !== u.equip ? `<button class="wr-btn" data-buy="equip:${u.equip}">装備</button>` : ""}<button class="buy-btn sm" data-buy="${u.buy}" ${ok ? "" : "disabled"}><span>${u.label}</span>${u.buy.startsWith("wupgrade:") ? upCostSpan(u.buy, d) : costHTML(d ? d.coins : 0)}</button></div>`;
       }).join("");
       if (others.length) out += `<div class="recipe-head">その他の使い道</div><div class="uses">${others.map(u => `<span class="use-chip" style="--mc:${u.color}"><i></i>${u.name}<em>${u.kind}</em></span>`).join("")}</div>`;
       return out || `<div class="sub">使い道: なし (売ることはできないが、集める楽しみはある)</div>`;
@@ -806,7 +824,7 @@ function equipBarHTML(){
     <span class="icon-badge sm" style="color:${w.accent};border-color:${w.accent};background:${w.accent}14">${iconSVG(w.icon)}</span>
     <div class="eb-main"><div class="eb-name">${w.name}${lv > 0 ? ` <span class="eb-lv">Lv.${lv}</span>` : ""}</div>
     <div class="eb-sub">DPS <b>${fmtD(weaponDPS(w) * weaponLvMul(k))}</b> ・ ${w.tag}</div></div>
-    <button class="buy-btn sm" data-buy="wupgrade:${k}" ${d && canBuy(d) ? "" : "disabled"}><span>強化</span>${costHTML(d ? d.coins : 0)}</button>
+    <button class="buy-btn sm" data-buy="wupgrade:${k}" ${d && canBuy(d) ? "" : "disabled"}><span>強化</span>${upCostSpan("wupgrade:" + k, d)}</button>
   </div>
   <div class="equip-mats">${d ? recipeChips(d.mats, true) + matSubHTML("wupgrade:" + k) : ""}</div>`;
 }
@@ -883,6 +901,10 @@ function refreshAffordability(){
     root.querySelectorAll("[data-matsub]").forEach(el => {
       const t = matSubText(matSubPlanFor(buyDef(el.dataset.matsub)));
       if (el._t !== t){ el._t = t; el.textContent = t; }
+    });
+    root.querySelectorAll("[data-upcost]").forEach(el => {
+      const h = upCostHTML(buyDef(el.dataset.upcost));
+      if (el._h !== h){ el._h = h; el.innerHTML = h; }
     });
     root.querySelectorAll(".mat-chip[data-mat]").forEach(ch => {
       const have = invOf(ch.dataset.mat), need = +ch.dataset.need;
@@ -1103,6 +1125,7 @@ $("resetBtn").addEventListener("click", () => {
 let updOpen = false;
 // 新しい順。行を足すときは先頭に追加し、core.js の GAME_VERSION を上げる
 const UPDATE_HISTORY = [
+  { v:83, text:"素材で支払う時は強化ボタンにも素材のアイコンを表示するようにした (全額素材払いではコイン表示なし・混合払いは両方表示)" },
   { v:82, text:"武器強化で素材を代用払いできるようにした (1素材=1コイン・所持数の多い素材から優先使用・支払い内訳を表示)" },
   { v:81, text:"超高速移動を追加：PCはスペースキー長押し、スマホは高速移動トグルボタン (通常の10倍速・残像と噴射の演出つき)" },
   { v:80, text:"スキルツリーに奥義15種を追加 (全165種・各系統に100/200/300SPの最終スキル：ファンネル/オービタルボット/軌道砲撃など) ・ ファストトラベル強化 (検索/リスト/ホーム＆リターン) ・ 画面シェイクを全廃止 ・ 設定に攻撃/破壊音のオフを追加" },
