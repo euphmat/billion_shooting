@@ -1,10 +1,10 @@
 "use strict";
 /* =========================================================
-   skills.js - レベル / 経験値 / スキルツリーのマスターデータ (全150種)
+   skills.js - レベル / 経験値 / スキルツリーのマスターデータ (全165種)
    と、ダメージ・コイン・撃破に割り込むパッシブ効果
 
    - レベルアップごとにスキルポイント +1 (5レベルごとにさらに +1)、全ダメージ +1.5%
-   - スキルは5系統 x 20種。各系統は同じ形の木 (TOPO) で、親を習得すると子が解放される
+   - スキルは5系統 x 33種 (通常30種 + 全開放者向けの奥義3種)。各系統は同じ形の木 (TOPO) で、親を習得すると子が解放される
    - 効果は全て sk("id") で「習得しているか」を見るだけ。振り直しても状態が壊れない
    - 1000時間級の放置を見据え、個々の倍率は控えめに。積み重ねで効いてくる
    - スキルは全てパッシブ (常時発動)。毎フレーム処理は skillfx.js、画面は skilltree.js
@@ -18,8 +18,14 @@ const BRANCHES = [
   { key:"e", name:"採掘", en:"EXCAVATION",  color:"#f2a65a", sub:"素材・お宝・連破・発破" },
 ];
 // 各系統共通の木の形: TOPO[i] = i番目のスキルの親 (-1 = 系統の入口)
-const TOPO = [-1, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 11, 13, 14, 16, 18, 19, 20, 21, 23, 25];
+const TOPO = [-1, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 11, 13, 14, 16, 18, 19, 20, 21, 23, 25, 29, 30, 31];   // スロット30-32 = 奥義 (最深ノード29から直線に伸びる)
 const COST_BY_DEPTH = [0, 1, 1, 2, 3, 4, 6, 8, 10];   // 深い (強い) スキルほど高コスト
+// 奥義だけは深さコストを使わず、100単位の個別コスト (全開放ユーザーの受け皿)
+const COST_OVERRIDE = { a_apex: 100, a_dimension: 200, a_planetkiller: 300,
+  b_singularity: 100, b_chainreaction: 200, b_core: 300,
+  c_eldorado: 100, c_tycoon: 200, c_philosopher: 300,
+  d_funnel: 100, d_orbital: 200, d_grandfleet: 300,
+  e_rights: 100, e_automine: 200, e_stareater: 300 };
 const REQ_LV_OLD = { 5: 15, 6: 25 }, REQ_LV_NEW = { 5: 18, 6: 28, 7: 40, 8: 55 };   // 深いスキルにはLv条件
 
 // [id, 名前, アイコン, 説明]
@@ -55,6 +61,9 @@ const SKILL_SRC = {
     ["a_rapid2",  "連射の極み",         "rapid",   "自機の連射速度 +20%。"],
     ["a_meteor2", "隕石群",             "meteor",  "流星の呼び声の間隔が 300個 → 120個 になる。"],
     ["a_core",    "惑星殺し",           "crown",   "最深層 (コア) のブロックへのダメージ 3倍。"],
+    ["a_apex",    "殲滅プロトコル",     "apex",    "【奥義】全ダメージ +50%、会心率 +10%。破壊の極致が自機に宿る。"],
+    ["a_dimension","次元崩壊砲",        "dimension","【奥義】自機の命中時8%で次元崩壊が起き、対象と周囲に800%ダメージの紫の爆発。"],
+    ["a_planetkiller","惑星殺し・極",   "planetkiller","【奥義】全ダメージ ×1.5。さらに30秒ごとに軌道砲撃が、画面内の全てのブロックとモンスターを焼き払う。"],
   ],
   b: [
     ["b_elem",    "元素付与",     "flame",   "どの武器でも元素が宿る。命中時10%でランダムな元素 (炎・氷・雷・酸) を付与。状態異常ダメージ +20%。"],
@@ -87,6 +96,9 @@ const SKILL_SRC = {
     ["b_magma",   "マグマ化",     "vulcan",  "燃焼中のブロックへのダメージ +25%。"],
     ["b_permafrost","永久凍土",   "genesis", "ブロックが新たに氷結すると、周囲のブロックも50%の確率で氷結する (伝播した氷結からは広がらない)。"],
     ["b_sun",     "太陽の核",     "star",    "燃焼中のブロックは、毎秒 最大HPの1% の追加ダメージを受ける。"],
+    ["b_singularity","元素特異点", "elemsing","【奥義】全元素の付与率 +25%、状態異常ダメージ ×2。元素が一点に凝縮する。"],
+    ["b_chainreaction","五色連鎖反応","chainreaction","【奥義】状態異常を付与した時15%で元素爆発：周囲に状態異常ダメージの300%を与え、その状態異常が周囲へ伝播する。"],
+    ["b_core",    "原初元素炉",   "elemcore", "【奥義】全元素の付与率さらに +25%、状態異常ダメージ ×1.5。状態異常中のブロックは毎秒さらに崩れていく。自機に虹色のオーラが宿る。"],
   ],
   c: [
     ["c_merchant","商才",             "coin",    "獲得コイン +10%。"],
@@ -119,6 +131,9 @@ const SKILL_SRC = {
     ["c_god",        "資本神",         "crown",   "累計コインの桁数ひとつにつき、全ダメージ +6%。貯めた富が、そのまま力になる。"],
     ["c_interest2",  "複利の極み",     "clock",   "利息が 0.3% → 0.8% になり、上限も2倍になる。"],
     ["c_king3",      "ミダス神",       "crown",   "宝箱の倍率が 30倍 → 60倍 になり、獲得コイン +20%。"],
+    ["c_eldorado",   "黄金郷",         "eldorado","【奥義】コイン ×2、素材ドロップ率 +50%。伝説の黄金郷が開かれる。"],
+    ["c_tycoon",     "大富豪の蓄財",   "tycoon",  "【奥義】コインを拾うたび3%で大当たり：その獲得の20倍のコインが、金色の雨と共に降り注ぐ。"],
+    ["c_philosopher","無限財宝",       "philosopher","【奥義】コイン・経験値・素材が全て ×1.5 (他と累積)。コイン吸引範囲 ×3。自機に金色の軌跡が残る。"],
   ],
   d: [
     ["d_boost",   "ブースター",       "speed",   "移動速度 +15%。"],
@@ -151,6 +166,9 @@ const SKILL_SRC = {
     ["d_god",       "艦隊総帥",         "crown",   "仲間1機につき、全ダメージ +2% (最大 +40%)。"],
     ["d_wave4",     "震撃の極み",       "nova",    "ソニックブームが 150 進むごとに発動するようになり、威力 900%、範囲 220。艦隊の機動力が、そのまま破壊力になる。"],
     ["d_shadow3",   "影の軍団・改",     "crown",   "影分身が 3体 → 4体 になり、威力が 30% → 40% になる。"],
+    ["d_funnel",    "ファンネル展開",   "funnel",  "【奥義】ファンネル4基が自機の周囲に出現し、公転しながら最寄りの敵を自動射撃する (1基あたり自機DPSの約15%)。"],
+    ["d_orbital",   "オービタルボット", "orbitalbot","【奥義】攻撃ボットとは別の軌道ボット1基が自機を大きく周回し、いちばん硬い敵へ徹甲レーザーを撃ち込む (自機DPSの約40%)。"],
+    ["d_grandfleet","艦隊総攻撃",       "grandfleet","【奥義】ファンネル8基・オービタルボット2基に増強し、全ボット威力 ×2。さらに10秒ごとに全ファンネル一斉射撃。"],
   ],
   e: [
     ["e_mine",    "採掘学",         "drill",   "素材ドロップが15%の確率で +1。掘る楽しさは、まず量から。"],
@@ -183,11 +201,14 @@ const SKILL_SRC = {
     ["e_sell3",   "換金市場",           "up",      "自動換金のレートがさらに2倍になり、上限も 9,999個 になる。"],
     ["e_vein4",   "鉱脈の心臓",         "gem",     "周囲に同じ素材が4つ以上あるブロック (鉱脈の中心) は、素材ドロップが2倍になる。"],
     ["e_god",     "採掘神",             "drill",   "全ての素材ドロップが3倍。製作・強化の素材コスト -20%。掘ることの極致。"],
+    ["e_rights",  "惑星採掘権",         "rights",  "【奥義】ブロック破壊時の素材 +100%、お宝ブロックの出現率 ×2。惑星そのものが掘り放題になる。"],
+    ["e_automine","自動採掘網",         "automine","【奥義】ブロックを壊すと20%で周囲3x3を追加で削る。発破採掘とは別系統で、重なって発動することもある。"],
+    ["e_stareater","星喰い",            "stareater","【奥義】100個破壊ごとに星喰いの一撃：破壊地点から十字4方向を最大20セル貫通破壊する。さらに連破の継続率と発破の頻度が上がる。"],
   ],
 };
 
 // ---------- 木の組み立て (座標は放射状レイアウト) ----------
-const TREE_SIZE = 1960, TREE_C = TREE_SIZE / 2;
+const TREE_SIZE = 2560, TREE_C = TREE_SIZE / 2;   // 奥義 (depth 9-11) の半径 1190 が収まるよう 1960 → 2560 に拡張 (既存ノードの角度・半径は不変)
 const treeRadius = depth => 140 + (depth - 1) * 105;
 const SKILLS = [], SKILL = {};
 (function buildSkills(){
@@ -198,7 +219,8 @@ const SKILLS = [], SKILL = {};
     list.forEach((n, i) => {
       n.parent = TOPO[i] < 0 ? null : list[TOPO[i]];
       n.depth = n.parent ? n.parent.depth + 1 : 1;
-      n.cost = COST_BY_DEPTH[Math.min(8, n.depth)];
+      n.slot = i;
+      n.cost = COST_OVERRIDE[n.id] || COST_BY_DEPTH[Math.min(8, n.depth)];
       n.reqLv = (i >= 20 ? REQ_LV_NEW : REQ_LV_OLD)[n.depth] || 0;
       if (n.parent) n.parent.kids.push(n);
     });
@@ -230,7 +252,7 @@ const canLearn = n => !sk(n.id) && skillUnlocked(n) && spLeft() >= n.cost;
 const levelDmgMul = () => 1 + 0.015 * (state.lv - 1);
 const blockXP = (gx, gy) => Math.max(1, Math.round(Math.sqrt(blockMaxHP(gx, gy) / 5)));
 function gainXP(n){
-  state.xp += n * (1 + artVal("xp")) * artMul("xpMul");   // 星屑の王笏: 経験値 ×2 (乗算キー)
+  state.xp += n * (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1);   // 星屑の王笏: 経験値 ×2 (乗算キー) / 無限財宝: ×1.5
   while (state.xp >= xpNeed(state.lv)){
     state.xp -= xpNeed(state.lv); state.lv++;
     if (typeof onLevelUpHeal === "function") onLevelUpHeal();   // レベルアップでHP全回復
@@ -247,20 +269,21 @@ const coinBotCount = () => act("coinBots") + (sk("d_drone") ? 1 : 0) + cbLv("rep
 const playerRate = () => (sk("a_rapid") ? 1.08 : 1) * (sk("a_rapid2") ? 1.2 : 1) * (1 + artVal("rate"));
 const crewRate   = () => (sk("d_rate") ? 1.15 : 1) * (sk("d_rate2") ? 1.25 : 1);
 // 素材ドロップ倍率 (装備の触媒効果はヒット時に別に掛かる)
-const matDropMul = () => (1 + artVal("drop")) * (1 + (sk("c_vein") ? 0.15 : 0)) * (sk("e_master") ? 2 : 1) * (sk("e_master2") ? 2 : 1) * (sk("e_god") ? 3 : 1);
-const elemMul    = () => (sk("b_elem") ? 1.2 : 1) * (1 + artVal("elem")) * (artHas("lg_crown") ? 1.75 : 1);   // 元素の心得: 状態異常ダメージ / 元素の王冠: ×1.75
+const matDropMul = () => (1 + artVal("drop")) * (1 + (sk("c_vein") ? 0.15 : 0)) * (sk("e_master") ? 2 : 1) * (sk("e_master2") ? 2 : 1) * (sk("e_god") ? 3 : 1) * (sk("c_eldorado") ? 1.5 : 1) * (sk("c_philosopher") ? 1.5 : 1) * (sk("e_rights") ? 2 : 1);
+const elemMul    = () => (sk("b_elem") ? 1.2 : 1) * (1 + artVal("elem")) * (artHas("lg_crown") ? 1.75 : 1) * (sk("b_singularity") ? 2 : 1) * (sk("b_core") ? 1.5 : 1);   // 元素の心得: 状態異常ダメージ / 元素の王冠: ×1.75 / 特異点: ×2 / 原初元素炉: ×1.5
 const burnSetMul = () => elemMul() * (sk("b_burn") ? 1.5 : 1) * (sk("b_plasma") ? 2 : 1) * (1 + artVal("burn"));   // 燃焼の付与倍率
 
 // ---------- 元素付与 (スキルツリー): どの武器でも状態異常が乗る ----------
 function elemChances(){
   const all = sk("b_kindling") ? 0.05 : 0;   // 元素活性: 全ての付与率アップ
   const crown = artHas("lg_crown") ? 0.20 : 0;   // 元素の王冠: 全元素の付与率 +20% (絶対値)
+  const apex = (sk("b_singularity") ? 0.25 : 0) + (sk("b_core") ? 0.25 : 0);   // 奥義: 特異点 +25pt / 原初元素炉 +25pt (累積で +50pt)
   return {
-    burn:  (sk("b_burn")  ? 0.08 : 0) + all + crown,
-    frost: (sk("b_frost") ? 0.08 : 0) + all + crown,
-    acid:  (sk("b_acid")  ? 0.08 : 0) + all + crown,
-    rad:   (sk("b_radio") ? 0.05 : 0) + all + crown,
-    shock: (sk("b_shock") ? 0.08 : 0) + (sk("b_tesla") ? 0.08 : 0) + all + crown,
+    burn:  (sk("b_burn")  ? 0.08 : 0) + all + crown + apex,
+    frost: (sk("b_frost") ? 0.08 : 0) + all + crown + apex,
+    acid:  (sk("b_acid")  ? 0.08 : 0) + all + crown + apex,
+    rad:   (sk("b_radio") ? 0.05 : 0) + all + crown + apex,
+    shock: (sk("b_shock") ? 0.08 : 0) + (sk("b_tesla") ? 0.08 : 0) + all + crown + apex,
   };
 }
 // 現在の武器 + スキル込みで「命中時にその状態異常が付く確率」(武器特性は命中時常時付与 = 100%扱い)
@@ -278,8 +301,14 @@ function elemTotals(){
 }
 
 // ---------- 発動カウンタ (セッション内のみ・セーブしない。「本当に発動しているか」の見える化用) ----------
-const skillProc = { burn: 0, frost: 0, acid: 0, rad: 0, shock: 0, thermo: 0, bolt: 0, firestorm: 0, icebreak: 0, meteor: 0, treasure: 0, treasureBreak: 0, chain: 0, blast: 0, quake: 0, jackpot: 0 };
+const skillProc = { burn: 0, frost: 0, acid: 0, rad: 0, shock: 0, thermo: 0, bolt: 0, firestorm: 0, icebreak: 0, meteor: 0, treasure: 0, treasureBreak: 0, chain: 0, blast: 0, quake: 0, jackpot: 0,
+  dimension: 0, planetkiller: 0, chainreact: 0, tycoon: 0, fleetburst: 0, automine: 0, stareater: 0 };
 function bumpProc(k){ skillProc[k]++; }
+// 奥義の大きな発動は、アーティファクトと同じ左上フィード (#artFeed) に名前を出す (チップのプール・集約は artifacts.js 側)
+function skillFeed(key, name, icon, color){
+  if (typeof artFeedShow === "function") artFeedShow({ id: "sk:" + key, name, icon, color, rar: 0 });
+}
+const goldRainFx = [];   // 大富豪の蓄財: 金の雨の発生イベント {x, y} (パーティクル化は skillfx.js)
 
 // 自機の命中時に呼ばれる。装備の特性とは独立に、スキル由来の状態異常を付ける
 function infuseElements(idx, gx, gy, dmg){
@@ -287,9 +316,9 @@ function infuseElements(idx, gx, gy, dmg){
   let kind = null;
   if (sk("b_elem") && Math.random() < 0.10) kind = ["burn", "frost", "acid"][(Math.random() * 3) | 0];   // 元素付与: ランダムに1つ (雷は放電判定側)
   const roll = k => kind === k || (ec[k] > 0 && Math.random() < ec[k]);
-  if (roll("burn") && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * 0.15 * burnSetMul(), t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn", g: 0 }); bumpProc("burn"); }
-  if (roll("acid") && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * 0.3 * elemMul() * (sk("b_acid") ? 1.5 : 1) * (1 + artVal("acid")), t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" }); bumpProc("acid"); }
-  if (ec.rad > 0 && Math.random() < ec.rad && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * 0.3 * elemMul(), t: 4, rad: true, k: "rad" }); bumpProc("rad"); }
+  if (roll("burn") && (burns.size < 800 || burns.has(idx))){ const bd = dmg * 0.15 * burnSetMul(); burns.set(idx, { d: bd, t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn", g: 0 }); bumpProc("burn"); chainReact(idx, gx, gy, "burn", bd); }
+  if (roll("acid") && (burns.size < 800 || burns.has(idx))){ const ad = dmg * 0.3 * elemMul() * (sk("b_acid") ? 1.5 : 1) * (1 + artVal("acid")); burns.set(idx, { d: ad, t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" }); bumpProc("acid"); chainReact(idx, gx, gy, "acid", ad); }
+  if (ec.rad > 0 && Math.random() < ec.rad && (burns.size < 800 || burns.has(idx))){ const rd = dmg * 0.3 * elemMul(); burns.set(idx, { d: rd, t: 4, rad: true, k: "rad" }); bumpProc("rad"); chainReact(idx, gx, gy, "rad", rd); }
   if (roll("frost")){
     if (sk("b_thermo") && burns.has(idx)){   // 熱衝撃: 燃焼中の氷結で大爆発 (両方消える)
       burns.delete(idx);
@@ -300,9 +329,34 @@ function infuseElements(idx, gx, gy, dmg){
       const freshFrost = !frosts.has(idx);
       frosts.set(idx, 3 + (sk("b_frost2") ? 2 : 0)); frostGen.set(idx, 0);
       bumpProc("frost");
+      if (freshFrost) chainReact(idx, gx, gy, "frost", dmg * 0.3 * elemMul());
       if (freshFrost && sk("b_permafrost")) for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && Math.random() < 0.5 && frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 2); frostGen.set(j, 1); bumpProc("frost"); } }   // 永久凍土
     }
   }
+}
+
+// 五色連鎖反応 (奥義): 状態異常の付与時に 15% で元素爆発 — 周囲8マスへ状態異常ダメージ×3 + その状態異常を伝播 (世代上限で打ち切り)
+const ELEM_RGB = { burn: "255,120,40", frost: "120,220,255", acid: "120,255,90", rad: "200,120,255" };
+function chainReact(idx, gx, gy, kind, baseD){
+  if (!sk("b_chainreaction") || chainReacting || Math.random() >= 0.15) return;
+  chainReacting = true;
+  try {
+    bumpProc("chainreact");
+    const x = g2w(gx), y = g2w(gy);
+    rings.push({ x, y, r: BS * 2.2, t: performance.now(), color: ELEM_RGB[kind], dur: 380 });
+    dimFx.push({ x, y, t: 0, kind });
+    for (const [dx, dy] of N8){
+      const j = liveAt(gx + dx, gy + dy);
+      if (j < 0) continue;
+      damageBlock(j, baseD * 3, 0);
+      if (kind === "frost"){ if (frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 2); frostGen.set(j, 2); } }
+      else if (burns.size < 800 || burns.has(j)){
+        if (kind === "burn") burns.set(j, { d: baseD, t: 2, k: "burn", g: 3 });
+        else if (kind === "acid") burns.set(j, { d: baseD, t: 2, k: "acid" });
+        else burns.set(j, { d: baseD, t: 2, rad: true, k: "rad" });
+      }
+    }
+  } finally { chainReacting = false; }
 }
 
 // ---------- 実行時の状態 (セーブしない) ----------
@@ -315,6 +369,8 @@ let curPl = false;         // いま処理中の攻撃が「自機の攻撃」�
 let curEcho = false;       // いま処理中の弾がエコーショットか (エコーはエコーを呼ばない)
 let shattering = false;    // 破砕のダメージを与えている最中か (破砕は破砕を呼ばない)
 let resonating = false, firestorming = false, blasting = false;    // 共鳴/火炎嵐/発破の処理中か (再入防止)
+let chainReacting = false, automining = false, stareating = false;   // 連鎖反応/自動採掘網/星喰いの処理中か (再入防止)
+let starN = 0;                  // 星喰い: 前回の一撃から壊した数
 const vuln = new Map();
 const embers = new Map(), overloads = new Map();   // 残り火 / 過負荷 (残り秒数)    // 弱点露出: idx -> 重ねた回数
 const burns = new Map();   // 燃焼 / 腐食 / 放射: idx -> {d: 毎秒ダメージ, t: 残り秒, rad: 放射 (壊れると隣へ移る)}
@@ -335,6 +391,8 @@ function rawDamage(fn){ dmgDepth++; try { fn(); } finally { dmgDepth--; } }
 function globalDmgMul(){
   let m = levelDmgMul() * (1 + artVal("dmg")) * artMul("dmgMul");   // 惑星の心臓: 全ダメージ ×1.5 (乗算キー)
   if (sk("a_train")) m *= 1.06;
+  if (sk("a_apex")) m *= 1.5;   // 殲滅プロトコル (奥義)
+  if (sk("a_planetkiller")) m *= 1.5;   // 惑星殺し・極 (奥義)
   if (sk("a_combo")) m *= 1 + Math.min(30, combo) * 0.005;
   if (sk("a_warm"))  m *= 1 + 0.2 * heat;
   if (sk("d_cruise") && player.moving) m *= 1.12;
@@ -351,7 +409,7 @@ function skillHitMods(idx, gx, gy, dmg, hp){
   const max = blockMaxHP(gx, gy);
   if (hp >= max && sk("a_first")) m *= 1.2;
   { const voidEye = artHas("lg_void");   // 虚無の単眼: 会心率 +25%、会心ダメは最低でも ×3、専用演出フラグを立てる
-    const ac = (sk("a_crit") ? 0.06 : 0) + artVal("crit") / 100 + (voidEye ? 0.25 : 0);
+    const ac = (sk("a_crit") ? 0.06 : 0) + (sk("a_apex") ? 0.10 : 0) + artVal("crit") / 100 + (voidEye ? 0.25 : 0);
     if (ac > 0 && Math.random() < ac){ let cm = (sk("a_critx") ? 3 : 2) + artVal("critd") / 100; if (voidEye){ cm = Math.max(cm, 3); dmgVoidFlag = true; } m *= cm; } }   // 会心 (スキル+アーティファクト合算)
   if (sk("a_deep")) m *= 1 + (sk("a_deep2") ? 2.0 : 1.0) * blockDepth(gx, gy);
   if (artVal("deep")) m *= 1 + artVal("deep") * blockDepth(gx, gy);   // アーティファクト: 深さダメ
@@ -384,6 +442,14 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
     } finally { artZapBusy = false; }
   }
   if (curPl && artHas("lg_dice") && Math.random() < 0.07) chaosDice(idx, gx, gy, dmg);   // 混沌のサイコロ: 自機の命中時 7%で発動
+  if (curPl && sk("a_dimension") && Math.random() < 0.08){   // 次元崩壊砲 (奥義): 自機の命中時 8% で紫の次元爆発 (800% 範囲)
+    bumpProc("dimension");
+    const dx2 = g2w(gx), dy2 = g2w(gy);
+    rings.push({ x: dx2, y: dy2, r: BS * 2.6, t: performance.now(), color: "200,120,255", dur: 420 });
+    rings.push({ x: dx2, y: dy2, r: BS * 1.6, t: performance.now(), color: "255,120,255", dur: 320 });
+    dimFx.push({ x: dx2, y: dy2, t: 0, kind: "dimension" });
+    rawDamage(() => damageRadius(dx2, dy2, BS * 2, dmg * 8));
+  }
   if (cur < 0 && dmg < 1e300 && !curCarry && sk("a_overkill")){   // 弾・照射は damageBlock の余剰引き継ぎで強化される
     let carry = -cur, cx = gx, cy = gy;
     for (let k = 0; k < 6 && carry > 0; k++){
@@ -433,16 +499,23 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
 }
 
 // ---------- 撃破時 ----------
-function coinSkillMul(){
+// 静的なコイン倍率 (JACKPOT 等の副作用なし)。ツリー詳細の probe 表示にも使う
+function coinMulStatic(){
   let m = (1 + artVal("coin")) * artMul("coinMul");   // 黄金の特異点: コイン ×2 (乗算キー)
   if (sk("c_merchant")) m *= 1.10;
   if (sk("c_king")) m *= 1.3;
   if (sk("c_bonus2")) m *= 1.2;
   if (sk("c_combo")) m *= 1 + Math.min(20, Math.floor(combo / 10)) * 0.02;
-  if (sk("c_lucky") && Math.random() < 0.08) m *= 2;
-  if (sk("c_jackpot") && ++jackN >= (sk("c_jackpot2") ? 400 : 1000)){ jackN = 0; bumpProc("jackpot"); const jm = sk("c_jackpot2") ? 50 : 30; m *= jm; toast(`JACKPOT!!  コイン${jm}倍`); }
+  if (sk("c_eldorado")) m *= 2;   // 黄金郷 (奥義)
+  if (sk("c_philosopher")) m *= 1.5;   // 無限財宝 (奥義)
   if (sk("c_bonus3")) m *= 1.25;
   if (sk("c_king3")) m *= 1.2;
+  return m;
+}
+function coinSkillMul(){
+  let m = coinMulStatic();
+  if (sk("c_lucky") && Math.random() < 0.08) m *= 2;
+  if (sk("c_jackpot") && ++jackN >= (sk("c_jackpot2") ? 400 : 1000)){ jackN = 0; bumpProc("jackpot"); const jm = sk("c_jackpot2") ? 50 : 30; m *= jm; toast(`JACKPOT!!  コイン${jm}倍`); }
   return m;
 }
 function skillOnBreak(idx, gx, gy, kind, rare){
@@ -527,7 +600,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
         }
     });
     rings.push({ x, y, r, t: performance.now(), color: "242,166,90", dur: 600 });
-    shake = Math.max(shake, 0.3); sndBoom();
+    sndBoom();
   }
   // --- お宝ブロック: 壊したら大ボーナス、壊すたび近くのブロックがまれにお宝化する ---
   if (treasureSet.has(idx)){
@@ -541,7 +614,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
     rings.push({ x, y, r: BS * 2.2, t: performance.now(), color: "255,214,64", dur: 500 });
     toast(`お宝ブロック! ${tm.name} +${tb} / コイン大放出`);
   }
-  if (sk("e_treasure") && treasureSet.size < (sk("e_treasure3") ? 60 : sk("e_treasure2") ? 40 : 20) && Math.random() < (sk("e_treasure3") ? 0.02 : sk("e_treasure2") ? 0.012 : 0.005)){
+  if (sk("e_treasure") && treasureSet.size < (sk("e_treasure3") ? 60 : sk("e_treasure2") ? 40 : 20) && Math.random() < (sk("e_treasure3") ? 0.02 : sk("e_treasure2") ? 0.012 : 0.005) * (sk("e_rights") ? 2 : 1)){   // 惑星採掘権 (奥義): お宝出現率 ×2
     for (let t = 0; t < 10; t++){
       const j = liveAt(gx + ((Math.random() * 29) | 0) - 14, gy + ((Math.random() * 29) | 0) - 14);
       if (j >= 0 && j !== idx && !treasureSet.has(j)){ treasureSet.add(j); bumpProc("treasure"); break; }
@@ -549,11 +622,11 @@ function skillOnBreak(idx, gx, gy, kind, rare){
   }
   // --- 連破: 周囲のブロックが巻き込まれて一緒に壊れる (予算の範囲で連鎖) ---
   if ((sk("e_chain") || sk("e_chain2")) && !deep){
-    if (chainBudget > 0){ chainBudget--; if (Math.random() < 0.75) chainStrike(gx, gy); }
+    if (chainBudget > 0){ chainBudget--; if (Math.random() < (sk("e_stareater") ? 0.90 : 0.75)) chainStrike(gx, gy); }   // 星喰い (奥義): 連破の継続率 75%→90%
     else if (Math.random() < (sk("e_chain2") ? 0.20 : 0.12)){ chainBudget = (sk("e_chain2") ? 4 : 2) - 1; chainStrike(gx, gy); }
   }
   // --- 発破採掘: 一定数壊すごとに、破壊地点を中心に大爆発 (発破で壊れた分は数えない) ---
-  if (sk("e_blast") && !blasting && ++blastN >= (sk("e_blast3") ? 10 : sk("e_blast2") ? 15 : 25)){
+  if (sk("e_blast") && !blasting && ++blastN >= blastThreshold()){
     blastN = 0; bumpProc("blast");
     blasting = true;
     try {
@@ -564,10 +637,39 @@ function skillOnBreak(idx, gx, gy, kind, rare){
         if (j >= 0) damageBlock(j, blockMaxHP(gx + dx, gy + dy) * 10, 0);
       }
       rings.push({ x, y, r: BS * (rr + 1.5), t: performance.now(), color: "255,110,50", dur: 450 });
-      shake = Math.max(shake, 0.35); sndBoom();
+      sndBoom();
     } finally { blasting = false; }
   }
+  // --- 自動採掘網 (奥義): 破壊時 20% で周囲 3x3 を追加で削る (発破採掘とは別系統で重複発動可) ---
+  if (sk("e_automine") && !deep && !automining && !blasting && Math.random() < 0.20){
+    bumpProc("automine");
+    automining = true;
+    try { for (const [dx, dy] of N8){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) damageBlock(j, blockMaxHP(gx + dx, gy + dy) * 0.5, 0); } }
+    finally { automining = false; }
+    rings.push({ x, y, r: BS * 1.9, t: performance.now(), color: "80,220,255", dur: 300 });
+  }
+  // --- 星喰い (奥義): 100個破壊ごとに十字4方向を一直線に貫通破壊 (各方向 最大20セル、報酬あり) ---
+  if (sk("e_stareater") && !stareating && ++starN >= 100){
+    starN = 0; bumpProc("stareater");
+    stareating = true;
+    skillFeed("stareater", "星喰いの一撃", "🌟", "#f2a65a");
+    try {
+      for (const [dx, dy] of N4){
+        beams.push({ x1: x, y1: y, x2: x + dx * BS * 20, y2: y + dy * BS * 20, t: performance.now(), w: 7, color: "#ffb060", life: 350 });
+        for (let s = 1; s <= 20; s++){
+          const jx = gx + dx * s, jy = gy + dy * s;
+          if (jx < 0 || jy < 0 || jx >= D || jy >= D) break;
+          const j = liveAt(jx, jy);
+          if (j >= 0) damageBlock(j, blockMaxHP(jx, jy) * 10, 0);
+        }
+      }
+    } finally { stareating = false; }
+    rings.push({ x, y, r: BS * 4, t: performance.now(), color: "255,176,96", dur: 550 });
+    sndBoom();
+  }
 }
+// 発破採掘の発動間隔 (星喰い習得で ×0.7 に短縮、下限 5)
+function blastThreshold(){ const b = sk("e_blast3") ? 10 : sk("e_blast2") ? 15 : 25; return sk("e_stareater") ? Math.max(5, Math.round(b * 0.7)) : b; }
 // 連破の一撃: 周囲8マスからランダムな1ブロックを即座に砕く
 function chainStrike(gx, gy){
   bumpProc("chain");
@@ -591,6 +693,13 @@ function gainCoin(c, byBot){
   }
   v = Math.round(v);
   addCoins(v); sndCoin();
+  if (!c.dup && sk("c_tycoon") && Math.random() < 0.03){   // 大富豪の蓄財 (奥義): コイン獲得時 3% で ×20 バースト + 金の雨 + フィード
+    const burst = v * 20;
+    addCoins(burst); bumpProc("tycoon");
+    goldRainFx.push({ x: c.x, y: c.y });
+    rings.push({ x: c.x, y: c.y, r: BS * 2.4, t: performance.now(), color: "255,214,10", dur: 420 });
+    skillFeed("tycoon", `大当たり! +${fmt(burst)}コイン`, "💰", "#ffd60a");
+  }
   if (sk("c_piggy")) piggy += v * (sk("c_piggy2") ? 0.2 : 0.1);
   if (!c.dup && sk("c_spill") && Math.random() < 0.05){
     const a = Math.random() * Math.PI * 2;

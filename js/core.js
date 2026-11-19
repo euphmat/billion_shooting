@@ -28,7 +28,7 @@ function fmtDmg(n){
 // ---------- save / state ----------
 const SAVE_KEY = "billion_shooting_save_v2";
 const OLD_SAVE_KEY = "million_shooting_save_v1";
-const GAME_VERSION = 79;   // 現在のゲームバージョン (アップデート履歴の未読判定に使う)
+const GAME_VERSION = 80;   // 現在のゲームバージョン (アップデート履歴の未読判定に使う)
 const state = {
   coins: 0, totalCoins: 0, destroyed: 0,
   weapon: "handDrill",
@@ -40,6 +40,7 @@ const state = {
   inv: {}, seen: {},   // 素材の所持数 / 発見済み
   crafted: 0,
   muted: false,
+  atkMuted: false,   // 攻撃・破壊音だけオフ (発射/破壊/爆発チャンネル。他の効果音と全体ミュートとは独立)
   xp: 0, lv: 1, skills: {},
   artifacts: {},   // 所持アーティファクト {id: 1}
   botCore: 0, botArmor: 0,   // 衛星テクノロジー (攻撃ボット兵装コア / 自機の衛星装甲)
@@ -49,7 +50,7 @@ const state = {
   lastSeenUpdate: 0,   // アップデート履歴を最後に見たバージョン
 };
 const SAVE_FIELDS = ["coins", "totalCoins", "destroyed", "weapon", "weaponsOwned", "weaponLv", "bots", "coinBots", "botLv",
-  "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode", "visitedBodies", "lastSeenUpdate"];
+  "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "atkMuted", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode", "visitedBodies", "lastSeenUpdate"];
 let migrated = false;
 try {
   // 本番の置き場所は IndexedDB (store.js が起動時に読み終えている)。
@@ -489,7 +490,7 @@ const COINBOT_RECIPE = n => COINBOT_MATS[Math.min(n, COINBOT_MATS.length - 1)];
 const BOT_UP_MATS_LIST = ["copperOre", "ironOre", "titaniumOre", "tungstenOre", "diamond", "iridium", "stellarIron", "adamant", "singularityShard"];
 const BOT_UP_COST = () => niceRound(150 * Math.pow(1.55, state.botLv));
 const BOT_UP_MATS = () => { const o = {}; o[BOT_UP_MATS_LIST[Math.min(BOT_UP_MATS_LIST.length - 1, Math.floor(state.botLv / 5))]] = Math.ceil(20 * Math.pow(1.18, state.botLv % 5 + Math.floor(state.botLv / 5) * 2)); return o; };
-const botMul = () => (1 + 0.12 * state.botLv) * crewMul() * (sk("d_bot") ? 1.3 : 1) * (1 + (typeof artVal === "function" ? artVal("bot") : 0)) * (1 + 0.25 * (state.botCore || 0));
+const botMul = () => (1 + 0.12 * state.botLv) * crewMul() * (sk("d_bot") ? 1.3 : 1) * (1 + (typeof artVal === "function" ? artVal("bot") : 0)) * (1 + 0.25 * (state.botCore || 0)) * (sk("d_grandfleet") ? 2 : 1);   // 艦隊総攻撃 (奥義): 全ボット威力 ×2
 // ---------- 衛星テクノロジー (ボット強化) ----------
 const BOT_CORE_MAX = 5, BOT_ARMOR_MAX = 5;
 const BOT_CORE_MATS  = [{ magmalite:60 }, { permaice:60, toxicite:40 }, { prismore:70 }, { voltore:70, duneglass:40 }, { novalite:90 }];
@@ -560,7 +561,7 @@ const playerDamage = () => weaponAtkMul(state.weapon);
 const shotDamage   = (k = state.weapon) => WEAPONS[k].dmg * weaponLvMul(k);
 const weaponYield  = () => WEAPONS[state.weapon].yield;   // 採掘ボーナス (コイン倍率)
 const playerSpeed  = () => 270 * (sk("d_boost") ? 1.15 : 1) * (1 + (typeof artVal === "function" ? artVal("spd") : 0));
-const magnetRange  = () => 90 * (1 + (typeof artVal === "function" ? artVal("magnet") : 0));
+const magnetRange  = () => 90 * (1 + (typeof artVal === "function" ? artVal("magnet") : 0)) * (sk("c_philosopher") ? 3 : 1);   // 無限財宝 (奥義): コイン吸引範囲 ×3
 const weaponDPS = w => 5 * w.power;   // 基礎ダメージ1あたりの実効DPS
 const playerDPS    = () => weaponDPS(WEAPONS[state.weapon]) * weaponLvMul(state.weapon);
 // ---------- 攻撃ボットの装備 ----------

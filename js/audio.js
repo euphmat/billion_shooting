@@ -47,10 +47,13 @@ function syncAudioActive(){
 }
 document.addEventListener("visibilitychange", syncAudioActive);
 
+// 攻撃・破壊音のチャンネル (設定 state.atkMuted でこの系統だけを止める)
+const ATK_CH = { shoot: 1, break: 1, boom: 1 };
 // delay: 何秒後に鳴らすか / ch: チャンネル (同時発音数の管理単位)
 function tone(freq, dur, type, vol, slideTo, delay, ch){
   if (state.muted || document.hidden) return;
   ch = ch || "ui";
+  if (state.atkMuted && ATK_CH[ch]) return;   // 攻撃・破壊音オフ: 発射/破壊/爆発だけを再生直前で止める (他SE・レベルアップ等は鳴る)
   try {
     const ac = audio(), now = ac.currentTime;
     let total = 0;

@@ -15,8 +15,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BILLION">
-<link rel="stylesheet" href="css/style.css?v=79">
-<link rel="stylesheet" href="css/mobile.css?v=79">
+<link rel="stylesheet" href="css/style.css?v=80">
+<link rel="stylesheet" href="css/mobile.css?v=80">
 </head>
 <body>
 <div id="app">
@@ -71,11 +71,32 @@
     <div id="mapOverlay">
       <div class="tree-head">
         <h3>WORLD MAP</h3>
-        <span class="tree-hint">訪問済みのダンジョン (色付き) をクリックするとファストトラベルできます</span>
+        <span class="tree-hint">訪問済みのダンジョンへファストトラベルできます (M キーで開閉)</span>
         <span id="mapCount"></span>
         <button id="mapClose" class="icon-btn" aria-label="閉じる">×</button>
       </div>
+      <div id="mapBar">
+        <button id="mapHome" class="map-btn">🏠 ホーム</button>
+        <button id="mapReturn" class="map-btn">↩ さっきの場所</button>
+        <input id="mapSearch" type="text" placeholder="天体名・効果で検索" autocomplete="off">
+        <span id="mapMatchCount"></span>
+        <span class="map-bar-sp"></span>
+        <button id="mapViewMapBtn" class="map-btn on">マップ</button>
+        <button id="mapViewListBtn" class="map-btn">リスト</button>
+        <select id="mapSort" aria-label="リストの並び順">
+          <option value="dist">距離順</option>
+          <option value="name">名前順</option>
+        </select>
+      </div>
+      <div id="mapFxChips"></div>
       <div id="mapWrap"><canvas id="bigMap" width="760" height="760"></canvas></div>
+      <div id="mapList"></div>
+      <div id="mapPop"></div>
+      <div id="mapGoBar">
+        <span id="mapGoName"></span>
+        <button id="mapGoBtn" class="map-btn go">ここへ移動</button>
+        <button id="mapGoClose" class="icon-btn" aria-label="選択を解除">×</button>
+      </div>
     </div>
     <div id="updateOverlay">
       <div class="tree-head">
@@ -105,7 +126,7 @@
          ブロックを壊すと<b>コインと素材</b>が手に入る。素材は全168種、地層ごとに違う。<br>
          <span class="b-long">集めた素材とコインで、右の工房で装備 (全137種) を<b>製作・強化</b>しよう。</span>
          <span class="b-short">集めた素材とコインで、<b>工房</b>ボタンから装備 (全137種) を製作・強化しよう。</span><br>
-         ブロックを壊すとレベルアップ。<span class="b-long">T キーで</span><span class="b-short">SKILL ボタンで</span>スキルツリー (全150種) を開こう。<br>
+         ブロックを壊すとレベルアップ。<span class="b-long">T キーで</span><span class="b-short">SKILL ボタンで</span>スキルツリー (全165種) を開こう。<br>
          <span class="note">音が出ます。開始ボタンを押すと効果音が有効になります。</span></p>
       <button class="bigbtn" id="startBtn">START</button>
       <button class="ghostbtn" id="startInstallBtn" hidden>▼ アプリとしてインストール</button>
@@ -221,6 +242,17 @@
         </label>
       </div>
 
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">攻撃・破壊音</div>
+          <div class="settings-desc">射撃音とブロックの破壊・爆発音だけをオフにできます（コイン・購入・レベルアップなどの音は鳴ります）</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="atkSndToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
       <div class="settings-row" id="installRow" hidden>
         <div>
           <div class="settings-label">アプリとしてインストール</div>
@@ -271,21 +303,21 @@
 <div id="tooltip"></div>
 <!-- セーブ (IndexedDB) を読み終えてからゲーム本体を読み込む。
      store.js だけ同期で読み、残りは SaveDB.boot が記述順どおりに実行する -->
-<script src="js/store.js?v=79"></script>
+<script src="js/store.js?v=80"></script>
 <script>
 SaveDB.boot([
-  "js/materials.js?v=79",
-  "js/planet.js?v=79",
-  "js/core.js?v=79",
-  "js/audio.js?v=79",
-  "js/skills.js?v=79",
-  "js/ui.js?v=79",
-  "js/mobs.js?v=79",
-  "js/artifacts.js?v=79",
-  "js/game.js?v=79",
-  "js/skillfx.js?v=79",
-  "js/skilltree.js?v=79",
-  "js/mobile.js?v=79",
+  "js/materials.js?v=80",
+  "js/planet.js?v=80",
+  "js/core.js?v=80",
+  "js/audio.js?v=80",
+  "js/skills.js?v=80",
+  "js/ui.js?v=80",
+  "js/mobs.js?v=80",
+  "js/artifacts.js?v=80",
+  "js/game.js?v=80",
+  "js/skillfx.js?v=80",
+  "js/skilltree.js?v=80",
+  "js/mobile.js?v=80",
 ]);
 </script>
 </body>

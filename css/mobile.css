@@ -300,6 +300,14 @@ body.pwa-ios-mode .pwa-ios { display:block; }
   #stickZone { width:118px; height:118px; }
 }
 
+/* ---------- ワールドマップ (ファストトラベル拡張) ---------- */
+@media (pointer: coarse){
+  .map-btn { padding:9px 13px; font-size:13px; }
+  .map-row { padding:12px 10px; }
+  #mapSearch { font-size:14px; padding:8px 10px; }
+  #mapGoBtn { padding:11px 18px; font-size:14px; }
+}
+
 /* ---------- PWA (ホーム画面から起動) のときだけ効かせたい調整 ---------- */
 @media (display-mode: standalone){
   #pwaSheet { display:none !important; }

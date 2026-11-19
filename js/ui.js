@@ -50,6 +50,22 @@ const ICONS = {
   chain:   `<path d="M3 6l6 5-3 2 7 5" stroke-linejoin="round"/><circle cx="3" cy="6" r="1.3"/><circle cx="14.5" cy="19" r="1.6"/><path d="M14 4l3 3-2 1.5 4.5 3.5" stroke-linejoin="round"/>`,
   nova:    `<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7" stroke-dasharray="2 2.5"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" stroke-linecap="round"/>`,
   singularity: `<circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/><path d="M12 5a7 7 0 0 1 7 7M12 19a7 7 0 0 1-7-7" stroke-linecap="round"/><path d="M3 9.5A9.5 9.5 0 0 1 12 2.5M21 14.5a9.5 9.5 0 0 1-9 7" stroke-linecap="round" stroke-dasharray="2 3"/>`,
+  // --- 奥義専用アイコン (15種) ---
+  apex:        `<circle cx="12" cy="12" r="6.2"/><path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22" stroke-linecap="round"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke-linecap="round"/>`,
+  dimension:   `<circle cx="12" cy="12" r="8.5"/><path d="M12.5 3.6 10.2 9l3.6 3-2.4 3 1.4 5.4" stroke-linejoin="round"/><path d="M4.8 7.8l4 1.6M19.2 16.2l-4-1" stroke-linecap="round"/>`,
+  planetkiller:`<path d="M12 .8v5.4" stroke-linecap="round"/><path d="M9.2 3.4 12 6.2l2.8-2.8" stroke-linejoin="round"/><circle cx="12" cy="14.2" r="6.6"/><path d="M8.2 11.2l3 2.4-1.6 3.2M15.8 10.6l-2.4 2.4 1.8 3" stroke-linejoin="round"/>`,
+  elemsing:    `<circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="12" cy="4" r="1.6"/><circle cx="19.6" cy="9.5" r="1.6"/><circle cx="16.7" cy="18.5" r="1.6"/><circle cx="7.3" cy="18.5" r="1.6"/><circle cx="4.4" cy="9.5" r="1.6"/><path d="M12 6.6v2M17.9 11l-1.8.8M15.2 16.8l-1.2-1.5M8.8 16.8l1.2-1.5M6.1 11l1.8.8" stroke-linecap="round"/>`,
+  chainreaction:`<circle cx="6" cy="7" r="2.6"/><circle cx="17" cy="10" r="2.6"/><circle cx="9" cy="17.5" r="2.6"/><path d="M8.3 8.3 14.5 9.6M15.5 12.3l-4.3 3.4M7.7 14.5 6.6 9.8" stroke-linecap="round"/><path d="M20.8 2.8v3M19.3 4.3h3" stroke-linecap="round"/>`,
+  elemcore:    `<path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.4"/><path d="M12 9.6c.9 1.3.9 2.6 0 3.8-.9-1.2-.9-2.5 0-3.8z" fill="currentColor" stroke="none"/>`,
+  eldorado:    `<path d="M3.5 20.5h17M6 20.5v-6h4v6M14 20.5v-6h4v6M8.2 14.5V9.8h7.6v4.7" stroke-linejoin="round"/><circle cx="12" cy="5.2" r="2"/><path d="M12 1.2v1.2M5.6 3.4l1 1M18.4 3.4l-1 1" stroke-linecap="round"/>`,
+  tycoon:      `<circle cx="10" cy="13" r="6.5"/><path d="M7.6 10.4 10 12.8l2.4-2.4M10 12.8v3.6M8.1 14.9h3.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.6 3.4l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z" stroke-linejoin="round"/><circle cx="19.2" cy="15.5" r="2.5"/>`,
+  philosopher: `<path d="M7 9.5c-2 0-3.5 1.1-3.5 2.5S5 14.5 7 14.5c3.5 0 6.5-5 10-5 2 0 3.5 1.1 3.5 2.5S19 14.5 17 14.5c-3.5 0-6.5-5-10-5z" stroke-linejoin="round"/><path d="M12 3.6l1.1 2.1 2.1 1.1-2.1 1.1L12 10l-1.1-2.1-2.1-1.1 2.1-1.1z" stroke-linejoin="round"/>`,
+  funnel:      `<path d="M12 6.8 15.6 12 12 17.2 8.4 12z" stroke-linejoin="round"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><path d="M3.6 12a8.4 8.4 0 0 1 4.8-7.6M20.4 12a8.4 8.4 0 0 1-4.8 7.6" stroke-linecap="round" stroke-dasharray="2.5 2.5"/><circle cx="4.9" cy="8.6" r="1.2"/><circle cx="19.1" cy="15.4" r="1.2"/>`,
+  orbitalbot:  `<circle cx="12" cy="12" r="4.4"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><path d="M12 5.4a6.6 6.6 0 1 1-6.6 6.6" stroke-linecap="round"/><circle cx="19.6" cy="6.2" r="1.8"/><path d="M17.9 12.9l2.6 2.6M20.5 12.9l-2.6 2.6" stroke-linecap="round"/>`,
+  grandfleet:  `<path d="M12 3.8 14.7 9 12 20.2 9.3 9z" stroke-linejoin="round"/><path d="M4.6 8.8l1.9 3.6-1.9 4.8-1.9-4.8zM19.4 8.8l-1.9 3.6 1.9 4.8 1.9-4.8z" stroke-linejoin="round"/><path d="M8 21.2h8" stroke-linecap="round"/>`,
+  rights:      `<path d="M6.5 21V4" stroke-linecap="round"/><path d="M6.5 4.6c3-1.8 5 1.4 9 .2v5.2c-4 1.2-6-2-9-.2" stroke-linejoin="round"/><path d="M3 21h18" stroke-linecap="round"/><path d="M14.5 21 17 16.8 19.5 21" stroke-linejoin="round"/>`,
+  automine:    `<path d="M4.5 19.5 14 10" stroke-linecap="round"/><path d="M9.2 3.8c4.6.4 8.2 3.4 9.8 8.2C15.4 9 12.2 7.4 9.2 7z" stroke-linejoin="round"/><circle cx="19" cy="19" r="1.5"/><circle cx="12.2" cy="20.2" r="1.5"/><path d="M15.8 13.2 18 17.5M13.4 14.8l-.6 3.6" stroke-linecap="round"/>`,
+  stareater:   `<path d="M12 2.8l2 5.3 5.6.5-4.3 3.7 1.4 5.5L12 14.6l-4.7 3.2 1.4-5.5L4.4 8.6 10 8.1z" stroke-linejoin="round"/><path d="M12 .8v3M12 20.2v3M.8 12h3M20.2 12h3" stroke-linecap="round"/>`,
   drill:   `<path d="M7 4h10l-5 17z" stroke-linejoin="round"/><path d="M8.2 8.5l7.2 2M9.6 13l4.4 1.5" stroke-linecap="round"/>`,
   rare:    `<path d="M6 4h12l4 5.5L12 21 2 9.5z" stroke-linejoin="round"/><path d="M2 9.5h20M9 4l-2 5.5L12 21l5-11.5L15 4"/>`,
   double:  `<path d="M4 9h11M4 15h11" stroke-linecap="round"/><path d="M14 6.5 19 9l-5 2.5M14 12.5 19 15l-5 2.5" stroke-linejoin="round"/>`,
@@ -1005,11 +1021,12 @@ $("panels").addEventListener("change", e => {
 
 /* ---------- settings popup ---------- */
 const settingsOverlay = $("settingsOverlay");
-$("gearBtn").addEventListener("click", () => { $("soundToggle").checked = !state.muted; settingsOverlay.classList.add("open"); });
+$("gearBtn").addEventListener("click", () => { $("soundToggle").checked = !state.muted; $("atkSndToggle").checked = !state.atkMuted; settingsOverlay.classList.add("open"); });
 $("settingsClose").addEventListener("click", () => settingsOverlay.classList.remove("open"));
 settingsOverlay.addEventListener("click", e => { if (e.target === settingsOverlay) settingsOverlay.classList.remove("open"); });
 window.addEventListener("keydown", e => { if (e.key === "Escape") settingsOverlay.classList.remove("open"); });
 $("soundToggle").addEventListener("change", e => { state.muted = !e.target.checked; save(); syncAudioActive(); if (!state.muted) sndBuy(); });
+$("atkSndToggle").addEventListener("change", e => { state.atkMuted = !e.target.checked; save(); if (!state.atkMuted) sndBuy(); });
 $("resetBtn").addEventListener("click", () => {
   if (confirm("セーブを削除して最初からにしますか？")) wipeSave().then(() => location.reload());
 });
@@ -1018,6 +1035,7 @@ $("resetBtn").addEventListener("click", () => {
 let updOpen = false;
 // 新しい順。行を足すときは先頭に追加し、core.js の GAME_VERSION を上げる
 const UPDATE_HISTORY = [
+  { v:80, text:"スキルツリーに奥義15種を追加 (全165種・各系統に100/200/300SPの最終スキル：ファンネル/オービタルボット/軌道砲撃など) ・ ファストトラベル強化 (検索/リスト/ホーム＆リターン) ・ 画面シェイクを全廃止 ・ 設定に攻撃/破壊音のオフを追加" },
   { v:79, text:"拡大マップで重なっていたダンジョン名のラベルが重ならないように調整 (4組)" },
   { v:78, text:"アーティファクトの発動を左上のフィードに表示 (発動カウンタ付き) ・ 工房に武器フィルタを追加 (未製作のみ/製作可能のみ/所持済みのみ)" },
   { v:77, text:"アーティファクト全60種の効果を強化し、レア度を5段階に整理 (コモン/レア/エピック/レジェンダリー/ミシック・枠に色) ・ スキルの発動が見えるように (発動カウンタ/取得前後の合計値/発動中マーク)" },

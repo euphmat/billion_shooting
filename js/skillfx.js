@@ -16,7 +16,7 @@ const sndLevel = () => [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, .18
 function blast(x, y, r, dmg, color){
   damageRadius(x, y, r, dmg);
   rings.push({ x, y, r: r * 1.15, t: performance.now(), color: color || "255,255,255", dur: 480 });
-  shake = Math.max(shake, Math.min(0.45, r / 600)); sndBoom();
+  sndBoom();
 }
 function levelUpFx(){
   sndLevel();
@@ -25,6 +25,248 @@ function levelUpFx(){
   let msg = `LEVEL UP!  Lv.${state.lv}  スキルポイント獲得`;
   if (sk("c_bonus")){ const g = state.lv * 60; addCoins(g); msg += `  祝い金 +${fmt(g)}`; }
   toast(msg);
+}
+
+// ---------- 奥義: 専用スプライト (事前レンダリング。発光はスプライト側に焼き込む) ----------
+function makeSprite(size, draw){
+  const c = document.createElement("canvas"); c.width = c.height = size;
+  const g = c.getContext("2d"); draw(g, size); return c;
+}
+// ファンネル: 菱形ビット本体 + 尾翼フィン + 発光コア + 砲口 (鼻は +x 方向)
+const funnelSpr = makeSprite(56, (g, S) => {
+  const cx = S / 2, cy = S / 2;
+  const body = g.createLinearGradient(cx - 20, 0, cx + 20, 0);
+  body.addColorStop(0, "#141c26"); body.addColorStop(0.55, "#33506b"); body.addColorStop(1, "#0d1218");
+  g.fillStyle = body; g.strokeStyle = "#7df9ff"; g.lineWidth = 1.6;
+  g.beginPath(); g.moveTo(cx + 20, cy); g.lineTo(cx + 2, cy - 11); g.lineTo(cx - 16, cy - 5); g.lineTo(cx - 20, cy); g.lineTo(cx - 16, cy + 5); g.lineTo(cx + 2, cy + 11); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = "#57e39a";
+  g.beginPath(); g.moveTo(cx - 14, cy - 4); g.lineTo(cx - 24, cy - 13); g.lineTo(cx - 10, cy - 10); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(cx - 14, cy + 4); g.lineTo(cx - 24, cy + 13); g.lineTo(cx - 10, cy + 10); g.closePath(); g.fill();
+  g.strokeStyle = "#dff6ff"; g.lineWidth = 2.4; g.beginPath(); g.moveTo(cx + 14, cy); g.lineTo(cx + 23, cy); g.stroke();
+  const core = g.createRadialGradient(cx - 2, cy, 0, cx - 2, cy, 10);
+  core.addColorStop(0, "#ffffff"); core.addColorStop(0.35, "#57e39a"); core.addColorStop(1, "rgba(87,227,154,0)");
+  g.fillStyle = core; g.beginPath(); g.arc(cx - 2, cy, 10, 0, 7); g.fill();
+});
+// オービタルボット: 重厚な二重リング軌道体 + 装甲セグメント + 金色コア (攻撃ボットと一目で違うシルエット)
+const orbitalSpr = makeSprite(104, (g, S) => {
+  const cx = S / 2, cy = S / 2;
+  g.strokeStyle = "#2c3e50"; g.lineWidth = 11; g.beginPath(); g.arc(cx, cy, 40, 0, 7); g.stroke();
+  g.strokeStyle = "#7df9ff"; g.lineWidth = 2.4; g.beginPath(); g.arc(cx, cy, 46, 0, 7); g.stroke();
+  g.strokeStyle = "#57e39a"; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, 34, 0, 7); g.stroke();
+  g.fillStyle = "#486581";
+  for (let k = 0; k < 4; k++){ const a = k * Math.PI / 2 + Math.PI / 4, x = cx + Math.cos(a) * 40, y = cy + Math.sin(a) * 40; g.save(); g.translate(x, y); g.rotate(a); g.fillRect(-7, -5, 14, 10); g.restore(); }
+  const core = g.createRadialGradient(cx, cy, 0, cx, cy, 17);
+  core.addColorStop(0, "#ffffff"); core.addColorStop(0.3, "#ffd60a"); core.addColorStop(0.7, "rgba(255,150,40,.55)"); core.addColorStop(1, "rgba(255,150,40,0)");
+  g.fillStyle = core; g.beginPath(); g.arc(cx, cy, 17, 0, 7); g.fill();
+  g.strokeStyle = "#ffe9a8"; g.lineWidth = 1.6; g.beginPath(); g.arc(cx, cy, 9, 0, 7); g.stroke();
+});
+// マズルフラッシュ: 十字スパイク + グロー
+const flashSpr = makeSprite(40, (g, S) => {
+  const cx = S / 2, cy = S / 2;
+  const rg = g.createRadialGradient(cx, cy, 0, cx, cy, 19);
+  rg.addColorStop(0, "rgba(255,255,255,.95)"); rg.addColorStop(0.4, "rgba(160,240,255,.55)"); rg.addColorStop(1, "rgba(160,240,255,0)");
+  g.fillStyle = rg; g.beginPath(); g.arc(cx, cy, 19, 0, 7); g.fill();
+  g.strokeStyle = "rgba(255,255,255,.9)"; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(cx - 18, cy); g.lineTo(cx + 18, cy); g.moveTo(cx, cy - 18); g.lineTo(cx, cy + 18); g.stroke();
+});
+// 原初元素炉の虹オーラ: 12色の扇セグメント + 柔らかい外周グロー
+const auraSpr = makeSprite(256, (g, S) => {
+  const cx = S / 2, cy = S / 2;
+  for (let k = 0; k < 12; k++){
+    g.fillStyle = `hsla(${k * 30}, 100%, 62%, .20)`;
+    g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, 124, k * Math.PI / 6, (k + 1) * Math.PI / 6); g.closePath(); g.fill();
+  }
+  const rg = g.createRadialGradient(cx, cy, 30, cx, cy, 126);
+  rg.addColorStop(0, "rgba(255,255,255,0)"); rg.addColorStop(0.75, "rgba(255,255,255,.10)"); rg.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = rg; g.beginPath(); g.arc(cx, cy, 126, 0, 7); g.fill();
+});
+// 金貨: 金のグラデーション + 縁取り + ハイライト
+const coinSpr = makeSprite(22, (g, S) => {
+  const cx = S / 2, cy = S / 2;
+  const rg = g.createRadialGradient(cx - 2, cy - 2, 0, cx, cy, 10);
+  rg.addColorStop(0, "#fff6bf"); rg.addColorStop(0.55, "#ffd60a"); rg.addColorStop(1, "#b8860b");
+  g.fillStyle = rg; g.beginPath(); g.arc(cx, cy, 9.5, 0, 7); g.fill();
+  g.strokeStyle = "#8a6508"; g.lineWidth = 1.4; g.beginPath(); g.arc(cx, cy, 9.5, 0, 7); g.stroke();
+  g.strokeStyle = "rgba(138,101,8,.8)"; g.lineWidth = 1.2; g.beginPath(); g.arc(cx, cy, 5.5, 0, 7); g.stroke();
+  g.fillStyle = "rgba(255,255,255,.9)"; g.fillRect(cx - 5, cy - 6, 2.4, 2.4);
+});
+// バースト演出: 白熱コア + 色グロー + 破片リング (二重の欠けリング)
+function burstSprite(color, coreColor){
+  return makeSprite(128, (g, S) => {
+    const cx = S / 2, cy = S / 2;
+    const rg = g.createRadialGradient(cx, cy, 0, cx, cy, 62);
+    rg.addColorStop(0, "rgba(255,255,255,.95)"); rg.addColorStop(0.25, coreColor); rg.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = rg; g.beginPath(); g.arc(cx, cy, 62, 0, 7); g.fill();
+    g.strokeStyle = color; g.lineWidth = 5;
+    for (let k = 0; k < 6; k++){ const a0 = k * Math.PI / 3 + 0.18; g.beginPath(); g.arc(cx, cy, 50, a0, a0 + Math.PI / 4.2); g.stroke(); }
+    g.lineWidth = 2.4;
+    for (let k = 0; k < 6; k++){ const a0 = k * Math.PI / 3 - 0.3; g.beginPath(); g.arc(cx, cy, 34, a0, a0 + Math.PI / 5); g.stroke(); }
+  });
+}
+const burstSprs = {
+  dimension: burstSprite("rgba(224,110,255,.9)", "rgba(190,90,255,.75)"),
+  planet: burstSprite("rgba(255,176,96,.95)", "rgba(255,140,50,.8)"),
+  burn: burstSprite("rgba(255,120,40,.9)", "rgba(255,90,20,.7)"),
+  frost: burstSprite("rgba(120,220,255,.9)", "rgba(90,180,255,.7)"),
+  acid: burstSprite("rgba(120,255,90,.9)", "rgba(80,220,60,.7)"),
+  rad: burstSprite("rgba(157,107,255,.9)", "rgba(140,80,255,.7)"),
+  spark: burstSprite("rgba(125,249,255,.95)", "rgba(125,249,255,.7)"),
+};
+
+// ---------- 奥義: 毎フレーム処理 ----------
+const funnels = [], orbitals = [];
+const dimFx = [], goldParts = [];   // dimFx: {x, y, t, kind, dur?} バースト演出 / goldParts: 金貨パーティクル
+let planetT = 30, fleetT = 10, coreFrostT = 0, goldTrailT = 0, funCount = -1, orbCount = -1;
+function capstoneUpdate(dt, bdt, now){
+  // 原初元素炉: 氷結中ブロックへ追加ダメージ (最大HP 1%/秒。数が多い時は間隔を伸ばして集約)
+  if (sk("b_core") && frosts.size){
+    coreFrostT -= dt;
+    if (coreFrostT <= 0){
+      coreFrostT = frosts.size > 400 ? 1 : frosts.size > 120 ? 0.5 : 0.25;   // 件数が多いほど間隔を伸ばして集約 (DPS は 1%/秒で不変)
+      const frac = coreFrostT * 0.01;
+      rawDamage(() => { for (const idx of frosts.keys()) if (!isDestroyed(idx)) damageBlock(idx, blockMaxHP(idx % D, (idx / D) | 0) * frac, 0); });
+    }
+  }
+  // 惑星殺し・極: 30秒ごとに軌道砲撃 (空からの太い光柱 + 多重リング + 画面内の全ブロック/モンスターへ特大ダメージ)
+  if (sk("a_planetkiller")){
+    planetT -= dt;
+    if (planetT <= 0){
+      planetT = 30; bumpProc("planetkiller");
+      skillFeed("planetkiller", "軌道砲撃", "☄️", "#ff6b4a");
+      const R = Math.min(1500, Math.hypot(CW, CH) / 2 / zoom + BS * 2);
+      beams.push({ x1: player.x, y1: player.y - 1700, x2: player.x, y2: player.y, t: now, w: 30, color: "#ffb060", life: 320 });
+      beams.push({ x1: player.x, y1: player.y - 1700, x2: player.x, y2: player.y, t: now, w: 11, color: "#ffffff", life: 320 });
+      rings.push({ x: player.x, y: player.y, r: R * 0.55, t: now, color: "255,150,60", dur: 650 });
+      rings.push({ x: player.x, y: player.y, r: R * 0.3, t: now, color: "255,230,190", dur: 500 });
+      dimFx.push({ x: player.x, y: player.y, t: 0, kind: "planet", dur: 0.6 });
+      rawDamage(() => damageRadius(player.x, player.y, R, playerDamage() * 20 * gMul));
+      sndBoom();
+    }
+  }
+  // ファンネル: 公転しながら既存の shoot() 経路で自動射撃 (艦隊総攻撃で 8基・二重リング逆回転)
+  const gf = sk("d_grandfleet");
+  const wantFun = gf ? 8 : sk("d_funnel") ? 4 : 0;
+  if (wantFun !== funCount){
+    funCount = wantFun; funnels.length = 0;
+    for (let i = 0; i < wantFun; i++) funnels.push({ ang: i * Math.PI * 2 / wantFun, x: player.x, y: player.y, face: 0, fireT: 0.12 * i, flash: 0, trail: [] });
+  }
+  for (let i = 0; i < funnels.length; i++){
+    const f = funnels[i], outer = gf && i >= 4;
+    const radius = gf ? (outer ? 88 : 56) : 62, speed = outer ? -1.4 : 2.0;
+    f.ang += bdt * speed;
+    f.x = player.x + Math.cos(f.ang) * radius; f.y = player.y + Math.sin(f.ang) * radius;
+    f.face = f.ang + (speed > 0 ? Math.PI / 2 : -Math.PI / 2);
+    f.trail.push({ x: f.x, y: f.y }); if (f.trail.length > 4) f.trail.shift();
+    if (f.flash > 0) f.flash -= bdt;
+    f.fireT -= bdt;
+    if (f.fireT <= 0){ f.fireT = 0.4; if (shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * (gf ? 2 : 1), null, true)) f.flash = 0.06; }   // 間隔 0.4s × 1発 = 自機DPSの約15%/基
+  }
+  // オービタルボット: 大きく周回し、最も硬い対象へ徹甲レーザー (太ビーム + 着弾スパーク)
+  const wantOrb = gf ? 2 : sk("d_orbital") ? 1 : 0;
+  if (wantOrb !== orbCount){
+    orbCount = wantOrb; orbitals.length = 0;
+    for (let i = 0; i < wantOrb; i++) orbitals.push({ ang: i * Math.PI, x: player.x, y: player.y, fireT: 1.2 + i * 1.1, flash: 0 });
+  }
+  for (const o of orbitals){
+    o.ang -= bdt * 0.85;
+    o.x = player.x + Math.cos(o.ang) * 128; o.y = player.y + Math.sin(o.ang) * 128;
+    if (o.flash > 0) o.flash -= bdt;
+    o.fireT -= bdt;
+    if (o.fireT <= 0){
+      o.fireT = 2.4;
+      const range = atkRange() * 1.3, dmg = playerDPS() * 0.40 * 2.4 * (gf ? 2 : 1);
+      let bIdx = -1, bHard = 0;
+      for (const i of findNearestBlocks(player.x, player.y, range, 14)){ const mh = blockMaxHP(i % D, (i / D) | 0); if (mh > bHard){ bHard = mh; bIdx = i; } }
+      let bMob = null;
+      for (const m of mobs){ if (!m.dead && m.maxHp > bHard && Math.hypot(m.x - player.x, m.y - player.y) <= range){ bHard = m.maxHp; bMob = m; } }
+      if (bMob || bIdx >= 0){
+        const tp = bMob ? { x: bMob.x, y: bMob.y } : blockPos(bIdx);
+        beams.push({ x1: o.x, y1: o.y, x2: tp.x, y2: tp.y, t: now, w: 7, color: "#7df9ff", life: 200 });
+        beams.push({ x1: o.x, y1: o.y, x2: tp.x, y2: tp.y, t: now, w: 2.5, color: "#ffffff", life: 200 });
+        dimFx.push({ x: tp.x, y: tp.y, t: 0, kind: "spark", dur: 0.28 });
+        if (bMob) damageMob(bMob, dmg, null); else damageBlock(bIdx, dmg, 0);
+        o.flash = 0.12;
+      } else o.fireT = 0.5;
+    }
+  }
+  // 艦隊総攻撃: 10秒ごとに全ファンネル一斉射撃バースト
+  if (gf && funnels.length){
+    fleetT -= dt;
+    if (fleetT <= 0){
+      fleetT = 10; bumpProc("fleetburst");
+      skillFeed("grandfleet", "艦隊総攻撃", "🛸", "#57e39a");
+      for (const f of funnels){ for (let k = 0; k < 3; k++) shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * 2 * 1.5, null, true); f.flash = 0.09; }
+    }
+  }
+  // 大富豪の蓄財: 金の雨 (イベント消費) / 無限財宝: 移動中の金の軌跡
+  while (goldRainFx.length){
+    const e = goldRainFx.shift();
+    for (let k = 0; k < 12 && goldParts.length < 90; k++){
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6, sp = 130 + Math.random() * 190;
+      goldParts.push({ x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: 0.85 + Math.random() * 0.3, rot: Math.random() * 6.3, vr: (Math.random() - 0.5) * 9 });
+    }
+  }
+  if (sk("c_philosopher") && player.moving){
+    goldTrailT -= dt;
+    if (goldTrailT <= 0 && goldParts.length < 90){ goldTrailT = 0.05; goldParts.push({ x: player.x + (Math.random() - 0.5) * 14, y: player.y + (Math.random() - 0.5) * 14, vx: (Math.random() - 0.5) * 24, vy: 26 + Math.random() * 22, t: 0, life: 0.55, rot: Math.random() * 6.3, vr: (Math.random() - 0.5) * 7 }); }
+  }
+  for (let i = goldParts.length - 1; i >= 0; i--){
+    const p = goldParts[i]; p.t += dt;
+    if (p.t >= p.life){ goldParts.splice(i, 1); continue; }
+    p.vy += 300 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+  }
+  // バースト演出の寿命
+  for (let i = dimFx.length - 1; i >= 0; i--){ dimFx[i].t += dt; if (dimFx[i].t >= (dimFx[i].dur || 0.45)) dimFx.splice(i, 1); }
+}
+
+// ---------- 奥義: 描画 (skillsDraw の先頭 = 自機より下の層) ----------
+function capstoneDraw(now, toScreen){
+  if (sk("b_core")){   // 虹色オーラ (回転 + 脈動)
+    const [sx, sy] = toScreen(player.x, player.y);
+    const size = 175 * zoom * (1 + 0.05 * Math.sin(now / 340));
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(now / 2600); ctx.globalAlpha = 0.85;
+    ctx.drawImage(auraSpr, -size / 2, -size / 2, size, size); ctx.restore();
+  }
+  for (const d of dimFx){   // 次元崩壊は回転させて歪み感を出す
+    const spr = burstSprs[d.kind]; if (!spr) continue;
+    const dur = d.dur || 0.45, p = Math.min(1, d.t / dur);
+    const base = d.kind === "planet" ? 360 : d.kind === "spark" ? 95 : 175;
+    const size = base * (0.35 + 0.75 * p) * zoom;
+    const [sx, sy] = toScreen(d.x, d.y);
+    ctx.save(); ctx.translate(sx, sy); if (d.kind === "dimension") ctx.rotate(p * 1.4);
+    ctx.globalAlpha = (1 - p) * 0.95; ctx.drawImage(spr, -size / 2, -size / 2, size, size); ctx.restore();
+  }
+  for (const p of goldParts){   // 金貨 (回転で薄くなる表現)
+    const [sx, sy] = toScreen(p.x, p.y);
+    const size = 15 * zoom, sq = Math.abs(Math.cos(p.rot));
+    ctx.save(); ctx.translate(sx, sy); ctx.globalAlpha = Math.min(1, (p.life - p.t) / 0.25);
+    ctx.drawImage(coinSpr, -size / 2, -size / 2, Math.max(2, size * (0.25 + 0.75 * sq)), size); ctx.restore();
+  }
+  for (const f of funnels){   // トレイル → 本体 (進行方向を向く) → マズルフラッシュ
+    for (let k = 0; k < f.trail.length; k++){
+      const tp = f.trail[k], [tx, ty] = toScreen(tp.x, tp.y);
+      ctx.fillStyle = `rgba(87,227,154,${0.05 + 0.05 * k})`;
+      ctx.beginPath(); ctx.arc(tx, ty, 2 + k, 0, 7); ctx.fill();
+    }
+    const [sx, sy] = toScreen(f.x, f.y), size = 27 * zoom;
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(f.face); ctx.drawImage(funnelSpr, -size / 2, -size / 2, size, size); ctx.restore();
+    if (f.flash > 0){
+      const nx = f.x + Math.cos(f.face) * 15, ny = f.y + Math.sin(f.face) * 15, [fx2, fy2] = toScreen(nx, ny), fs = 21 * zoom;
+      ctx.save(); ctx.translate(fx2, fy2); ctx.rotate(f.face); ctx.globalCompositeOperation = "lighter";
+      ctx.drawImage(flashSpr, -fs / 2, -fs / 2, fs, fs); ctx.restore();
+    }
+  }
+  for (const o of orbitals){   // リング軌道体 (チャージで脈動が強まる) + 発射フラッシュ
+    const [sx, sy] = toScreen(o.x, o.y);
+    const charge = 1 - Math.max(0, o.fireT) / 2.4;
+    const size = 56 * zoom * (1 + 0.05 * Math.sin(now / 200) + 0.1 * charge);
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(o.ang * 0.6); ctx.drawImage(orbitalSpr, -size / 2, -size / 2, size, size); ctx.restore();
+    if (o.flash > 0){
+      const fs = 30 * zoom;
+      ctx.save(); ctx.translate(sx, sy); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.min(1, o.flash / 0.12);
+      ctx.drawImage(flashSpr, -fs / 2, -fs / 2, fs, fs); ctx.restore();
+    }
+  }
 }
 
 // ---------- 設置物 / 継続効果 ----------
@@ -101,6 +343,7 @@ function skillsUpdate(dt, fdt, bdt, now){
         let tick = b.d * 0.25;
         if (sk("b_sun") && (!b.k || b.k === "burn")) tick += blockMaxHP(idx % D, (idx / D) | 0) * 0.0025;   // 太陽の核
         if (sk("b_decay") && b.rad) tick += blockMaxHP(idx % D, (idx / D) | 0) * 0.00125;   // 崩壊
+        if (sk("b_core")) tick += blockMaxHP(idx % D, (idx / D) | 0) * 0.0025;   // 原初元素炉 (奥義): 状態異常中は追加で最大HP 1%/秒
         damageBlock(idx, tick, 0);
       }
     });
@@ -121,7 +364,7 @@ function skillsUpdate(dt, fdt, bdt, now){
     damageRadius(m.x, m.y, m.r, m.dmg);
     rings.push({ x: m.x, y: m.y, r: m.r * 1.3, t: now, color: "255,170,80", dur: 420 });
     beams.push({ x1: m.x + 500, y1: m.y - 1400, x2: m.x, y2: m.y, t: now, w: 5, color: "#ffb060", life: 150 });
-    shake = Math.max(shake, 0.18); sndBoom();
+    sndBoom();
   }
 
   // --- 爆撃ドローン (自動発進) ---
@@ -183,11 +426,12 @@ function skillsUpdate(dt, fdt, bdt, now){
       }
     }
   }
-
+  capstoneUpdate(dt, bdt, now);
 }
 
 // ---------- 描画 (draw() の中、弾の後・ユニットの前) ----------
 function skillsDraw(now, toScreen){
+  capstoneDraw(now, toScreen);
   const px = BS * zoom;
   // 爆弾 (ブロックの状態異常は game.js の drawStatusFx でスプライト描画する)
   if (px > 4){

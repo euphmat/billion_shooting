@@ -307,7 +307,6 @@ function heartPulse(){
   rings.push({ x: player.x, y: player.y, r: 300, t: performance.now(), color: "255,90,122", dur: 650 });
   rings.push({ x: player.x, y: player.y, r: 185, t: performance.now(), color: "255,160,180", dur: 480 });
   rawDamage(() => damageRadius(player.x, player.y, 280, playerDamage() * 6));
-  shake = Math.max(shake, 0.1);
 }
 // 超新星の核: 50個破壊ごとの大爆発 (虹色の三重リング + 星バースト)
 function supernovaAt(x, y){
@@ -317,7 +316,7 @@ function supernovaAt(x, y){
   rings.push({ x, y, r: BS * 4,   t: performance.now(), color: "130,160,255", dur: 500 });
   burstAt(x, y, { accent: "#ffa502", c2: "#ffffff", burst: "star" }, null);
   damageRadius(x, y, BS * 6, playerDamage() * 16);
-  shake = Math.max(shake, 0.4); sndBoom();
+  sndBoom();
   toast("超新星爆発！");
 }
 // 不死鳥の灰: 復活時の大爆発 (炎の翼のような花弁バースト x3 + 範囲ダメージ)
@@ -327,7 +326,7 @@ function phoenixBlast(){
   rings.push({ x: player.x, y: player.y, r: 340, t: performance.now(), color: "255,123,63", dur: 620 });
   rings.push({ x: player.x, y: player.y, r: 210, t: performance.now(), color: "255,214,10", dur: 460 });
   rawDamage(() => damageRadius(player.x, player.y, 320, playerDamage() * 12));
-  shake = Math.max(shake, 0.35); sndBoom();
+  sndBoom();
 }
 // 星屑の王笏: レベルアップ時に星が降り注ぐ (ビーム + リング + 大ダメージ、同時演出は24体まで)
 function scepterStarfall(){
