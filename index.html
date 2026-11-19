@@ -15,8 +15,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BILLION">
-<link rel="stylesheet" href="css/style.css?v=80">
-<link rel="stylesheet" href="css/mobile.css?v=80">
+<link rel="stylesheet" href="css/style.css?v=81">
+<link rel="stylesheet" href="css/mobile.css?v=81">
 </head>
 <body>
 <div id="app">
@@ -121,8 +121,8 @@
     <div id="startOverlay" class="overlay">
       <h1>BILLION<br>SHOOTING</h1>
       <p>1億ブロックの超巨大惑星「地球」を破壊せよ。<br>
-         <span class="b-long">WASD で移動 / ブロックに近づくと自動射撃 / マウスホイールでズーム</span>
-         <span class="b-short">右下のスティックで移動 / ブロックに近づくと自動射撃 / ピンチでズーム</span><br>
+         <span class="b-long">WASD で移動 / スペース長押しで高速移動 / ブロックに近づくと自動射撃 / マウスホイールでズーム</span>
+         <span class="b-short">右下のスティックで移動 / » ボタンで高速移動 / ブロックに近づくと自動射撃 / ピンチでズーム</span><br>
          ブロックを壊すと<b>コインと素材</b>が手に入る。素材は全168種、地層ごとに違う。<br>
          <span class="b-long">集めた素材とコインで、右の工房で装備 (全137種) を<b>製作・強化</b>しよう。</span>
          <span class="b-short">集めた素材とコインで、<b>工房</b>ボタンから装備 (全137種) を製作・強化しよう。</span><br>
@@ -136,6 +136,7 @@
       <div id="stickBase"><span class="st-cross"></span><div id="stickKnob"></div></div>
     </div>
     <div id="mBtns">
+      <button id="mBoost" class="mbtn" aria-label="高速移動モード" aria-pressed="false">»</button>
       <button id="mZoomOut" class="mbtn" aria-label="縮小">－</button>
       <button id="mZoomIn"  class="mbtn" aria-label="拡大">＋</button>
     </div>
@@ -303,21 +304,21 @@
 <div id="tooltip"></div>
 <!-- セーブ (IndexedDB) を読み終えてからゲーム本体を読み込む。
      store.js だけ同期で読み、残りは SaveDB.boot が記述順どおりに実行する -->
-<script src="js/store.js?v=80"></script>
+<script src="js/store.js?v=81"></script>
 <script>
 SaveDB.boot([
-  "js/materials.js?v=80",
-  "js/planet.js?v=80",
-  "js/core.js?v=80",
-  "js/audio.js?v=80",
-  "js/skills.js?v=80",
-  "js/ui.js?v=80",
-  "js/mobs.js?v=80",
-  "js/artifacts.js?v=80",
-  "js/game.js?v=80",
-  "js/skillfx.js?v=80",
-  "js/skilltree.js?v=80",
-  "js/mobile.js?v=80",
+  "js/materials.js?v=81",
+  "js/planet.js?v=81",
+  "js/core.js?v=81",
+  "js/audio.js?v=81",
+  "js/skills.js?v=81",
+  "js/ui.js?v=81",
+  "js/mobs.js?v=81",
+  "js/artifacts.js?v=81",
+  "js/game.js?v=81",
+  "js/skillfx.js?v=81",
+  "js/skilltree.js?v=81",
+  "js/mobile.js?v=81",
 ]);
 </script>
 </body>

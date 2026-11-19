@@ -116,6 +116,22 @@ if (COARSE) document.body.classList.add("touch");
 })();
 
 /* =========================================================
+   2.5 高速移動モードのトグル (ズームボタンの並びにある » ボタン)
+   ON の間はスティック移動がブースト速度になる。状態はセッション内のみ保持し、
+   ボタンの .on クラスと aria-pressed で見た目にそのまま反映する
+   ========================================================= */
+(() => {
+  const btn = $("mBoost");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    audio();
+    boostTouchOn = !boostTouchOn;
+    btn.classList.toggle("on", boostTouchOn);
+    btn.setAttribute("aria-pressed", boostTouchOn ? "true" : "false");
+  });
+})();
+
+/* =========================================================
    3. 工房 = ボトムシート
    ========================================================= */
 const sheetOpen = () => document.body.classList.contains("sheet-open");

@@ -167,6 +167,9 @@ body.pwa-ios-mode .pwa-ios { display:block; }
     -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
   }
   .mbtn:active { background:#fff; color:#000; }
+  /* 高速移動トグル: ON の間は水色に発光して、押下状態が一目で分かるようにする */
+  #mBoost { color:#7df9ff; border-color:rgba(125,249,255,.75); font-weight:700; }
+  #mBoost.on { background:rgba(125,249,255,.85); color:#04222b; border-color:#7df9ff; box-shadow:0 0 16px rgba(125,249,255,.55); }
   /* ---- 左下メニュー ---- */
   #mMenu {
     display:flex; flex-direction:column; gap:9px; position:absolute; z-index:6;

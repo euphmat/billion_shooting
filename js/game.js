@@ -9,6 +9,37 @@ const player = { x: SW && isFinite(SW.px) ? SW.px : (R + 4) * BS, y: SW && isFin
 const keys = {};
 // スマホのバーチャルスティック (mobile.js が書き込む)。mag は 0〜1 のアナログ量
 const touchAxis = { x:0, y:0, mag:0, on:false };
+/* ---------- 超高速移動 (ブースト): PC = スペース長押し / スマホ = トグルボタン ----------
+   倍率の根拠: 天体間の表面距離は最寄りでも約12,000px・典型約27,000px (実測)。
+   通常速度 270 の ×6 (1,620) では最寄りでも 7 秒超かかるため、「数秒で隣の天体圏」を
+   満たす ×10 (2,700 → 最寄り約 4.4 秒 / 典型約 10 秒) を採用。手動入力の間だけ効き、
+   オートパイロット (放置移動) には効かない。 */
+const BOOST_MUL = 10;
+let boostKey = false;        // スペース押下中 (PC)
+let boostTouchOn = false;    // スマホのトグル (mobile.js が切り替える。セッション内のみ保持)
+let boostOn = false;         // このフレーム実際にブースト中か (描画とボットの追いつきが参照)
+const boostGhosts = [];      // 残像 {x, y, a, t} (最大14)
+const boostParts = [];       // 噴射パーティクル {x, y, vx, vy, t, life} (最大90)
+let boostGhostT = 0, boostPartT = 0;
+// 噴射の光: 事前レンダリング済みスプライト (奥義と同じ流儀で毎フレーム描き直さない)
+const boostFlameSpr = (() => {
+  const c = document.createElement("canvas"); c.width = c.height = 32;
+  const g = c.getContext("2d");
+  const rg = g.createRadialGradient(16, 16, 0, 16, 16, 15);
+  rg.addColorStop(0, "rgba(255,255,255,.95)"); rg.addColorStop(0.35, "rgba(125,249,255,.75)"); rg.addColorStop(1, "rgba(125,249,255,0)");
+  g.fillStyle = rg; g.beginPath(); g.arc(16, 16, 15, 0, 7); g.fill();
+  return c;
+})();
+// スペースの押下/解放をブーストに結ぶ。入力欄にフォーカスがある時は文字入力を優先し、
+// ゲーム側では扱わない (マップ検索の M キーと同じ流儀)。解放は常に対象外でも止める (押しっぱなしの取り残し防止)
+function boostSpaceEvent(e, down){
+  if (!e || e.code !== "Space") return;
+  if (!down){ boostKey = false; return; }
+  const tag = e.target && e.target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  if (e.preventDefault) e.preventDefault();   // ページスクロールと、フォーカス中ボタンのスペース再押下を止める
+  boostKey = true;
+}
 const bullets = [];   // {x,y,vx,vy,idx,dmg,splash,life}
 const coinsArr = [];  // {x,y,vx,vy,value}
 const flashes = new Map(); // idx -> timestamp
@@ -636,8 +667,9 @@ cv.addEventListener("wheel", e => {
 }, { passive:false });
 let hoverInfo = null;   // カーソル下のブロック {gx, gy, name, color, cur, max} (無いときは null)。カーソル位置は skillfx.js の mouseSX/mouseSY/mouseIn を共有
 window.addEventListener("dragstart", e => e.preventDefault());   // 要素のゴーストドラッグを止める
-window.addEventListener("keydown", e => { keys[e.key.toLowerCase()] = true; if (["w","a","s","d"].includes(e.key.toLowerCase())) audio(); });
-window.addEventListener("keyup",   e => { keys[e.key.toLowerCase()] = false; });
+window.addEventListener("keydown", e => { keys[e.key.toLowerCase()] = true; if (["w","a","s","d"].includes(e.key.toLowerCase())) audio(); boostSpaceEvent(e, true); });
+window.addEventListener("keyup",   e => { keys[e.key.toLowerCase()] = false; boostSpaceEvent(e, false); });
+window.addEventListener("blur", () => { boostKey = false; });   // フォーカスを失ったらブーストは解除 (押しっぱなし扱いの防止)
 
 // ---------- start / clear ----------
 let started = false, cleared = false;
@@ -714,16 +746,39 @@ function frame(now){
   dmgFlushT -= dt;   // 0以下になったら draw 前に flushDmgLabels が集計を発行し、周期を戻す
   const pfdt = dt * playerRate(), bdt = dt * crewRate();   // 自機 / 仲間それぞれの連射スキル込み
   // --- player move ---
-  let ax = 0, ay = 0, amp = 1;
+  let ax = 0, ay = 0, amp = 1, manual = false;
   if (keys["w"]) ay -= 1; if (keys["s"]) ay += 1; if (keys["a"]) ax -= 1; if (keys["d"]) ax += 1;
-  if (!ax && !ay && touchAxis.on && touchAxis.mag > 0){ ax = touchAxis.x; ay = touchAxis.y; amp = touchAxis.mag; }   // スマホのスティック (傾けた分だけ速い)
+  if (ax || ay) manual = true;
+  if (!ax && !ay && touchAxis.on && touchAxis.mag > 0){ ax = touchAxis.x; ay = touchAxis.y; amp = touchAxis.mag; manual = true; }   // スマホのスティック (傾けた分だけ速い)
   if (ax || ay) idleT = 0; else { [ax, ay] = autopilot(dt); amp = 1; }   // オートパイロット (スキル)
   player.moving = !!(ax || ay);
-  const al = Math.hypot(ax, ay) || 1, sp = playerSpeed() * amp;
+  boostOn = manual && (boostKey || boostTouchOn);   // ブーストは手動入力の間だけ (放置の自動移動は速くしない)
+  const al = Math.hypot(ax, ay) || 1, sp = playerSpeed() * amp * (boostOn ? BOOST_MUL : 1);
   player.vx = ax / al * sp * (ax || ay ? 1 : 0); player.vy = ay / al * sp * (ax || ay ? 1 : 0);
-  player.x += player.vx * dt; player.y += player.vy * dt;
+  // 高速時は 1 フレームの移動量がブロック (BS=24) を超え、押し出し式の衝突だけでは
+  // 薄い壁をすり抜けるので、16px 以下の小刻みに進めて各歩で衝突を解決する
+  const mdx = player.vx * dt, mdy = player.vy * dt;
+  const mSteps = Math.max(1, Math.ceil(Math.hypot(mdx, mdy) / 16));
+  for (let s = 0; s < mSteps; s++){ player.x += mdx / mSteps; player.y += mdy / mSteps; resolveCollision(player, 10); }
   if (ax || ay) player.angle = Math.atan2(ay, ax);
-  resolveCollision(player, 10);
+  // ブースト演出の発生 (残像と噴射。寿命は draw 側が時刻で管理する)
+  if (boostOn){
+    boostGhostT -= dt; boostPartT -= dt;
+    if (boostGhostT <= 0){
+      boostGhostT = 0.03;
+      boostGhosts.push({ x: player.x, y: player.y, a: player.angle, t: now });
+      if (boostGhosts.length > 14) boostGhosts.shift();
+    }
+    if (boostPartT <= 0){
+      boostPartT = 0.012;
+      const bx = player.x - Math.cos(player.angle) * 12, by = player.y - Math.sin(player.angle) * 12;
+      for (let k = 0; k < 2; k++){
+        const ja = player.angle + Math.PI + (Math.random() - 0.5) * 0.7, js = 120 + Math.random() * 160;
+        boostParts.push({ x: bx, y: by, vx: Math.cos(ja) * js - player.vx * 0.25, vy: Math.sin(ja) * js - player.vy * 0.25, t: now, life: 260 + Math.random() * 160 });
+      }
+      if (boostParts.length > 90) boostParts.splice(0, boostParts.length - 90);
+    }
+  }
 
   // --- player fire ---
   player.fireT -= pfdt;
@@ -773,7 +828,10 @@ function frame(now){
       // 装備の届く距離まで近づく (オーラは範囲内まで、短射程は撃ち切れる距離まで)。遠い目標へは距離に応じて加速する
       const stopD = regroup ? 24 : bw && bw.mode === "aura" ? (bw.auraR || 110) * 0.7
                   : Math.min(atkRange() * 0.75, atkRange() * ((bw && bw.range) || 1) * 0.9);
-      if (d > stopD){ const spd = 210 + Math.min(2200, Math.max(0, d - 400) * 0.75); b.x += dx / d * spd * dt; b.y += dy / d * spd * dt; }
+      // 追いつき上限: 通常は従来通り 2200。プレイヤーがブースト中だけ、自機のブースト速度に
+      // 合わせて上限を広げる (置いてけぼりにせず、ブーストを止めればすぐ編隊に戻れる範囲)
+      const spdCap = boostOn ? Math.max(2200, playerSpeed() * BOOST_MUL) : 2200;
+      if (d > stopD){ const spd = 210 + Math.min(spdCap, Math.max(0, d - 400) * 0.75); b.x += dx / d * spd * dt; b.y += dy / d * spd * dt; }
       resolveCollision(b, 10);
       b.angle = Math.atan2(dy, dx);
     }
@@ -1553,8 +1611,46 @@ function draw(now){
   }
   bots.forEach((b, bi) => { const wk = botWeaponAt(bi); attackBotShape(b.x, b.y, b.angle, wk ? WEAPONS[wk].accent : null); });
   coinBots.forEach((cb, i) => coinBotShape(cb.x, cb.y, cb.angle, now / 350 + i * 1.7));
+  // ブースト演出 (シェイクは使わない): 残像は自機と同じ矢じり輪郭を薄く、噴射は事前レンダリング済みスプライト
+  const boostVis = boostOn && started && !cleared && !treeOpen && !artOpen && !mapOpen && !updOpen && !botEqOpen;
+  for (let i = boostGhosts.length - 1; i >= 0; i--){
+    const g = boostGhosts[i], age = (now - g.t) / 380;
+    if (age >= 1){ boostGhosts.splice(i, 1); continue; }
+    const [sx, sy] = toScreen(g.x, g.y);
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(g.a);
+    ctx.strokeStyle = `rgba(125,249,255,${0.5 * (1 - age)})`; ctx.beginPath();
+    ctx.moveTo(12, 0); ctx.lineTo(-9, -8); ctx.lineTo(-5, 0); ctx.lineTo(-9, 8); ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  }
+  for (let i = boostParts.length - 1; i >= 0; i--){
+    const p = boostParts[i], ageMs = now - p.t, age = ageMs / p.life;
+    if (age >= 1){ boostParts.splice(i, 1); continue; }
+    const [sx, sy] = toScreen(p.x + p.vx * ageMs / 1000, p.y + p.vy * ageMs / 1000);
+    ctx.globalAlpha = 0.75 * (1 - age);
+    ctx.drawImage(boostFlameSpr, sx - 8, sy - 8, 16, 16);
+  }
+  ctx.globalAlpha = 1;
   ship(player.x, player.y, player.angle, 1);
   drawArtifactsFx(now, toScreen);   // LEGENDARY の常時演出 (残像 / オーラ / きらめき / サイコロ)
+  if (boostVis){
+    // 画面端のスピードライン: 端の帯だけに、進行方向と逆向きの短い線を流す
+    ctx.strokeStyle = "rgba(160,240,255,.35)"; ctx.lineWidth = 2;
+    const dirx = Math.cos(player.angle), diry = Math.sin(player.angle), tick = (now / 90) | 0;
+    for (let i = 0; i < 10; i++){
+      const s1 = Math.sin(i * 77.7 + tick * 13.3) * 43758.5453, fr = s1 - Math.floor(s1);
+      const s2 = Math.sin(i * 31.7 + tick * 7.1) * 24634.6345, fr2 = s2 - Math.floor(s2);
+      const ex = fr * CW, ey = fr2 * CH;
+      if (Math.min(ex, CW - ex, ey, CH - ey) > 130) continue;   // 中央は空ける
+      const ln = 26 + fr * 30;
+      ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex - dirx * ln, ey - diry * ln); ctx.stroke();
+    }
+    ctx.lineWidth = 1;
+    // BOOST 表示 (自機は常に画面中央)
+    ctx.font = "700 13px system-ui, sans-serif"; ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(125,249,255,.95)";
+    ctx.fillText("» BOOST «", CW / 2, CH / 2 - 26);
+    ctx.textAlign = "start";
+  }
 
   // range rings
   const [pcx, pcy] = toScreen(player.x, player.y);
