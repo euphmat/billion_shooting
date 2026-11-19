@@ -79,6 +79,86 @@ function removeCoinAt(j){
   const tail = coinsArr.pop();
   if (j < coinsArr.length) coinsArr[j] = tail;
 }
+
+// ---------- コインの合体 (マージ) ----------
+// 1箇所に大量に落ちたコイン同士がひっついて大きな1枚になる。目的はエンティティ数と
+// 描画コストの削減で、合体は経済イベントではない: 合計額は厳密に保存され、構成枚数は
+// survivor の n に積まれる (取得時の発動抽選は gainCoin が n 回ぶん回すので期待値は不変)。
+// 宝箱コイン (ミダス王) と複製コイン (こぼれ) は性質が違うので合体対象にしない。
+const COIN_MERGE_R = 36;              // 合体が起きる中心間距離 (約1.5ブロック)
+const COIN_MERGE_R2 = COIN_MERGE_R * COIN_MERGE_R;
+const COIN_MERGE_MIN_AGE = 0.3;       // 生まれた直後は合体しない (飛散の途中を固めない)
+const COIN_MERGE_MAX_SPD2 = 38 * 38;  // これより速く動いているコインは「静止」扱いにしない (吸引・輸送中は合体しない)
+const COIN_MERGE_MAX_PER_PASS = 160;  // 1パスの合体上限 (スパイク防止)
+let coinMergeT = 0.25;                // パスの周期タイマ (frame から駆動)
+function coinMergeable(c){
+  return !c.chest && !c.dup && !c.gone && (c.age || 0) >= COIN_MERGE_MIN_AGE
+    && c.vx * c.vx + c.vy * c.vy < COIN_MERGE_MAX_SPD2;
+}
+// a が b を吸収する。位置・速度は額面で重み付けした重心に寄せ、age は古い方を残す
+// (回収ボットの利息判定 c.age > 2 が目減りしないように)
+function absorbCoin(a, b){
+  const tot = a.value + b.value;
+  if (tot > 0){
+    a.x = (a.x * a.value + b.x * b.value) / tot;
+    a.y = (a.y * a.value + b.y * b.value) / tot;
+    a.vx = (a.vx * a.value + b.vx * b.value) / tot;
+    a.vy = (a.vy * a.value + b.vy * b.value) / tot;
+  }
+  a.value = tot;
+  a.n = (a.n || 1) + (b.n || 1);
+  if ((b.age || 0) > (a.age || 0)) a.age = b.age;
+  b.gone = true;
+}
+// 0.25秒に1回、空間グリッド (セル = 合体半径) で近傍だけを見る。全数総当たりはしない。
+// 「近いコイン同士の連なり」(連結成分) を BFS で集めて塊ごとに1枚へ畳むので、
+// 直線状に連なったコインでも端から端まで連鎖して合体する。
+// survivor は塊の最大額面 (回収ボットの目標になっている大きなコインが消えにくい)。
+function mergeCoinsPass(){
+  if (coinsArr.length < 2) return 0;
+  const grid = new Map();
+  for (const c of coinsArr){
+    if (!coinMergeable(c)) continue;
+    const k = coinCellKey(Math.floor(c.x / COIN_MERGE_R), Math.floor(c.y / COIN_MERGE_R));
+    let a = grid.get(k); if (!a){ a = []; grid.set(k, a); } a.push(c);
+  }
+  let merges = 0;
+  const seen = new Set(), consumed = [];
+  for (const c of coinsArr){
+    if (merges >= COIN_MERGE_MAX_PER_PASS) break;
+    if (c.gone || seen.has(c) || !coinMergeable(c)) continue;
+    const comp = [c]; seen.add(c);
+    for (let qi = 0; qi < comp.length; qi++){
+      const m = comp[qi];
+      const gx = Math.floor(m.x / COIN_MERGE_R), gy = Math.floor(m.y / COIN_MERGE_R);
+      for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++){
+        const a = grid.get(coinCellKey(gx + ox, gy + oy)); if (!a) continue;
+        for (let bi = a.length - 1; bi >= 0; bi--){
+          const o = a[bi];
+          if (seen.has(o) || o.gone) continue;
+          const dx = o.x - m.x, dy = o.y - m.y;
+          if (dx * dx + dy * dy < COIN_MERGE_R2){
+            seen.add(o); comp.push(o);
+            a[bi] = a[a.length - 1]; a.pop();   // 塊に入れたコインはバケットから抜く (密集時の走査が二乗に膨らまない)
+          }
+        }
+      }
+    }
+    if (comp.length < 2) continue;
+    let s = comp[0];
+    for (const o of comp) if (o.value > s.value) s = o;
+    for (const o of comp){
+      if (o === s) continue;
+      if (merges >= COIN_MERGE_MAX_PER_PASS) break;   // 上限に達したら残りは次のパスで
+      absorbCoin(s, o); consumed.push(o); merges++;
+    }
+  }
+  if (consumed.length){
+    const dead = new Set(consumed);
+    for (let i = coinsArr.length - 1; i >= 0; i--) if (dead.has(coinsArr[i])) removeCoinAt(i);
+  }
+  return merges;
+}
 // HUD (DOM) の更新は重いので、コインを拾うたびではなく、まとめて最大 10回/秒 にする
 let hudDirty = false, hudT = 0;
 
@@ -1062,6 +1142,9 @@ function frame(now){
   }
   pruneFx(now);
 
+  // --- コインの合体: 密集して静止したコインを 0.25 秒ごとに間引いて大きな1枚にする ---
+  coinMergeT -= dt; if (coinMergeT <= 0){ coinMergeT = 0.25; mergeCoinsPass(); }
+
   // --- coins (player magnet / coin-bot vacuum, yellow) ---
   // 距離の比較は2乗のまま行い、平方根は必要なときだけ取る
   const goldSing = artHas("lg_gold");   // 黄金の特異点: 吸引範囲 ×6・吸引力も大幅アップ
@@ -1472,9 +1555,12 @@ function draw(now){
   const ox = CW / 2 - camX * zoom, oy = CH / 2 - camY * zoom;
   for (const c of coinsArr){
     const sx = c.x * zoom + ox, sy = c.y * zoom + oy;
-    if (sx < -24 || sy < -24 || sx > CW + 24 || sy > CH + 24) continue;
-    const sp = coinSpriteFor(c), h = sp.size / 2;
-    ctx.drawImage(sp.cv, sx - h, sy - h, sp.size, sp.size);
+    if (sx < -30 || sy < -30 || sx > CW + 30 || sy > CH + 30) continue;
+    const sp = coinSpriteFor(c);
+    // 大判コイン (10万〜) はゆっくり脈動させて「特別な1枚」だと伝える。age 由来なので追加の状態を持たない
+    const sz = c.value >= 100000 && !c.chest ? sp.size * (1 + 0.05 * Math.sin((c.age || 0) * 2.4)) : sp.size;
+    const h = sz / 2;
+    ctx.drawImage(sp.cv, sx - h, sy - h, sz, sz);
   }
   // beams
   for (const b of beams){
@@ -2260,28 +2346,57 @@ function drawBullet(bl, sx, sy, now){
 const hexA = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
 
 // ---------- コインのスプライト (大きさ・色ごとに1回だけ描いて使い回す) ----------
+// 額面の段階: 合体で育った大判コインほど大きく・豪華になる (最大半径19 = 直径約2ブロック弱で頭打ち)
 const coinSprites = new Map();
-function coinSprite(r, fill, stroke, lw){
-  const key = r + fill + stroke + lw;
+function coinSprite(r, fill, stroke, lw, fx){
+  const halo = fx === "halo" || fx === "rainbow", rainbow = fx === "rainbow";
+  const key = r + "|" + fill + "|" + stroke + "|" + lw + "|" + (fx || "");
   let sp = coinSprites.get(key);
   if (sp) return sp;
-  const S = 2, size = Math.ceil(r * 2 + lw + 2), cv2 = document.createElement("canvas");   // 高解像度ディスプレイ用に2倍で描く
+  const pad = halo ? 6 : 0;   // ハロー (外周のグロー) のぶんだけキャンバスを広げる。本体の見かけ半径は r のまま
+  const S = 2, size = Math.ceil((r + pad) * 2 + lw + 2), cv2 = document.createElement("canvas");   // 高解像度ディスプレイ用に2倍で描く
   cv2.width = cv2.height = size * S;
   const g = cv2.getContext("2d"), c = size / 2;
   g.scale(S, S);
+  if (halo){   // 外周グロー: 淡い金の輪 + 外側へにじむ影
+    g.beginPath(); g.arc(c, c, r + 4.5, 0, 7);
+    g.strokeStyle = rainbow ? "rgba(255,240,180,.55)" : "rgba(255,214,10,.5)"; g.lineWidth = 3; g.stroke();
+    g.beginPath(); g.arc(c, c, r + 1.5, 0, 7);
+    g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 1; g.stroke();
+  }
   g.beginPath(); g.arc(c, c, r, 0, 7);
   g.fillStyle = fill; g.fill();
-  g.strokeStyle = stroke; g.lineWidth = lw; g.stroke();
+  if (rainbow){   // 最高額面: 縁を虹色の6分割にする
+    for (let k = 0; k < 6; k++){
+      g.beginPath(); g.arc(c, c, r - lw / 2, k * Math.PI / 3, (k + 1) * Math.PI / 3);
+      g.strokeStyle = `hsl(${k * 60}, 95%, 62%)`; g.lineWidth = lw; g.stroke();
+    }
+  } else {
+    g.strokeStyle = stroke; g.lineWidth = lw; g.stroke();
+  }
   g.fillStyle = "#000"; g.font = `bold ${Math.round(r * 1.3)}px monospace`; g.textAlign = "center";
   g.fillText("C", c, c + r * 0.45);
+  if (rainbow){   // キラキラ (十字の星) を2つ焼き込む
+    g.strokeStyle = "rgba(255,255,255,.95)"; g.lineWidth = 1.4;
+    for (const [sx, sy, sr] of [[c - r * 0.45, c - r * 0.5, 3.4], [c + r * 0.5, c - r * 0.28, 2.6]]){
+      g.beginPath();
+      g.moveTo(sx - sr, sy); g.lineTo(sx + sr, sy);
+      g.moveTo(sx, sy - sr); g.lineTo(sx, sy + sr);
+      g.stroke();
+    }
+  }
   sp = { cv: cv2, size };
   coinSprites.set(key, sp);
   return sp;
 }
 function coinSpriteFor(c){
   const v = c.value;
-  const r = c.chest ? 14 : v >= 10000 ? 11 : v >= 1000 ? 9.5 : v >= 100 ? 8 : v >= 10 ? 7 : 6;
-  return coinSprite(r, v >= 1000 ? "#ffe95e" : "#ffd60a", v >= 10000 ? "#ffffff" : "#a88600", v >= 10000 ? 2 : 1);
+  if (c.chest) return coinSprite(14, v >= 1000 ? "#ffe95e" : "#ffd60a", v >= 10000 ? "#ffffff" : "#a88600", v >= 10000 ? 2 : 1);
+  if (v >= 1000000) return coinSprite(19, "#fff6a8", "#ffffff", 2.5, "rainbow");
+  if (v >= 100000)  return coinSprite(15.5, "#ffec8a", "#fff3c4", 2, "halo");
+  if (v >= 10000)   return coinSprite(12, "#ffe95e", "#ffffff", 2);
+  const r = v >= 1000 ? 9.5 : v >= 100 ? 8 : v >= 10 ? 7 : 6;
+  return coinSprite(r, v >= 1000 ? "#ffe95e" : "#ffd60a", "#a88600", 1);
 }
 
 // ミニマップ (レーダー式): 自機を中心に、メインビューのズームに同期して

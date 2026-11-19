@@ -685,25 +685,32 @@ function chainStrike(gx, gy){
 function addCoins(n){ state.coins += n; state.totalCoins += n; }
 function gainCoin(c, byBot){
   let v = c.value;
+  const n = c.n || 1;   // 合体コインの構成枚数。取得は1回でも、発動抽選は構成枚数ぶん回して期待値を落とさない
   if (byBot){
     v *= botCoinMul();
     if (sk("c_haul")) v *= 1.10;
     if (c.age > 2 && cbInterest() > 0) v *= 1 + cbInterest();
-    if (cbScanChance() > 0 && Math.random() < cbScanChance()) scanMaterialAt(c.x, c.y);   // 鉱物スキャナ
+    if (cbScanChance() > 0){ const sc = cbScanChance(); for (let k = 0; k < n; k++) if (Math.random() < sc) scanMaterialAt(c.x, c.y); }   // 鉱物スキャナ
   }
   v = Math.round(v);
   addCoins(v); sndCoin();
-  if (!c.dup && sk("c_tycoon") && Math.random() < 0.03){   // 大富豪の蓄財 (奥義): コイン獲得時 3% で ×20 バースト + 金の雨 + フィード
-    const burst = v * 20;
-    addCoins(burst); bumpProc("tycoon");
-    goldRainFx.push({ x: c.x, y: c.y });
-    rings.push({ x: c.x, y: c.y, r: BS * 2.4, t: performance.now(), color: "255,214,10", dur: 420 });
-    skillFeed("tycoon", `大当たり! +${fmt(burst)}コイン`, "💰", "#ffd60a");
+  if (!c.dup && sk("c_tycoon")){   // 大富豪の蓄財 (奥義): コイン獲得時 3% で ×20 バースト + 金の雨 + フィード
+    const per = Math.max(1, Math.round(v / n));   // 1枚あたりの額 (n=1 では従来と完全一致)
+    for (let k = 0; k < n; k++) if (Math.random() < 0.03){
+      const burst = per * 20;
+      addCoins(burst); bumpProc("tycoon");
+      goldRainFx.push({ x: c.x, y: c.y });
+      rings.push({ x: c.x, y: c.y, r: BS * 2.4, t: performance.now(), color: "255,214,10", dur: 420 });
+      skillFeed("tycoon", `大当たり! +${fmt(burst)}コイン`, "💰", "#ffd60a");
+    }
   }
   if (sk("c_piggy")) piggy += v * (sk("c_piggy2") ? 0.2 : 0.1);
-  if (!c.dup && sk("c_spill") && Math.random() < 0.05){
-    const a = Math.random() * Math.PI * 2;
-    coinsArr.push({ x: c.x, y: c.y, vx: Math.cos(a) * 420, vy: Math.sin(a) * 420, value: c.value, dup: true, age: 0 });
+  if (!c.dup && sk("c_spill")){
+    const per = Math.max(1, Math.round(c.value / n));
+    for (let k = 0; k < n; k++) if (Math.random() < 0.05){
+      const a = Math.random() * Math.PI * 2;
+      coinsArr.push({ x: c.x, y: c.y, vx: Math.cos(a) * 420, vy: Math.sin(a) * 420, value: per, dup: true, age: 0 });
+    }
   }
 }
 // 鉱物スキャナ: その場所の地層からランダムな素材を1つ見つける
