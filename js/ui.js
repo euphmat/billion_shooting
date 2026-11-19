@@ -508,7 +508,7 @@ const WFILTER_EMPTY = {
 };
 function craftPanelHTML(){
   const counts = weaponFilterCounts();
-  let html = `<div class="panel-intro"><b>番号が大きいほど強い</b> (実効DPS +11.5%ずつ)。</div>
+  let html = `${bulkUpBarHTML(bulkUpPreview(true))}<div class="panel-intro"><b>番号が大きいほど強い</b> (実効DPS +11.5%ずつ)。</div>
   <div class="filters wfilters">${WFILTERS.map(([f, label]) => `<button class="fchip${wFilter === f ? " on" : ""}" data-wfilter="${f}">${label} <span class="wf-n" data-wfcount="${f}">${counts[f]}</span></button>`).join("")}</div>`;
   let shown = 0;
   WEAPON_TIERS.forEach((t, ti) => {
@@ -910,6 +910,16 @@ function refreshAffordability(){
       const h = upCostHTML(buyDef(el.dataset.upcost));
       if (el._h !== h){ el._h = h; el.innerHTML = h; }
     });
+    root.querySelectorAll("[data-bulkup]").forEach(btn => {
+      const pv = bulkUpPreview(false);
+      btn.disabled = !pv.total;
+      const n = btn.querySelector("[data-bulkup-n]");
+      if (n){ const t = pv.total ? "×" + fmt(pv.total) : ""; if (n._t !== t){ n._t = t; n.textContent = t; } }
+    });
+    root.querySelectorAll("[data-bulkup-sub]").forEach(el => {
+      const t = bulkUpSubText(bulkUpPreview(false));
+      if (el._t !== t){ el._t = t; el.textContent = t; }
+    });
     root.querySelectorAll(".mat-chip[data-mat]").forEach(ch => {
       const have = invOf(ch.dataset.mat), need = +ch.dataset.need;
       ch.classList.toggle("ok", have >= need); ch.classList.toggle("lack", have < need);
@@ -976,6 +986,66 @@ function doBuyBulk(dataBuy, maxN){
   toast(`${bulkLabel(dataBuy)} ×${n}`);
   return n;
 }
+/* ---------- 工房: 一括強化 (強い順) ----------
+   所持武器を現在の実効DPS (装備バーの表示と同じ weaponDPS × weaponLvMul) 降順に並べ、
+   先頭から順に「買える間は繰り返し買う」単一パスでまとめて強化する。製作はしない (強化のみ)。
+   順番は開始時点のDPSで固定し、途中で再ソートしない (予測可能な挙動にする)。
+   支払いは既存の applyBuy をそのまま使うので、製作素材払い (matSubPlan) も自動で効く */
+const BULKUP_MAX = 10000;   // 無限ループ防止の総強化回数上限
+function bulkUpOrder(){
+  return WEAPON_KEYS.filter(k => state.weaponsOwned[k])
+    .sort((a, b) => weaponDPS(WEAPONS[b]) * weaponLvMul(b) - weaponDPS(WEAPONS[a]) * weaponLvMul(a) || WEAPONS[a].no - WEAPONS[b].no);
+}
+function bulkUpPass(){
+  const order = bulkUpOrder();
+  const lv0 = {}; for (const k of order) lv0[k] = weaponLvOf(k);
+  let total = 0, capped = false;
+  for (const k of order){
+    while (total < BULKUP_MAX && applyBuy("wupgrade:" + k)) total++;
+    if (total >= BULKUP_MAX){ capped = true; break; }
+  }
+  const ups = [];
+  for (const k of order){ const from = lv0[k], to = weaponLvOf(k); if (to > from) ups.push({ k, from, to, n: to - from }); }
+  let top = null; for (const u of ups) if (!top || u.n > top.n) top = u;
+  return { total, kinds: ups.length, ups, top, capped };
+}
+// 見込み回数の事前計算: 状態 (コイン・素材・武器Lv) を退避して実パスを試し、そっくり元に戻す。
+// 実処理と同じ applyBuy を通すので、表示する回数は実行結果と一致する
+let bulkUpCache = { res: null, coins: NaN, inv: -1, lvKey: "", skN: -1, at: 0 };
+function bulkUpPreview(force){
+  if (!force && bulkUpCache.res){
+    if (bulkUpCache.coins === state.coins && bulkUpCache.inv === invVersion &&
+        bulkUpCache.lvKey === JSON.stringify(state.weaponLv) && bulkUpCache.skN === Object.keys(state.skills).length) return bulkUpCache.res;
+    if (Date.now() - bulkUpCache.at < 200) return bulkUpCache.res;   // 残高が頻繁に変わる場面では再計算を間引く
+  }
+  const snap = { coins: state.coins, inv: Object.assign({}, state.inv), lv: Object.assign({}, state.weaponLv), plan: lastMatSubPlan };
+  const res = bulkUpPass();
+  state.coins = snap.coins;
+  for (const k in state.inv) if (!(k in snap.inv)) delete state.inv[k];
+  Object.assign(state.inv, snap.inv);
+  for (const k in state.weaponLv) if (!(k in snap.lv)) delete state.weaponLv[k];
+  Object.assign(state.weaponLv, snap.lv);
+  lastMatSubPlan = snap.plan;
+  bulkUpCache = { res, coins: state.coins, inv: invVersion, lvKey: JSON.stringify(state.weaponLv), skN: Object.keys(state.skills).length, at: Date.now() };
+  return res;
+}
+const bulkUpSubText = pv => pv.total ? `強い武器から順に ${fmt(pv.total)} 回ぶん強化できる` : "今は強化できる武器がない (コイン・素材を確認)";
+function bulkUpBarHTML(pv){
+  return `<div class="bulkup-bar"><button class="bulkup-btn" data-bulkup ${pv.total ? "" : "disabled"} title="所持武器を現在のDPSが強い順に並べ、買えるだけまとめて強化する (製作素材払いも自動で適用)"><span class="bulkup-label">${iconSVG("up")}一括強化 (強い順)</span><span class="bulkup-n" data-bulkup-n>${pv.total ? "×" + fmt(pv.total) : ""}</span></button><div class="bulkup-sub" data-bulkup-sub>${bulkUpSubText(pv)}</div></div>`;
+}
+function doBulkUpgrade(){
+  const res = bulkUpPass();
+  if (!res.total){ sndFail(); return res; }
+  sndBuy(); save(); renderPanels(true); updateHUD();
+  const t = res.top;
+  toast(`一括強化: ${fmt(res.total)}回 (${res.kinds}種) / 最多: ${WEAPONS[t.k].name} Lv${t.from}→Lv${t.to}${res.capped ? " (上限で停止)" : ""}`);
+  return res;
+}
+$("panels").addEventListener("click", e => {
+  const b = e.target.closest("[data-bulkup]"); if (!b || b.disabled) return;
+  doBulkUpgrade();
+});
+
 // 繰り返し買えるタイルに付ける「×10 / 最大まで」のボタン行
 function bulkRowHTML(dataBuy){
   const dis = canBuy(buyDef(dataBuy)) ? "" : "disabled";
@@ -1129,6 +1199,7 @@ $("resetBtn").addEventListener("click", () => {
 let updOpen = false;
 // 新しい順。行を足すときは先頭に追加し、core.js の GAME_VERSION を上げる
 const UPDATE_HISTORY = [
+  { v:88, text:"工房の最上部に「一括強化 (強い順)」ボタンを追加 (強い武器から順に、買える限りまとめて強化・見込み回数つき)" },
   { v:87, text:"コイン同士の引き合う力を付けた (約4ブロック以内のコインが寄り集まって合体しやすくなった)" },
   { v:86, text:"素材払いに使える素材を、その武器の製作に使う素材だけに限定した (内訳表示も「製作素材払い」に変更)" },
   { v:85, text:"コインの色が額面で10段階に変わるようにした (銅→赤銅→銀→プラチナ→金→濃金→エメラルド→サファイア→アメジスト→虹・合体で段階が上がるとリング表示)" },

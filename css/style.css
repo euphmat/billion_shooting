@@ -153,6 +153,22 @@ img, canvas, svg { -webkit-user-drag:none; }
 .panel.active { display:flex; }
 .panel-intro { font-size:10.5px; line-height:1.55; opacity:.7; padding:1px 2px 0; }
 
+/* 一括強化バー (工房パネルの最上部) */
+.bulkup-bar { display:flex; flex-direction:column; gap:4px; }
+.bulkup-btn {
+  width:100%; display:flex; justify-content:space-between; align-items:center; gap:8px;
+  background:#ffd60a; color:#000; border:1px solid #ffd60a; padding:11px 12px;
+  font-size:14.5px; font-weight:bold; letter-spacing:.06em; cursor:pointer; transition:all .12s;
+  box-shadow:0 0 14px rgba(255,214,10,.35);
+}
+.bulkup-btn svg { width:16px; height:16px; }
+.bulkup-label { display:inline-flex; align-items:center; gap:6px; }
+.bulkup-btn:hover:not(:disabled) { background:#000; color:#ffd60a; }
+.bulkup-btn:active:not(:disabled) { transform:scale(.99); }
+.bulkup-btn:disabled { background:#000; color:#777; border-color:#444; font-weight:normal; cursor:not-allowed; box-shadow:none; }
+.bulkup-n { font-size:16px; font-variant-numeric:tabular-nums; }
+.bulkup-sub { font-size:10.5px; opacity:.7; padding:0 2px; }
+
 .card {
   border:1px solid #555; padding:8px 9px 9px; background:#000;
   transition:border-color .15s;
