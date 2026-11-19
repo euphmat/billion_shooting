@@ -166,6 +166,64 @@ function mergeCoinsPass(){
   }
   return merges;
 }
+
+// ---------- コイン同士の引き合い ----------
+// 合体半径 (36px) より広く散らばった山は、合体パスだけでは永遠に残ってしまう。
+// 静止したコイン同士に弱いバネ状の引き合いを付け、近傍の重心へゆっくり寄せて
+// 合体半径まで凝集させる。力は回収系 (マグネット 1400 / ボット真空 3200) より
+// 十分弱く、吸引を受けているコインにはフレーム側で適用しない (回収が常に勝つ)。
+// コイン物理にブロック衝突は無い (吸引でもブロックを抜ける) ので、引き合いも
+// 遮蔽は見ない。方向の計算は 0.5 秒周期で空間グリッドを使い、
+// フレーム側は保存した加速度ベクトル (pax / pay) を適用するだけにする。
+const COIN_PULL_R = 96;                    // 引き合いが届く中心間距離 (約4ブロック)
+const COIN_PULL_R2 = COIN_PULL_R * COIN_PULL_R;
+const COIN_PULL_K = 6.5;                   // バネ定数: 重心までの距離 1px あたりの加速度 (px/s^2)。終端速度は距離×約1.24 px/s
+const COIN_PULL_MAX_ACCEL = 480;           // 加速度の上限 (px/s^2)。引き合い半径の縁 (96px) ではバネ値 624 がここで頭打ちになる
+const COIN_PULL_MAX_SPD = 110;             // 引き合いが付ける速度の上限 (px/s)
+const COIN_PULL_MAX_SPD2 = COIN_PULL_MAX_SPD * COIN_PULL_MAX_SPD;
+const COIN_PULL_SRC_MAX_SPD2 = 150 * 150;  // これより速いコインは引き合い対象にしない (吸引・輸送の途中)
+const COIN_PULL_MAX_NB = 24;               // 重心計算に使う近傍数の上限 (密集時の走査が二乗に膨らまないように)
+function coinPullable(c){
+  return !c.chest && !c.dup && !c.gone && (c.age || 0) >= COIN_MERGE_MIN_AGE
+    && c.vx * c.vx + c.vy * c.vy < COIN_PULL_SRC_MAX_SPD2;
+}
+// 0.5 秒に1回 (合体パスより緩い周期で十分。方向の鮮度より軽さを優先)、引き合い対象の
+// コインごとに「近傍 (96px) の額面重み付き重心」を求め、そこへ向かうバネ加速度を
+// c.pax / c.pay に保存する。近傍が無いコインはベクトルを消して完全静止させる。
+// 重心に近いほど力は弱まる (距離比例) ので、中心付近では減速して合体条件
+// (速度 <38px/s) に落ち着き、振動やジッターは起きない。
+let coinPullT = 0.5;   // パスの周期タイマ (frame から駆動)
+function coinPullPass(){
+  const grid = new Map(), elig = [];
+  for (const c of coinsArr){
+    if (!coinPullable(c)){ if (c.pax){ c.pax = 0; c.pay = 0; } continue; }
+    elig.push(c);
+    const k = coinCellKey(Math.floor(c.x / COIN_PULL_R), Math.floor(c.y / COIN_PULL_R));
+    let a = grid.get(k); if (!a){ a = []; grid.set(k, a); } a.push(c);
+  }
+  for (const c of elig){
+    let sx = 0, sy = 0, sv = 0, nb = 0;
+    // 隣接セルのキーは基準キーへの加算で得る (coinCellKey(gx+ox, gy+oy) = base + ox*8192 + oy)
+    const base = coinCellKey(Math.floor(c.x / COIN_PULL_R), Math.floor(c.y / COIN_PULL_R));
+    outer:
+    for (let ox = -8192; ox <= 8192; ox += 8192) for (let oy = -1; oy <= 1; oy++){
+      const a = grid.get(base + ox + oy); if (!a) continue;
+      for (const o of a){
+        if (o === c) continue;
+        const dx = o.x - c.x, dy = o.y - c.y;
+        if (dx * dx + dy * dy < COIN_PULL_R2){
+          sx += o.x * o.value; sy += o.y * o.value; sv += o.value;
+          if (++nb >= COIN_PULL_MAX_NB) break outer;
+        }
+      }
+    }
+    if (!nb || sv <= 0){ c.pax = 0; c.pay = 0; continue; }
+    const dx = sx / sv - c.x, dy = sy / sv - c.y, d2 = dx * dx + dy * dy;
+    if (d2 < 4){ c.pax = 0; c.pay = 0; continue; }   // ほぼ重心上: 力を消してジッターを防ぐ
+    const d = Math.sqrt(d2), acc = Math.min(COIN_PULL_K * d, COIN_PULL_MAX_ACCEL);
+    c.pax = dx / d * acc; c.pay = dy / d * acc;
+  }
+}
 // HUD (DOM) の更新は重いので、コインを拾うたびではなく、まとめて最大 10回/秒 にする
 let hudDirty = false, hudT = 0;
 
@@ -1150,7 +1208,9 @@ function frame(now){
   pruneFx(now);
 
   // --- コインの合体: 密集して静止したコインを 0.25 秒ごとに間引いて大きな1枚にする ---
+  // --- コインの引き合い: 散らばったコインの重心方向を 0.5 秒ごとに決める (合体より緩くて十分) ---
   coinMergeT -= dt; if (coinMergeT <= 0){ coinMergeT = 0.25; mergeCoinsPass(); }
+  coinPullT -= dt; if (coinPullT <= 0){ coinPullT = 0.5; coinPullPass(); }
 
   // --- coins (player magnet / coin-bot vacuum, yellow) ---
   // 距離の比較は2乗のまま行い、平方根は必要なときだけ取る
@@ -1160,17 +1220,22 @@ function frame(now){
   const damp = Math.pow(0.92, dt * 60);   // フレームレートに依らない減衰 (60fps で従来の 0.92)
   for (let i = coinsArr.length - 1; i >= 0; i--){
     const c = coinsArr[i];
-    let collected = false;
+    let collected = false, towed = false;   // towed = マグネット/真空の吸引を受けている (引き合いより回収が優先)
     const dx = player.x - c.x, dy = player.y - c.y, d2 = dx * dx + dy * dy;
     c.age = (c.age || 0) + dt;
-    if (d2 < mr2){ const d = Math.sqrt(d2) || 1; c.vx += dx / d * pPull * dt; c.vy += dy / d * pPull * dt; }
+    if (d2 < mr2){ const d = Math.sqrt(d2) || 1; c.vx += dx / d * pPull * dt; c.vy += dy / d * pPull * dt; towed = true; }
     if (d2 < 676) collected = true;
     if (!collected){
       for (const cb of coinBots){
         const bx = cb.x - c.x, by = cb.y - c.y, bd2 = bx * bx + by * by;
-        if (bd2 < vac2){ const bd = Math.sqrt(bd2) || 1; c.vx += bx / bd * pull * dt; c.vy += by / bd * pull * dt; }
+        if (bd2 < vac2){ const bd = Math.sqrt(bd2) || 1; c.vx += bx / bd * pull * dt; c.vy += by / bd * pull * dt; towed = true; }
         if (bd2 < touch2){ collected = 2; break; }   // 2 = 回収ボットが拾った
       }
+    }
+    // コイン同士の引き合い (coinPullPass が保存した加速度ベクトル)。吸引中はそちらに従い、
+    // 上限速度を超えている間は足さない (回収の勢いを邪魔せず、暴走もしない)
+    if (!towed && (c.pax || c.pay) && c.vx * c.vx + c.vy * c.vy < COIN_PULL_MAX_SPD2){
+      c.vx += c.pax * dt; c.vy += c.pay * dt;
     }
     c.vx *= damp; c.vy *= damp;
     c.x += c.vx * dt; c.y += c.vy * dt;
