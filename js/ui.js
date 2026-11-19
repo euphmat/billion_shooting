@@ -222,6 +222,49 @@ const recipeChips = (rec, small) => `<div class="recipe">${Object.keys(rec).map(
 // コイン + 素材 の両方を見て買えるか
 const canPay = (coins, mats) => state.coins >= coins && (!mats || invHas(mats));
 
+/* ---------- 武器強化の「素材代用払い」 ----------
+   強化のコイン部分は、手持ち素材を 1個 = 1コイン として代用払いできる (素材を優先し、不足分だけコインで払う)。
+   要求素材は先に差し引き、その購入では代用プールから除外する (二重計上しない)。
+   代用素材は所持数の多い順に使い、同数なら素材の並び順 (MAT_KEYS) で安定させる。
+   購入可否・買えない理由・支払い実行・内訳表示はすべてこのプラン計算を通す (二重実装しない) */
+function matSubPlan(coins, mats){
+  const req = mats || {};
+  const plan = { subs: [], subTotal: 0, coinsPay: coins, short: 0, ok: false };
+  if (!invHas(req)) return plan;   // 要求素材が揃っていない (coinsPay は名目値のまま)
+  let rest = coins;
+  if (rest > 0){
+    const pool = [];
+    for (let i = 0; i < MAT_KEYS.length; i++){
+      const k = MAT_KEYS[i], free = invOf(k) - (req[k] || 0);
+      if (free > 0) pool.push({ k, i, free, have: invOf(k) });
+    }
+    pool.sort((a, b) => b.have - a.have || a.i - b.i);   // 所持数降順 → 並び順で安定
+    for (const p of pool){
+      if (rest <= 0) break;
+      const use = Math.min(p.free, rest);
+      plan.subs.push({ k: p.k, n: use });
+      plan.subTotal += use; rest -= use;
+    }
+  }
+  plan.coinsPay = rest;
+  plan.short = Math.max(0, rest - state.coins);   // コイン+代用素材でも足りない分
+  plan.ok = plan.short === 0;                     // 実質所持 (コイン + 代用可能素材) で払えるか
+  return plan;
+}
+// buyDef の結果からプランを引く (素材代用が効く購入 = 武器強化だけ)
+const matSubPlanFor = d => d && d.matSub ? matSubPlan(d.coins, d.mats) : null;
+// 内訳表示: 「素材払い: ○○ ×n 他m種 = Xコイン分 + コイン Y」(代用が無い時は空文字)
+function matSubText(plan){
+  if (!plan || plan.subTotal <= 0) return "";
+  const first = plan.subs[0];
+  let s = `素材払い: ${MAT[first.k].name} ×${fmt(first.n)}`;
+  if (plan.subs.length > 1) s += ` 他${plan.subs.length - 1}種`;
+  s += ` = ${fmt(plan.subTotal)}コイン分`;
+  if (plan.coinsPay > 0) s += ` + コイン ${fmt(plan.coinsPay)}`;
+  return s;
+}
+const matSubHTML = dataBuy => `<span class="matsub-line" data-matsub="${dataBuy}">${matSubText(matSubPlanFor(buyDef(dataBuy)))}</span>`;
+
 /* ---------- 購入 / 製作の定義 ----------
    data-buy="kind:arg" ごとに { coins, mats, ok, apply } を返す。ボタンの有効化判定と実行の両方で使う */
 function buyDefRaw(dataBuy){
@@ -235,7 +278,7 @@ function buyDefRaw(dataBuy){
       } }; }
     case "equip": return { coins:0, ok:!!state.weaponsOwned[arg], apply(){ state.weapon = arg; clearBotWeapon(arg); } };
     case "wupgrade": if (!WEAPONS[arg]) return null;
-      return { coins:WEAPON_UP_COST(arg), mats:WEAPON_UP_MATS(arg), ok:!!state.weaponsOwned[arg], apply(){ state.weaponLv[arg] = weaponLvOf(arg) + 1; } };
+      return { coins:WEAPON_UP_COST(arg), mats:WEAPON_UP_MATS(arg), matSub:true, ok:!!state.weaponsOwned[arg], apply(){ state.weaponLv[arg] = weaponLvOf(arg) + 1; } };
     case "bot":   return { coins:BOT_COST(state.bots), mats:BOT_RECIPE(state.bots), ok:state.bots < BOT_MAX, apply(){ state.bots++; syncBots(); } };
     case "coinbot": return { coins:COINBOT_COST(state.coinBots), mats:COINBOT_RECIPE(state.coinBots), ok:state.coinBots < COINBOT_MAX, apply(){ state.coinBots++; syncCoinBots(); } };
     case "bupgrade": return { coins:BOT_UP_COST(), mats:BOT_UP_MATS(), ok:state.bots > 0, apply(){ state.botLv++; } };
@@ -248,7 +291,11 @@ function buyDefRaw(dataBuy){
   }
   return null;
 }
-const canBuy = d => !!d && d.ok && canPay(d.coins, d.mats);
+const canBuy = d => {
+  if (!d || !d.ok) return false;
+  if (d.matSub) return matSubPlan(d.coins, d.mats).ok;   // 武器強化: 実質所持 (コイン+代用素材) で判定
+  return canPay(d.coins, d.mats);
+};
 // 買えない理由 (ボット系タイルでボタンの下に赤字で出す。買える時は空文字)
 const BUY_NEED = { bupgrade:"攻撃ボットが1機以上必要", botcore:"攻撃ボットが1機以上必要" };
 function buyReason(dataBuy){
@@ -257,6 +304,12 @@ function buyReason(dataBuy){
   if (!d.ok){
     if (dataBuy.startsWith("cbmod:")) return "回収ボットが1機以上必要";
     return BUY_NEED[dataBuy] || "条件を満たしていない";
+  }
+  if (d.matSub){
+    // 武器強化: 要求素材が不足なら素材不足、そうでなければ実質所持 (コイン+全素材換算) での不足分を出す
+    if (d.mats) for (const k in d.mats){ const lack = d.mats[k] - invOf(k); if (lack > 0) return `${MAT[k].name} が不足 (あと ${fmt(lack)})`; }
+    const p = matSubPlan(d.coins, d.mats);
+    return `コイン・素材が不足 (あと ${fmt(p.short)})`;
   }
   if (state.coins < d.coins) return `コイン不足 (あと ${fmt(d.coins - state.coins)})`;
   if (d.mats) for (const k in d.mats){ const lack = d.mats[k] - invOf(k); if (lack > 0) return `${MAT[k].name} が不足 (あと ${fmt(lack)})`; }
@@ -309,7 +362,7 @@ function weaponCardHTML(k, w){
       <button class="buy-btn" data-buy="craft:${k}" ${canBuy(d) ? "" : "disabled"}><span>製作する</span>${costHTML(d.coins)}</button>`;
   } else {
     const d = buyDef("wupgrade:" + k);
-    body = `<div class="sbadges" style="border-top:none;padding-top:0"><span class="sbadge">Lv <b>${lv} → ${lv + 1}</b></span><span class="sbadge up">威力 +8%</span></div>${recipeChips(d.mats, true)}
+    body = `<div class="sbadges" style="border-top:none;padding-top:0"><span class="sbadge">Lv <b>${lv} → ${lv + 1}</b></span><span class="sbadge up">威力 +8%</span></div>${recipeChips(d.mats, true)}${matSubHTML("wupgrade:" + k)}
       <div class="btn-row">${eq ? `<button class="buy-btn" disabled><span>装備中</span></button>` : `<button class="equip-btn" data-buy="equip:${k}">装備する</button>`}<button class="buy-btn" data-buy="wupgrade:${k}" ${canBuy(d) ? "" : "disabled"}><span>強化</span>${costHTML(d.coins)}</button></div>`;
   }
   const m = w.mat ? MAT[w.mat] : null;
@@ -350,7 +403,7 @@ function nextActionHTML(nk){
     return `<div class="hero" style="--accent:${cur.accent}"><div class="hero-label">NEXT — 次のおすすめ</div>
       ${cardTop(cur.icon, cur.accent, cur.name, `<span class="badge solid">強化</span>`, cur.tag)}
       <div class="sbadges"><span class="sbadge">Lv <b>${lv} → ${lv + 1}</b></span><span class="sbadge up">威力 +8%</span></div>
-      ${recipeChips(d.mats, true)}
+      ${recipeChips(d.mats, true)}${matSubHTML("wupgrade:" + state.weapon)}
       <button class="buy-btn" data-buy="wupgrade:${state.weapon}" ${canBuy(d) ? "" : "disabled"}><span>強化する</span>${costHTML(d.coins)}</button></div>`;
   }
   const w = WEAPONS[nk], d = buyDef("craft:" + nk), ok = canBuy(d), rel = w.power / cur.power;
@@ -755,7 +808,7 @@ function equipBarHTML(){
     <div class="eb-sub">DPS <b>${fmtD(weaponDPS(w) * weaponLvMul(k))}</b> ・ ${w.tag}</div></div>
     <button class="buy-btn sm" data-buy="wupgrade:${k}" ${d && canBuy(d) ? "" : "disabled"}><span>強化</span>${costHTML(d ? d.coins : 0)}</button>
   </div>
-  <div class="equip-mats">${d ? recipeChips(d.mats, true) : ""}</div>`;
+  <div class="equip-mats">${d ? recipeChips(d.mats, true) + matSubHTML("wupgrade:" + k) : ""}</div>`;
 }
 $("equipBar").addEventListener("click", e => {
   const btn = e.target.closest("[data-buy]"); if (!btn || btn.disabled) return;
@@ -827,6 +880,10 @@ function refreshAffordability(){
       const t = buyReason(el.dataset.buyreason);
       if (el._t !== t){ el._t = t; el.textContent = t; }
     });
+    root.querySelectorAll("[data-matsub]").forEach(el => {
+      const t = matSubText(matSubPlanFor(buyDef(el.dataset.matsub)));
+      if (el._t !== t){ el._t = t; el.textContent = t; }
+    });
     root.querySelectorAll(".mat-chip[data-mat]").forEach(ch => {
       const have = invOf(ch.dataset.mat), need = +ch.dataset.need;
       ch.classList.toggle("ok", have >= need); ch.classList.toggle("lack", have < need);
@@ -850,13 +907,23 @@ document.querySelectorAll("#tabs button").forEach(b => b.addEventListener("click
 }));
 
 /* ---------- 購入 / 製作 / 強化 ---------- */
+// 直近の購入で素材代用払いした内訳 (購入フィードバック表示用)
+let lastMatSubPlan = null;
 // 検証済みの1回分を適用するだけ (保存・再描画・音はしない)。まとめ買いはこれを繰り返す
+// 武器強化は呼び出しのたびに matSubPlan を引き直すので、まとめ買いでも素材の減り方が正しく反映される
 function applyBuy(dataBuy){
   const d = buyDef(dataBuy);
   if (!canBuy(d)) return false;
   const before = state.coins;
-  state.coins -= d.coins;
-  if (d.mats) invTake(d.mats);
+  lastMatSubPlan = matSubPlanFor(d);
+  if (lastMatSubPlan){
+    state.coins -= lastMatSubPlan.coinsPay;                 // 不足分だけコインで払う
+    if (d.mats) invTake(d.mats);                            // 要求素材 (代用プールから除外済み)
+    if (lastMatSubPlan.subTotal > 0){ const subRec = {}; for (const s of lastMatSubPlan.subs) subRec[s.k] = s.n; invTake(subRec); }
+  } else {
+    state.coins -= d.coins;
+    if (d.mats) invTake(d.mats);
+  }
   if (d.mats && sk("e_recycle")) for (const k in d.mats) if (Math.random() < 0.2) invAdd(k, Math.ceil(d.mats[k] / 2));   // 廃材リサイクル
   d.apply();
   if (sk("c_cashback") && state.coins < before) state.coins += Math.floor((before - state.coins) * (sk("c_cash2") ? 0.25 : 0.10));   // キャッシュバック
@@ -865,6 +932,7 @@ function applyBuy(dataBuy){
 }
 function doBuy(dataBuy){
   if (!applyBuy(dataBuy)){ sndFail(); return false; }
+  if (lastMatSubPlan && lastMatSubPlan.subTotal > 0) toast(`素材払い ${fmt(lastMatSubPlan.subTotal)} コイン分で強化した`);
   sndBuy(); save(); renderPanels(true); updateHUD();
   return true;
 }
@@ -1035,6 +1103,7 @@ $("resetBtn").addEventListener("click", () => {
 let updOpen = false;
 // 新しい順。行を足すときは先頭に追加し、core.js の GAME_VERSION を上げる
 const UPDATE_HISTORY = [
+  { v:82, text:"武器強化で素材を代用払いできるようにした (1素材=1コイン・所持数の多い素材から優先使用・支払い内訳を表示)" },
   { v:81, text:"超高速移動を追加：PCはスペースキー長押し、スマホは高速移動トグルボタン (通常の10倍速・残像と噴射の演出つき)" },
   { v:80, text:"スキルツリーに奥義15種を追加 (全165種・各系統に100/200/300SPの最終スキル：ファンネル/オービタルボット/軌道砲撃など) ・ ファストトラベル強化 (検索/リスト/ホーム＆リターン) ・ 画面シェイクを全廃止 ・ 設定に攻撃/破壊音のオフを追加" },
   { v:79, text:"拡大マップで重なっていたダンジョン名のラベルが重ならないように調整 (4組)" },
@@ -1112,7 +1181,7 @@ function buyTipHTML(arg){
   }
   if (arg.startsWith("wupgrade:")){
     const k = arg.slice(9), w = WEAPONS[k], lv = weaponLvOf(k), d = buyDef(arg);
-    return head(w.icon, w.accent, `${w.name} を強化`, "武器の強化") + `<p class="tip-desc">この武器の威力が +8% 上がる。その武器を使う自機・攻撃ボット・僚機すべてに効く。さらに Lv が 10 上がるごとに発射数も +1 される。</p><div class="tip-line">Lv.${lv} → Lv.${lv + 1} の素材${Math.floor((lv + 1) / 10) > Math.floor(lv / 10) ? ` ・ <b style="color:#57e39a">発射数 +1!</b>` : ""}</div>${recipeChips(d.mats, true)}`;
+    return head(w.icon, w.accent, `${w.name} を強化`, "武器の強化") + `<p class="tip-desc">この武器の威力が +8% 上がる。その武器を使う自機・攻撃ボット・僚機すべてに効く。さらに Lv が 10 上がるごとに発射数も +1 される。</p><div class="tip-line">Lv.${lv} → Lv.${lv + 1} の素材${Math.floor((lv + 1) / 10) > Math.floor(lv / 10) ? ` ・ <b style="color:#57e39a">発射数 +1!</b>` : ""}</div>${recipeChips(d.mats, true)}${matSubHTML(arg)}`;
   }
   return "";
 }
