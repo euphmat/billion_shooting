@@ -627,7 +627,8 @@ function evoTick(dt){
   if (!w.evoU || w.evoU.t !== "timer" || !evoIsReady(w.key)) return;
   evoTimerRetry -= dt;
   if (evoTimerRetry > 0) return;
-  const j = findNearestBlock(player.x, player.y, atkRange());
+  // 発動点 = 自機に一番近いブロック。最難関の武器は 60〜110 ブロック先まで消し去るので、その届く範囲 (130 ブロック) まで探す
+  const j = findNearestBlock(player.x, player.y, Math.max(atkRange() * (w.range || 1), w.ultra ? BS * 130 : 0));
   if (j < 0){ evoTimerRetry = 0.5; return; }
   evoFire(w, g2w(j % D), g2w((j / D) | 0), shotDamage(state.weapon), true);
 }
