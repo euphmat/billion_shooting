@@ -5,7 +5,7 @@
 
 // ---------- 元素付与 (スキルツリー): どの武器でも状態異常が乗る ----------
 function elemChances(){
-  const all = sk("b_kindling") ? 0.05 : 0;   // 元素活性: 全ての付与率アップ
+  const all = (sk("b_kindling") ? 0.05 : 0) + MASTERY.b.elem[masteryRank("b")];   // 元素活性: 全ての付与率アップ / 元素マスタリー
   const crown = artHas("lg_crown") ? 0.20 : 0;   // 元素の王冠: 全元素の付与率 +20% (絶対値)
   const apex = (sk("b_singularity") ? 0.25 : 0) + (sk("b_core") ? 0.25 : 0) + (sk("b_ultimate") ? 0.50 : 0);   // 奥義: 特異点 +25pt / 原初元素炉 +25pt / 究極: ビッグバン元素炉 +50pt
   return {
@@ -228,6 +228,7 @@ function processBreakQueue(){
 // 全ての攻撃に掛かる倍率。毎フレーム gMul に入れておき、命中時はそれを使う
 function globalDmgMul(){
   let m = levelDmgMul() * (1 + artVal("dmg")) * artMul("dmgMul");   // 惑星の心臓: 全ダメージ ×1.5 (乗算キー)
+  m *= masteryMul("a");   // 破壊マスタリー
   if (sk("a_train")) m *= 1.06;
   if (sk("a_apex")) m *= 1.5;   // 殲滅プロトコル (奥義)
   if (sk("a_planetkiller")) m *= 1.5;   // 惑星殺し・極 (奥義)
@@ -248,7 +249,7 @@ function skillHitMods(idx, gx, gy, dmg, hp){
   const max = blockMaxHP(gx, gy);
   if (hp >= max && sk("a_first")) m *= 1.2;
   { const voidEye = artHas("lg_void");   // 虚無の単眼: 会心率 +25%、会心ダメは最低でも ×3、専用演出フラグを立てる
-    const ac = (sk("a_crit") ? 0.06 : 0) + (sk("a_apex") ? 0.10 : 0) + artVal("crit") / 100 + (voidEye ? 0.25 : 0);
+    const ac = (sk("a_crit") ? 0.06 : 0) + (sk("a_apex") ? 0.10 : 0) + MASTERY.a.crit[masteryRank("a")] + artVal("crit") / 100 + (voidEye ? 0.25 : 0);   // 破壊マスタリー: 会心率
     if (ac > 0 && Math.random() < ac){ let cm = (sk("a_critx") ? 3 : 2) + artVal("critd") / 100; if (voidEye){ cm = Math.max(cm, 3); dmgVoidFlag = true; } m *= cm; } }   // 会心 (スキル+アーティファクト合算)
   if (sk("a_deep")) m *= 1 + (sk("a_deep2") ? 2.0 : 1.0) * blockDepth(gx, gy);
   if (artVal("deep")) m *= 1 + artVal("deep") * blockDepth(gx, gy);   // アーティファクト: 深さダメ
@@ -341,6 +342,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
 // 静的なコイン倍率 (JACKPOT 等の副作用なし)。ツリー詳細の probe 表示にも使う
 function coinMulStatic(){
   let m = (1 + artVal("coin")) * artMul("coinMul");   // 黄金の特異点: コイン ×2 (乗算キー)
+  m *= masteryMul("c");   // 財宝マスタリー
   if (sk("c_merchant")) m *= 1.10;
   if (sk("c_king")) m *= 1.3;
   if (sk("c_bonus2")) m *= 1.2;
@@ -526,7 +528,7 @@ function gainCoin(c, byBot){
     if (cbScanChance() > 0){ const sc = cbScanChance(); for (let k = 0; k < n; k++) if (Math.random() < sc) scanMaterialAt(c.x, c.y); }   // 鉱物スキャナ
   }
   v = Math.round(v);
-  addCoins(v); sndCoin();
+  addCoins(v); sndCoin(n, c.chest, byBot);
   if (!c.dup && sk("c_tycoon")){   // 大富豪の蓄財 (奥義): コイン獲得時 3% で ×20 バースト + 金の雨 + フィード
     const per = Math.max(1, Math.round(v / n));   // 1枚あたりの額 (n=1 では従来と完全一致)
     for (let k = 0; k < n; k++) if (Math.random() < 0.03){

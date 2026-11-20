@@ -360,7 +360,7 @@ const weaponLvMul   = k => 1 + 0.08 * weaponLvOf(k);                       // �
    弾が増えすぎて重くもなっていた。節目ボーナスを全装備共通の威力倍率にし、DPS 表示にも含める */
 const UPGRADE_TIER_BONUS = 0.5;
 const weaponTierMul  = k => 1 + UPGRADE_TIER_BONUS * Math.floor(weaponLvOf(k) / 10);
-const weaponPowerMul = k => weaponLvMul(k) * weaponTierMul(k);         // 装備の威力倍率 (1発の威力・DPS 表示はこれ)
+const weaponPowerMul = k => weaponLvMul(k) * weaponTierMul(k) * evoPowerMul(k);   // 装備の威力倍率 (1発の威力・DPS 表示はこれ)。覚醒 (★) の威力は data/evolve.js
 // 弾を撃つ装備は Lv10・20 で発射数も +1 (手応えの演出。1発の威力は弾数で割るので DPS は変わらない)
 const PELLET_BONUS_MAX = 2;
 const weaponPellets = k => (WEAPONS[k].pellets || 1) + Math.min(PELLET_BONUS_MAX, Math.floor(weaponLvOf(k) / 10));

@@ -21,7 +21,7 @@ function weaponStatsHTML(k, w){
   const cmp = k === state.weapon ? "" : rel > 1.0001 ? `<span class="sbadge up">▲ ${relUp(rel)}</span>` : `<span class="sbadge down">▼ 弱い</span>`;
   const tags = weaponFeatTags(w);
   const pel = weaponPellets(k), pelBonus = pel - (w.pellets || 1);
-  return `<div class="sbadges"><span class="sbadge main">${iconSVG("damage")}DPS <b>${fmtD(dps)}</b></span>${cmp}<span class="sbadge">${iconSVG("heavy")}1発 <b>x${fmtX(w.dmg * mul)}</b></span><span class="sbadge">${iconSVG("rapid")}<b>${w.rate}</b>/秒</span><span class="sbadge${w.yield > 1 ? "" : " dim"}">${iconSVG("coin")}<b>+${Math.round((w.yield - 1) * 100)}%</b></span>${tier > 1 ? `<span class="sbadge up" title="強化Lv10ごとに威力 +50%">${iconSVG("up")}節目 <b>×${fmtX(tier)}</b></span>` : ""}${pel > 1 ? `<span class="sbadge${pelBonus > 0 ? " up" : ""}">${iconSVG("spread")}<b>${pel}</b>発${pelBonus > 0 ? ` (+${pelBonus})` : ""}</span>` : ""}${w.move ? `<span class="sbadge">${iconSVG("wave")}${MOVE_INFO[w.move][0]}</span>` : ""}${w.mine ? `<span class="sbadge">${iconSVG("bomber")}設置爆弾</span>` : ""}${(w.targets || 1) > 1 ? `<span class="sbadge">${iconSVG("normal")}<b>${w.targets}</b>目標</span>` : ""}${tags}</div>${w.feat ? `<div class="feat-line">${w.feat}</div>` : ""}`;
+  return `<div class="sbadges"><span class="sbadge main">${iconSVG("damage")}DPS <b>${fmtD(dps)}</b></span>${cmp}<span class="sbadge">${iconSVG("heavy")}1発 <b>x${fmtX(w.dmg * mul)}</b></span><span class="sbadge">${iconSVG("rapid")}<b>${w.rate}</b>/秒</span><span class="sbadge${w.yield > 1 ? "" : " dim"}">${iconSVG("coin")}<b>+${Math.round((w.yield - 1) * 100)}%</b></span>${tier > 1 ? `<span class="sbadge up" title="強化Lv10ごとに威力 +50%">${iconSVG("up")}節目 <b>×${fmtX(tier)}</b></span>` : ""}${evoStar(k) ? `<span class="sbadge evo" style="--ec:${EVO_COLORS[evoStar(k)]}" title="覚醒 ★ごとに威力 +${Math.round(EVO_POWER * 100)}%">★${evoStar(k)} ${EVO_TITLE[evoStar(k)]} <b>×${fmtX(evoPowerMul(k))}</b></span>` : ""}${pel > 1 && !w.mode && !w.orb ? `<span class="sbadge${pelBonus > 0 ? " up" : ""}">${iconSVG("spread")}<b>${pel}</b>発${pelBonus > 0 ? ` (+${pelBonus})` : ""}</span>` : ""}${w.move ? `<span class="sbadge">${iconSVG("wave")}${MOVE_INFO[w.move][0]}</span>` : ""}${w.mine ? `<span class="sbadge">${iconSVG("bomber")}設置爆弾</span>` : ""}${(w.targets || 1) > 1 ? `<span class="sbadge">${iconSVG("normal")}<b>${w.targets}</b>目標</span>` : ""}${tags}</div>${w.feat ? `<div class="feat-line">${w.feat}</div>` : ""}`;
 }
 // 製作素材の揃い具合 (0〜100)
 function recipePct(rec){
@@ -44,6 +44,24 @@ function weaponRel(k){
 const relUp = rel => rel >= 10 ? "×" + fmtX(rel) : pctUp(rel);
 const relHTML = rel => rel > 1.0001 ? `<span class="up">${relUp(rel)}</span>` : rel < 0.9999 ? `<span class="down">-${Math.min(99, Math.round((1 - rel) * 100))}%</span>` : "";
 
+/* ---------- 覚醒 (★1〜★5): 強化の節目で武器が化ける (data/evolve.js) ---------- */
+// 装備中カードの1行: 次の覚醒までのレベルと、その時に伸びるもの
+function evoNextHTML(k){
+  const s = evoStar(k), nx = evoNextLv(k), lv = weaponLvOf(k);
+  if (!nx) return `<div class="evo-next max" style="--ec:${EVO_COLORS[5]}">★5「${EVO_TITLE[5]}」完全覚醒 ・ ${evoTraitsText(k, 5).join(" / ")}</div>`;
+  const prev = s ? EVO_LV[s - 1] : 0, pct = Math.round((lv - prev) / (nx - prev) * 100);
+  return `<div class="evo-next" style="--ec:${EVO_COLORS[s + 1]}"><span class="evo-bar"><i style="width:${pct}%"></i></span>Lv.${nx} で <b>★${s + 1}「${EVO_TITLE[s + 1]}」</b> ・ ${evoTraitsText(k, s + 1).map(t => t.split(": ")[1]).join("・")} ・ ${EVO_FX_TEXT[s + 1]}</div>`;
+}
+// 詳細: 覚醒の道のり (★1〜★5 の各段階で何が起きるか)
+function evoRoadHTML(k){
+  const s = state.weaponsOwned[k] ? evoStar(k) : 0, fams = EVO_FAM_OF[k];
+  const rows = EVO_LV.map((lv, i) => {
+    const st = i + 1, done = st <= s, next = st === s + 1;
+    return `<li class="${done ? "done" : next ? "next" : ""}" style="--ec:${EVO_COLORS[st]}"><span class="er-lv">Lv.${lv}</span><b>★${st} ${EVO_TITLE[st]}</b><span class="er-fx">威力 ×${fmtX(1 + EVO_POWER * st)} ・ ${evoTraitsText(k, st).map(t => t.split(": ")[1]).join(" ・ ")} ・ ${EVO_FX_TEXT[st]}</span></li>`;
+  }).join("");
+  return `<div class="evo-road"><div class="wd-label">覚醒の道のり ・ 特性 <b>${fams.map(f => f.name).join(" + ")}</b></div><ol>${rows}</ol></div>`;
+}
+
 /* ---------- 装備中の武器カード (武器タブ・おすすめタブの先頭) ---------- */
 function equippedCardHTML(){
   const k = state.weapon, w = WEAPONS[k], lv = weaponLvOf(k), d = buyDef("wupgrade:" + k);
@@ -51,8 +69,9 @@ function equippedCardHTML(){
   return `<div class="eqcard" style="--accent:${w.accent}" data-tip="weapon:${k}">
     <div class="ar-top">${iconBadge(w.icon, w.accent)}
       <div class="ar-main"><div class="eqc-label">装備中の武器</div>
-        <div class="ar-title"><span class="ar-name">${w.name}</span><span class="lv-pill">Lv.${lv}</span></div>
-        <div class="ar-eff">DPS <b>${fmtD(weaponDPS(w) * weaponPowerMul(k))}</b> ・ ${w.tag}${tierUp ? ` ・ <span class="up">次で発射数 +1</span>` : ""}</div></div>
+        <div class="ar-title"><span class="ar-name">${w.name}</span><span class="lv-pill">Lv.${lv}</span>${evoStarsHTML(k)}</div>
+        <div class="ar-eff">DPS <b>${fmtD(weaponDPS(w) * weaponPowerMul(k))}</b> ・ ${w.tag}${tierUp ? ` ・ <span class="up">次で威力 +50%</span>` : ""}</div>
+        ${evoNextHTML(k)}</div>
       ${d ? `<button class="act-btn" data-buy="wupgrade:${k}" ${canBuy(d) ? "" : "disabled"}><span class="ab-label">強化</span>${upCostSpan("wupgrade:" + k, d)}</button>` : ""}
     </div>
     ${d ? `<div class="ar-foot">${recipeChips(d.mats, true)}</div>${matSubHTML("wupgrade:" + k)}${buyReasonHTML("wupgrade:" + k)}` : ""}
@@ -121,7 +140,7 @@ function weaponRowHTML(k){
   return `<div class="wl-row${owned ? " owned" : ""}${eq ? " eq" : ""}${craftable ? " craftable" : ""}${open ? " open" : ""}" style="--accent:${w.accent}" data-wsel="${k}" data-tip="weapon:${k}" role="button" tabindex="0" aria-expanded="${open}">
     ${iconBadge(w.icon, w.accent)}
     <div class="wl-main">
-      <div class="wl-name"><span class="wno">${w.no}</span><span class="wl-n">${w.name}</span>${owned ? `<span class="lv-pill">Lv.${lv}</span>` : ""}${pills}</div>
+      <div class="wl-name"><span class="wno">${w.no}</span><span class="wl-n">${w.name}</span>${owned ? `<span class="lv-pill">Lv.${lv}</span>${evoStar(k) ? evoStarsHTML(k, "sm") : ""}` : ""}${pills}</div>
       <div class="wl-sub">${w.tag} ・ DPS ${fmtD(weaponDPS(w) * (owned ? weaponPowerMul(k) : 1))} ${eq ? "" : relHTML(rel)}</div>
     </div>
     <div class="wl-act">${act}</div>
@@ -136,10 +155,10 @@ function weaponDetailHTML(k){
       <button class="act-btn wide go" data-buy="craft:${k}" ${canBuy(d) ? "" : "disabled"}><span class="ab-label">製作する</span>${costHTML(d.coins)}</button>${buyReasonHTML("craft:" + k)}`;
   } else {
     const d = buyDef("wupgrade:" + k), tierUp = Math.floor((lv + 1) / 10) > Math.floor(lv / 10);
-    body = `<div class="wd-label">強化 Lv.${lv} → ${lv + 1} ・ <span class="up">威力 +8%${tierUp ? " ・ 発射数 +1!" : ""}</span></div>${recipeChips(d.mats, true)}${matSubHTML("wupgrade:" + k)}
+    body = `<div class="wd-label">強化 Lv.${lv} → ${lv + 1} ・ <span class="up">威力 +8%${tierUp ? " ・ 節目で威力 +50%!" : ""}${EVO_LV.includes(lv + 1) ? ` ・ ★${evoStarAt(lv + 1)}「${EVO_TITLE[evoStarAt(lv + 1)]}」覚醒!` : ""}</span></div>${recipeChips(d.mats, true)}${matSubHTML("wupgrade:" + k)}
       <div class="btn-row">${eq ? `<button class="act-btn ghost wide" disabled>装備中</button>` : `<button class="act-btn ghost wide" data-buy="equip:${k}">装備する</button>`}<button class="act-btn wide" data-buy="wupgrade:${k}" ${canBuy(d) ? "" : "disabled"}><span class="ab-label">強化</span>${upCostSpan("wupgrade:" + k, d)}</button></div>${buyReasonHTML("wupgrade:" + k)}`;
   }
-  return `<div class="wl-detail" style="--accent:${w.accent}">${weaponStatsHTML(k, w)}${w.desc ? `<p class="wd-desc">${w.desc}</p>` : ""}${body}</div>`;
+  return `<div class="wl-detail" style="--accent:${w.accent}">${weaponStatsHTML(k, w)}${w.desc ? `<p class="wd-desc">${w.desc}</p>` : ""}${evoRoadHTML(k)}${body}</div>`;
 }
 
 const WFILTER_EMPTY = {

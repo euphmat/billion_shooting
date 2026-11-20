@@ -16,7 +16,7 @@ function drawBullet(bl, sx, sy, now){
     else if (bl.trailFx === "ember"){ ctx.fillStyle = g % 2 ? c2 : "#ff9d3c"; ctx.beginPath(); ctx.arc(gx2, gy2, Math.max(0.8, z * (0.4 - g * 0.09)), 0, 7); ctx.fill(); }
     else if (bl.trailFx === "spark"){ ctx.fillStyle = c2; ctx.fillRect(gx2 - 1.5, gy2 - 1.5, 3, 3); }
     else { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(gx2, gy2, Math.max(0.5, z * (0.8 - g * 0.18)), 0, 7); ctx.fill(); } } ctx.globalAlpha = 1; ctx.lineWidth = 1; }
-  if (bl.glow){ ctx.fillStyle = c; ctx.globalAlpha = 0.15; ctx.beginPath(); ctx.arc(sx, sy, z * 2.3, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+  if (bl.glow){ ctx.fillStyle = c; ctx.globalAlpha = 0.15 + 0.018 * (bl.evo || 0); ctx.beginPath(); ctx.arc(sx, sy, z * 2.3, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
   if (bl.crit){   // クリティカル: 黄色く大きく
     ctx.fillStyle = "#ffe14d"; ctx.beginPath();
     for (let k = 0; k < 8; k++){ const r = k & 1 ? z * 0.5 : z * 1.1, t = now / 90 + k * Math.PI / 4; ctx.lineTo(sx + Math.cos(t) * r, sy + Math.sin(t) * r); }
@@ -231,6 +231,26 @@ function drawBullet(bl, sx, sy, now){
       ctx.fillStyle = c; ctx.beginPath(); ctx.arc(sx, sy, z * 0.2, 0, 7); ctx.fill(); ctx.lineWidth = 1; break; }
     default: { ctx.fillStyle = c; ctx.fillRect(sx - z / 2, sy - z / 2, z, z); }
   }
+  if (bl.evo >= 3 && !fxLow() && bullets.length < 500) drawEvoAdorn(bl, sx, sy, z, now);   // 覚醒 ★3〜★5 の飾り
   if (bl.stuck){ const f = 0.5 + 0.5 * Math.sin(now / 70); ctx.strokeStyle = `rgba(255,60,40,${0.35 + 0.4 * f})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(sx, sy, z * (1.5 + 0.3 * f), 0, 7); ctx.stroke(); ctx.lineWidth = 1; }
+}
+// 覚醒の飾り: ★3 光の衛星 (2つの光点が弾を回る) / ★4 二色の光冠 (脈打つ輪) / ★5 虹のオーロラ (色の巡る弧)
+function drawEvoAdorn(bl, sx, sy, z, now){
+  const e = bl.evo, seed = bl.seed || 0, t = now / 150 + seed;
+  const orbitR = z * 1.9, dotR = Math.max(1, z * 0.24);
+  ctx.fillStyle = bl.c2 || "#fff";
+  for (let k = 0; k < 2; k++){ const a = t + k * Math.PI; ctx.beginPath(); ctx.arc(sx + Math.cos(a) * orbitR, sy + Math.sin(a) * orbitR, dotR, 0, 7); ctx.fill(); }
+  if (e >= 4){
+    ctx.strokeStyle = bl.color || "#fff"; ctx.globalAlpha = 0.4 + 0.25 * Math.sin(now / 85 + seed); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(sx, sy, z * (1.45 + 0.18 * Math.sin(now / 95 + seed)), 0, 7); ctx.stroke();
+  }
+  if (e >= 5){
+    const hue = (now / 5 + seed * 60) % 360;
+    ctx.globalAlpha = 0.75; ctx.lineWidth = 1.8; ctx.lineCap = "round";
+    ctx.strokeStyle = `hsl(${hue},100%,70%)`; ctx.beginPath(); ctx.arc(sx, sy, z * 2.4, t * 1.6, t * 1.6 + 1.9); ctx.stroke();
+    ctx.strokeStyle = `hsl(${(hue + 150) % 360},100%,70%)`; ctx.beginPath(); ctx.arc(sx, sy, z * 2.4, t * 1.6 + Math.PI, t * 1.6 + Math.PI + 1.9); ctx.stroke();
+    ctx.lineCap = "butt";
+  }
+  ctx.globalAlpha = 1; ctx.lineWidth = 1;
 }
 const hexA = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };

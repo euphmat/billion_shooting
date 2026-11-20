@@ -54,11 +54,13 @@ function frame(now){
 
   // --- player fire ---
   player.fireT -= pfdt;
-  const w = WEAPONS[state.weapon];
+  const w = evoW(state.weapon);   // 覚醒 (★) 込み (ガトリングの最大連射も伸びる)
+  evoCheck(dt);                   // ★が上がった瞬間の演出 (data/evolve.js)
   if (player.fireT <= 0){
     const fired = shoot(player.x, player.y, shotDamage(), null, false);
     player.fireT = fireDelay(w, player, fired);
     if (fired){
+      player.muzzleT = now;   // 銃口の閃光 (render/draw.js)
       heatT = 0.5;                                                                        // ウォームアップ
       if (sk("a_double") && Math.random() < (sk("a_triple") ? 0.35 : 0.2)) player.fireT = Math.min(player.fireT, 0.04);   // ダブルタップ
     }

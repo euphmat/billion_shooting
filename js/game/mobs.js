@@ -182,7 +182,7 @@ const mobDmgAcc = new Map();   // mob.id -> {m, total, crit, max}
 function noteMobDmg(m, dmg, crit){
   if (!(dmg > 0)) return;
   let e = mobDmgAcc.get(m.id);
-  if (!e){ if (mobDmgAcc.size >= 48) return; e = { m, total: 0, crit: false, max: 0 }; mobDmgAcc.set(m.id, e); }
+  if (!e){ if (mobDmgAcc.size >= 48 || !onScreen(m.x, m.y, 60)) return; e = { m, total: 0, crit: false, max: 0 }; mobDmgAcc.set(m.id, e); }
   e.total += dmg; if (crit) e.crit = true; if (dmg > e.max) e.max = dmg;
 }
 function damageMob(m, dmg, bl){
@@ -204,6 +204,7 @@ function damageMob(m, dmg, bl){
   if (m.hp <= 0) killMob(m);
 }
 function killMob(m){
+  sndMobDie();
   if (typeof burstAt === "function") burstAt(m.x, m.y, m.lastFx || { accent: (m.type && m.type.color) || "#ffd24d", c2: "#ffffff", burst: "dots" }, null);
   const si = m.sat, S = SATS[si], T = m.type;
   const total = Math.round((30 + si * 45) * T.hpMul * (T.coinMul || 1)), each = Math.max(1, Math.round(total / 4));

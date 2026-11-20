@@ -27,7 +27,7 @@ function equipRowHTML(k){
   const w = WEAPONS[k];
   return `<div class="arow afford" style="--accent:${w.accent}" data-tip="weapon:${k}">
     <div class="ar-top">${iconBadge(w.icon, w.accent)}
-      <div class="ar-main"><div class="ar-title"><span class="ar-name">${w.name}</span><span class="lv-pill">Lv.${weaponLvOf(k)}</span></div>
+      <div class="ar-main"><div class="ar-title"><span class="ar-name">${w.name}</span><span class="lv-pill">Lv.${weaponLvOf(k)}</span>${evoStar(k) ? evoStarsHTML(k, "sm") : ""}</div>
       <div class="ar-eff">持っている中で最強 ・ 今の装備より <span class="up">${relUp(weaponRel(k))}</span></div></div>
       <button class="act-btn go" data-buy="equip:${k}"><span class="ab-label">持ち替え</span></button></div>
   </div>`;

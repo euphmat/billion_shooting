@@ -74,9 +74,11 @@ function damageBlock(idx, dmg, splash){
   if (dealt > 0){
     let e = dmgAcc.get(idx);
     if (!e){
-      if (dmgAcc.size < 96){
+      // 画面外のヒット (遠くの攻撃ボット・仲間) は数えない。数えると枠を先に使い切り、画面内の数字が出なくなる
+      const wx = g2w(gx), wy = g2w(gy);
+      if (dmgAcc.size < 96 && onScreen(wx, wy, BS * 2)){
         e = dmgEntryPool.pop() || {};
-        e.x = g2w(gx); e.y = g2w(gy); e.total = 0; e.crit = false; e.void = false; e.max = hp;
+        e.x = wx; e.y = wy; e.total = 0; e.crit = false; e.void = false; e.max = hp;
         dmgAcc.set(idx, e);
       }
     }
@@ -153,9 +155,9 @@ function onBlockBroken(idx){
   dropMaterial(gx, gy, m, kind);
   noteCoinSpawn(g2w(gx), g2w(gy), value);   // 回収ボットの待ち伏せ先 (コイン発生ヒートマップ)
   spawnCoin({ x:g2w(gx), y:g2w(gy), vx:(Math.random()-.5)*90, vy:(Math.random()-.5)*90, value, chest, age:0 });   // 上限を超えたら既存のコインへ上乗せ
-  sndBreak();
+  sndBreak(m);
   if (goldified){   // 黄金化: 金色に輝いて壊れる (リング + 金の星バースト + フィード)
-    bumpProc("goldify", g2w(gx), g2w(gy));
+    bumpProc("goldify", g2w(gx), g2w(gy)); sndGoldify();
     skillFeed("goldify", "黄金化! コイン×100", "✨", "#ffd60a");
     addRing({ x: g2w(gx), y: g2w(gy), r: BS * 2.6, t: performance.now(), color: "255,214,10", dur: 520 });
     burstAt(g2w(gx), g2w(gy), { accent: "#ffd60a", c2: "#fff3b0", burst: "star" }, m);
@@ -288,7 +290,7 @@ function shoot(sx, sy, dmg, weaponKey, fromBot){
 }
 // xs = 追加の着弾範囲 (終末の一撃)
 function shootRaw(sx, sy, dmg, weaponKey, fromBot, xs){
-  const w = weaponKey ? WEAPONS[weaponKey] : WEAPONS[state.weapon];
+  const w = evoW(weaponKey || state.weapon);   // 覚醒 (★) 込みの性能 (data/evolve.js)
   const mods = curPl;
 
   // ボット: 装備なしは普通の単発、装備ありは装備の性能そのまま
@@ -341,7 +343,7 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
         if (dx * dx + dy * dy <= r2){ damageBlock(i, dmg, 0); hitAny = true; }
       }
     }
-    if (hitAny){ addRing({ x:sx, y:sy, r, t:performance.now(), color: hexRGB(w.accent) }); sndShoot(); }
+    if (hitAny){ addRing({ x:sx, y:sy, r, t:performance.now(), color: hexRGB(w.accent), evo: w.evo || 0 }); sndShoot(w, mods); }
     return hitAny;
   }
 
@@ -351,7 +353,7 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
     let px = sx, py = sy, d = dmg;
     const mob0 = nearestMob(sx, sy, rng);   // 最初の一撃はモンスター優先
     if (mob0){
-      addBeam({ x1:px, y1:py, x2:mob0.x, y2:mob0.y, t:performance.now(), w:2.5, color:w.accent, zig:true, life:120 });
+      addBeam({ x1:px, y1:py, x2:mob0.x, y2:mob0.y, t:performance.now(), w:2.5, color:w.accent, zig:true, life:120, evo: w.evo || 0 });
       damageMob(mob0, d, { fx: w });
       px = mob0.x; py = mob0.y; d *= w.chainDecay || 0.7;
     }
@@ -360,13 +362,13 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
     for (let c = mob0 ? 1 : 0; c <= w.chains && idx !== undefined && idx >= 0; c++){
       seen.add(idx);
       const tx = g2w(idx % D), ty = g2w((idx / D) | 0);
-      addBeam({ x1:px, y1:py, x2:tx, y2:ty, t:performance.now(), w:c ? 1.5 : 2.5, color:w.accent, zig:true, life:120 });
+      addBeam({ x1:px, y1:py, x2:tx, y2:ty, t:performance.now(), w:c ? 1.5 : 2.5, color:w.accent, zig:true, life:120, evo: w.evo || 0 });
       damageBlock(idx, d, splash);
       px = tx; py = ty; d *= w.chainDecay || 0.7;
       const cand = findNearestBlocks(px, py, 120, 8, seen);
       idx = cand.length ? cand[(Math.random() * cand.length) | 0] : undefined;
     }
-    sndShoot();
+    sndShoot(w, mods);
     return true;
   }
 
@@ -390,9 +392,9 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
         const i = gy * D + gx;
         if (!seen.has(i) && !isDestroyed(i)){ seen.add(i); damageBlock(i, dmg, splash); }
       }
-      addBeam({ x1:sx, y1:sy, x2:sx + Math.cos(a) * rng, y2:sy + Math.sin(a) * rng, t:performance.now(), w:w.beamW || 5, color:w.accent });
+      addBeam({ x1:sx, y1:sy, x2:sx + Math.cos(a) * rng, y2:sy + Math.sin(a) * rng, t:performance.now(), w:w.beamW || 5, color:w.accent, evo: w.evo || 0 });
     }
-    sndShoot();
+    sndShoot(w, mods);
     return true;
   }
 
@@ -400,7 +402,7 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
   for (const aim of aims){
     const idx = aim.idx, tx = aim.x, ty = aim.y, baseA = Math.atan2(ty - sy, tx - sx);
     if (w.mode === "laser"){
-      addBeam({ x1:sx, y1:sy, x2:tx, y2:ty, t:performance.now(), w:2, color:w.accent });
+      addBeam({ x1:sx, y1:sy, x2:tx, y2:ty, t:performance.now(), w:2 + 0.3 * (w.evo || 0), color:w.accent, evo: w.evo || 0 });
       if (aim.mob){ damageMob(aim.mob, dmg, { fx: w }); continue; }
       curCarry = true;
       const over = damageBlock(idx, dmg, splash);
@@ -413,18 +415,19 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
     const n = weaponPellets(w.key), base = w.pellets || 1;
     if (n > base) dmg *= base / n;
     const spd = (w.bulletSpeed || 720) * BULLET_SPD_MUL;
+    const ev = w.evo || 0;   // 覚醒 (★): 弾が大きく・光り・残像を引く (描画は render/bullets.js)
     const mk = a => {
       const isCrit = w.critC && Math.random() < w.critC;
       const hm = !!w.homing;
       bullets.push({ x:sx, y:sy, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd,
-        dmg: isCrit ? dmg * w.critM : dmg, crit:isCrit, fx:w, sz:w.size || 4,
+        dmg: isCrit ? dmg * w.critM : dmg, crit:isCrit, fx:w, sz:(w.size || 4) * (1 + 0.08 * ev),
         splash, life: rng / spd + 0.25,
         homing: hm, targetIdx: idx, targetMob: aim.mob ? aim.mob.id : 0, retargetT: 0, color: w.accent,
         pierce: (w.pierce || 0) + (bonusPierce || 0), bounce: w.bounce || 0,
         split: w.split || 0, frags: w.frags || 0, lastHit: -1, pl: mods, shape: w.shape || "dot",
         coinMul: w.coinMul || 1, nova: w.nova || 0, orb: w.orb ? w.orbR : 0, tickT: 0,
         move: w.move || null, seed: Math.random() * 6.283, age: 0, life0: rng / spd + 0.25, spd0: spd,
-        baseSz: w.size || 4, spin: w.spin || 0, pulse: w.pulse || 0, trail: !!w.trail, glow: !!w.glow,
+        baseSz: (w.size || 4) * (1 + 0.08 * ev), spin: w.spin || 0, pulse: w.pulse || 0, trail: !!w.trail || ev >= 2, glow: !!w.glow || ev >= 1, evo: ev,
         mine: w.mine || 0, ox: sx, oy: sy,
         form: w.form || w.shape || "dot", c2: w.c2 || "#ffffff", trailFx: w.trailFx || "ghost" });
     };
@@ -434,7 +437,7 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
       mk(a + (w.jitter ? (Math.random() - 0.5) * w.jitter : 0));
     }
   }
-  sndShoot();
+  sndShoot(w, mods);
   return true;
 }
 const hexRGB = h => { const n = parseInt(h.slice(1), 16); return `${n >> 16 & 255},${n >> 8 & 255},${n & 255}`; };

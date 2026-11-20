@@ -344,7 +344,7 @@ function diceLabel(text, color){
   if (dmgLabels.length >= MAX_DMG_LABELS) return;
   const d = dmgPool.pop() || {};
   d.x = player.x; d.y = player.y - 46; d.text = text; d.color = color;
-  d.fs = 17; d.crit = false; d.void = false; d.vy = 30; d.t = nowMs;
+  d.fs = 17; d.font = DMG_FONT(17); d.crit = false; d.void = false; d.vy = 30; d.vx = 0; d.pop = 0.5; d.shake = 0; d.flash = false; d.t = nowMs;
   dmgLabels.push(d);
 }
 // 全体凍結: 半径内のブロックを氷結させ、モンスターを鈍らせる

@@ -13,7 +13,7 @@ const playerDamage = () => weaponAtkMul(state.weapon);
 // 1発の威力: 装備ごとに「実効DPS ÷ 連射 ÷ 実効倍率」で決まる
 const shotDamage   = (k = state.weapon) => WEAPONS[k].dmg * weaponPowerMul(k);
 const weaponYield  = () => WEAPONS[state.weapon].yield;   // 採掘ボーナス (コイン倍率)
-const playerSpeed  = () => 270 * (sk("d_boost") ? 1.15 : 1) * (1 + (typeof artVal === "function" ? artVal("spd") : 0));
+const playerSpeed  = () => 270 * (sk("d_boost") ? 1.15 : 1) * (1 + (typeof artVal === "function" ? artVal("spd") : 0)) * (1 + MASTERY.d.spd[masteryRank("d")]);   // 艦隊マスタリー: 移動速度
 const magnetRange  = () => 90 * (1 + (typeof artVal === "function" ? artVal("magnet") : 0)) * (sk("c_philosopher") ? 3 : 1);   // 無限財宝 (奥義): コイン吸引範囲 ×3
 const weaponDPS = w => 5 * w.power;   // 基礎ダメージ1あたりの実効DPS
 const playerDPS    = () => weaponDPS(WEAPONS[state.weapon]) * weaponPowerMul(state.weapon);

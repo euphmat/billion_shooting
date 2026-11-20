@@ -10,7 +10,7 @@
    ファイルを足すときは APP_SCRIPTS の「読み込み順」に注意: 全て通常の <script> と同じく
    グローバルを共有するので、読み込み時に実行されるコードは先に読まれたファイルにしか依存できない。
    ========================================================= */
-const APP_VERSION = 91;
+const APP_VERSION = 92;
 
 const APP_STYLES = ["css/style.css", "css/side.css", "css/mobile.css"];
 
@@ -26,6 +26,7 @@ const APP_SCRIPTS = [
   "js/data/weapons.js",         // 装備
   "js/data/crew.js",            // ボット
   "js/core/stats.js",           // 派生ステータス
+  "js/data/evolve.js",          // 武器の覚醒 (★1〜★5)
   "js/core/audio.js",           // 効果音
   "js/data/skills.js",          // スキルツリーのデータ / レベル
   "js/game/skill-hooks.js",     // スキルの命中時・撃破時フック
@@ -56,6 +57,7 @@ const APP_SCRIPTS = [
   // --- 描画 ---
   "js/render/labels.js",
   "js/render/draw.js",
+  "js/render/block-tex.js",     // 素材ごとのブロックのテクスチャ (前計算)
   "js/render/blocks.js",
   "js/render/status-fx.js",
   "js/render/bullets.js",

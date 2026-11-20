@@ -9,10 +9,13 @@
 // - 画像は画面より少し広く作り、カメラが端を越えたときだけ作り直す
 // - 壊れた/削れたブロック (dirtyBlocks) は、そのピクセルだけ描き直す
 // - 遠景 (1セル = step x step ブロック) は、描き直しを 0.12秒に1回まで間引く
+// - 近景 (step 1) は 1セル = T x T ピクセルにして素材のテクスチャ (block-tex.js) を焼き込む。
+//   T はズームで 2 / 4 / 8 を使い分け、画面上の 1テクセルが 2px 前後になるようにする (書き込む量を一定に保つ)
 // レアブロック・黄金・被弾の白フラッシュは、数が少ないので毎フレーム上から重ねて描く
 const LAYER_MARGIN = 12;
-const blockLayer = { cv: document.createElement("canvas"), ctx: null, img: null, step: 0, cx0: 0, cy0: 0, cols: 0, rows: 0,
+const blockLayer = { cv: document.createElement("canvas"), ctx: null, img: null, step: 0, T: 1, M: LAYER_MARGIN, cx0: 0, cy0: 0, cols: 0, rows: 0,
   t: 0, rare: [], bx0: 1e9, by0: 1e9, bx1: -1, by1: -1 };
+const layerTexRes = (px, step) => step > 1 ? 1 : px >= 20 ? 8 : px >= 9 ? 4 : 2;
 blockLayer.ctx = blockLayer.cv.getContext("2d");
 // セル (cx,cy) の代表ブロック: step 1 ならそのブロック。LOD なら範囲内で最初に見つかった生存ブロック
 function layerCellIdx(cx, cy, step){
@@ -45,9 +48,11 @@ function layerCellIdx(cx, cy, step){
 function paintLayerCell(cx, cy, collect){
   const L = blockLayer, lx = cx - L.cx0, ly = cy - L.cy0;
   if (lx < 0 || ly < 0 || lx >= L.cols || ly >= L.rows) return;
-  const d = L.img.data, o = (ly * L.cols + lx) * 4, idx = layerCellIdx(cx, cy, L.step);
-  if (idx < 0) d[o + 3] = 0;
+  const d = L.img.data, idx = layerCellIdx(cx, cy, L.step), T = L.T;
+  if (T > 1){ paintTexCell(d, lx, ly, idx, collect); }
+  else if (idx < 0) d[(ly * L.cols + lx) * 4 + 3] = 0;
   else {
+    const o = (ly * L.cols + lx) * 4;
     const rx = idx % D, ry = (idx / D) | 0, c = earthColor(rx, ry, L.step === 1);
     let cr = c[0], cg = c[1], cb = c[2];
     if (L.step === 1 && collect){
@@ -60,6 +65,33 @@ function paintLayerCell(cx, cy, collect){
   }
   if (lx < L.bx0) L.bx0 = lx; if (lx > L.bx1) L.bx1 = lx;
   if (ly < L.by0) L.by0 = ly; if (ly > L.by1) L.by1 = ly;
+}
+// テクスチャ付きのセル (T x T ピクセル)。素材によらず同じ手順: テクスチャを濃淡 k 倍して書くだけ
+function paintTexCell(d, lx, ly, idx, collect){
+  const L = blockLayer, T = L.T, W4 = L.cols * T * 4;
+  let o = ly * T * W4 + lx * T * 4;
+  if (idx < 0){ for (let y = 0; y < T; y++, o += W4) for (let x = 0, p = o + 3; x < T; x++, p += 4) d[p] = 0; return; }
+  const rx = idx % D, ry = (idx / D) | 0, mi = materialAt(rx, ry);
+  if (collect && blockKind(rx, ry)) L.rare.push(idx);
+  // earthColor と同じ濃淡 (ブロックごと + 鉱脈セルごと)
+  let k = (0.90 + hash01(idx) * 0.18) * (0.96 + coarseHash((rx >> 3) + 11, (ry >> 3) + 5) * 0.08);
+  const hv = Math.imul(idx, 0x9e3779b1) >>> 0, t = blockTex(mi, T, hv >>> 30);
+  const hp = damagedMap.get(idx);
+  if (hp === undefined){
+    for (let y = 0, s = 0; y < T; y++, o += W4) for (let x = 0, p = o; x < T; x++, p += 4, s += 3){
+      d[p] = t[s] * k; d[p + 1] = t[s + 1] * k; d[p + 2] = t[s + 2] * k; d[p + 3] = 255;
+    }
+    return;
+  }
+  // 削れたブロック: 暗くなり、残りHPに応じてひびが増える
+  const f = hp / blockMaxHP(rx, ry);
+  k *= 0.55 + 0.45 * f;
+  const lv = f > 0.75 ? 0 : f > 0.45 ? 1 : f > 0.2 ? 2 : 3;
+  const cm = lv ? crackMasks[lv - 1][(hv >>> 29) & 1][T] : null;
+  for (let y = 0, s = 0, q = 0; y < T; y++, o += W4) for (let x = 0, p = o; x < T; x++, p += 4, s += 3, q++){
+    const kk = cm ? k * cm[q] : k;
+    d[p] = t[s] * kk; d[p + 1] = t[s + 1] * kk; d[p + 2] = t[s + 2] * kk; d[p + 3] = 255;
+  }
 }
 // ブロック行 gy にブロックがある横幅を、天体ごとの区間リストで返す (左→右の順)
 function rowIntervals(gy){
@@ -76,13 +108,14 @@ function buildRowSpans(y0, y1){
   for (let gy = y0; gy <= y1; gy++){ const ivs = rowIntervals(gy); spans[gy - y0] = ivs.length ? ivs : null; }
   return spans;
 }
-function rebuildBlockLayer(now, step, cxa, cya, cxb, cyb){
-  const L = blockLayer, M = LAYER_MARGIN;
+function rebuildBlockLayer(now, step, T, cxa, cya, cxb, cyb){
+  const L = blockLayer, M = T >= 8 ? 8 : LAYER_MARGIN;   // 高解像度のときは余白を少し減らして書き込み量を抑える
   const cols = cxb - cxa + 1 + 2 * M, rows = cyb - cya + 1 + 2 * M;
-  if (cols !== L.cols || rows !== L.rows || !L.img){
-    L.cols = cols; L.rows = rows; L.cv.width = cols; L.cv.height = rows;
-    L.img = L.ctx.createImageData(cols, rows);
+  if (cols !== L.cols || rows !== L.rows || T !== L.T || !L.img){
+    L.cols = cols; L.rows = rows; L.T = T; L.cv.width = cols * T; L.cv.height = rows * T;
+    L.img = L.ctx.createImageData(cols * T, rows * T);
   }
+  L.M = M;
   L.step = step; L.cx0 = cxa - M; L.cy0 = cya - M; L.t = now; L.rare.length = 0;
   if (step > 1){ L.spanY0 = Math.max(0, L.cy0 * step); L.spans = buildRowSpans(L.spanY0, Math.min(D - 1, (L.cy0 + rows) * step - 1)); }
   else L.spans = null;
@@ -95,24 +128,36 @@ function layerCoversView(gx0, gy0, gx1, gy1){
   return Math.floor(gx0 / s) >= L.cx0 && Math.floor(gy0 / s) >= L.cy0
     && Math.floor(gx1 / s) < L.cx0 + L.cols && Math.floor(gy1 / s) < L.cy0 + L.rows;
 }
-function updateBlockLayer(now, step, gx0, gy0, gx1, gy1){
-  const L = blockLayer, M = LAYER_MARGIN;
-  if (step !== stepReq){ stepReq = step; stepChangeT = now; }
+function updateBlockLayer(now, step, T, gx0, gy0, gx1, gy1){
+  const L = blockLayer, M = L.M, key = step * 16 + T;
+  if (key !== stepReq){ stepReq = key; stepChangeT = now; }
   const cxa = Math.floor(gx0 / step), cya = Math.floor(gy0 / step), cxb = Math.floor(gx1 / step), cyb = Math.floor(gy1 / step);
-  const covered = L.img && L.step === step
+  const changed = L.step !== step || L.T !== T;
+  const covered = L.img && !changed
     && cxa >= L.cx0 && cya >= L.cy0 && cxb < L.cx0 + L.cols && cyb < L.cy0 + L.rows
     && L.cols - (cxb - cxa + 1) <= 4 * M && L.rows - (cyb - cya + 1) <= 4 * M;   // ズームインで画像が大きすぎたら作り直す
   let eff = step;
   if (!covered || (dirtyOverflow && (step === 1 || now - L.t > 250))){
     // step が変わった直後 (ズーム操作中) は旧レイヤーを拡大/縮小して描き回し、
     // ズームが落ち着いて (130ms) から作り直す。再構築の連続発生を防ぐ
-    if (L.img && L.step !== step && now - stepChangeT < 130 && layerCoversView(gx0, gy0, gx1, gy1)) eff = L.step;
-    else if (L.img && L.step !== step && now - stepChangeT < 400 && now - L.t < 120) eff = L.step;   // ズーム継続中は再構築を最大 120ms 間隔に間引く
-    else rebuildBlockLayer(now, step, cxa, cya, cxb, cyb);
+    if (L.img && changed && now - stepChangeT < 130 && layerCoversView(gx0, gy0, gx1, gy1)) eff = L.step;
+    else if (L.img && changed && now - stepChangeT < 400 && now - L.t < 120) eff = L.step;   // ズーム継続中は再構築を最大 120ms 間隔に間引く
+    else rebuildBlockLayer(now, step, T, cxa, cya, cxb, cyb);
   }
   else if (dirtyBlocks.length && (L.step === 1 || now - L.t > 120)){
     L.t = now;
-    if (L.step === 1) for (const idx of dirtyBlocks) paintLayerCell(idx % D, (idx / D) | 0, false);
+    if (L.step === 1 && L.T > 1 && dirtyBlocks.length <= 48){
+      // テクスチャ付きは画像が大きいので、離れた数ブロックを囲む矩形ごと送らず、セルごとに送る
+      const T = L.T;
+      for (const idx of dirtyBlocks){
+        const cx = idx % D, cy = (idx / D) | 0, lx = cx - L.cx0, ly = cy - L.cy0;
+        if (lx < 0 || ly < 0 || lx >= L.cols || ly >= L.rows) continue;
+        paintLayerCell(cx, cy, false);
+        L.ctx.putImageData(L.img, 0, 0, lx * T, ly * T, T, T);
+      }
+      L.bx0 = L.by0 = 1e9; L.bx1 = L.by1 = -1;
+    }
+    else if (L.step === 1) for (const idx of dirtyBlocks) paintLayerCell(idx % D, (idx / D) | 0, false);
     else {
       const seen = new Set();
       for (const idx of dirtyBlocks){
@@ -123,14 +168,15 @@ function updateBlockLayer(now, step, gx0, gy0, gx1, gy1){
     dirtyBlocks.length = 0;
   }
   if (L.bx1 >= L.bx0){
-    L.ctx.putImageData(L.img, 0, 0, L.bx0, L.by0, L.bx1 - L.bx0 + 1, L.by1 - L.by0 + 1);
+    const T = L.T;
+    L.ctx.putImageData(L.img, 0, 0, L.bx0 * T, L.by0 * T, (L.bx1 - L.bx0 + 1) * T, (L.by1 - L.by0 + 1) * T);
     L.bx0 = L.by0 = 1e9; L.bx1 = L.by1 = -1;
   }
   return eff;
 }
 
 function drawBlocks(now, camX, camY, px, step, gx0, gy0, gx1, gy1){
-  step = updateBlockLayer(now, step, gx0, gy0, gx1, gy1);
+  step = updateBlockLayer(now, step, layerTexRes(px, step), gx0, gy0, gx1, gy1);
   const L = blockLayer, cell = px * step;
   const toSX = gx => ((gx - GC) * BS - camX) * zoom + CW / 2, toSY = gy => ((gy - GC) * BS - camY) * zoom + CH / 2;
   ctx.imageSmoothingEnabled = false;

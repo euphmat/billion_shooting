@@ -12,7 +12,7 @@ const mouseWorld = () => ({ x: player.x + (mouseSX - CW / 2) / zoom, y: player.y
 const blockPos = idx => ({ x: g2w(idx % D), y: g2w((idx / D) | 0) });
 
 // ---------- 演出の部品 ----------
-const sndLevel = () => [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, .18, "square", .055, 0, i * .075));
+const sndLevel = () => [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, .18, "triangle", .07, 0, i * .075));
 function blast(x, y, r, dmg, color){
   damageRadius(x, y, r, dmg);
   addRing({ x, y, r: r * 1.15, t: performance.now(), color: color || "255,255,255", dur: 480 });
@@ -188,7 +188,7 @@ function capstoneUpdate(dt, bdt, now){
       addRing({ x: player.x, y: player.y, r: R * 0.3, t: now, color: "255,230,190", dur: 500 });
       dimFx.push({ x: player.x, y: player.y, t: 0, kind: "planet", dur: 0.6 });
       rawDamage(() => damageRadius(player.x, player.y, R, playerDamage() * 20 * gMul));
-      sndBoom();
+      sndBoom(true);
     }
   }
   // ファンネル: 公転しながら既存の shoot() 経路で自動射撃 (艦隊総攻撃で 8基・二重リング逆回転)
@@ -207,7 +207,7 @@ function capstoneUpdate(dt, bdt, now){
     f.trail.push({ x: f.x, y: f.y }); if (f.trail.length > 4) f.trail.shift();
     if (f.flash > 0) f.flash -= bdt;
     f.fireT -= bdt;
-    if (f.fireT <= 0){ f.fireT = 0.4; if (shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * (gf ? 2 : 1) * (sk("d_ultimate") ? 3 : 1), null, true)) f.flash = 0.06; }   // 間隔 0.4s × 1発 = 自機DPSの約15%/基 / 惑星破壊艦隊 (究極): ×3
+    if (f.fireT <= 0){ f.fireT = 0.4; if (shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * (gf ? 2 : 1) * (sk("d_ultimate") ? 3 : 1) * masteryMul("d"), null, true)) f.flash = 0.06; }   // 間隔 0.4s × 1発 = 自機DPSの約15%/基 / 惑星破壊艦隊 (究極): ×3
   }
   // オービタルボット: 大きく周回し、最も硬い対象へ徹甲レーザー (太ビーム + 着弾スパーク)
   const wantOrb = gf ? 2 : sk("d_orbital") ? 1 : 0;
@@ -243,7 +243,7 @@ function capstoneUpdate(dt, bdt, now){
     if (fleetT <= 0){
       fleetT = 10; bumpProc("fleetburst");
       skillFeed("grandfleet", "艦隊総攻撃", "🛸", "#57e39a");
-      for (const f of funnels){ for (let k = 0; k < 3; k++) shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * 2 * 1.5 * (sk("d_ultimate") ? 3 : 1), null, true); f.flash = 0.09; }   // 惑星破壊艦隊 (究極): ×3
+      for (const f of funnels){ for (let k = 0; k < 3; k++) shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * 2 * 1.5 * (sk("d_ultimate") ? 3 : 1) * masteryMul("d"), null, true); f.flash = 0.09; }   // 惑星破壊艦隊 (究極): ×3
     }
   }
   // 大富豪の蓄財: 金の雨 (イベント消費) / 無限財宝: 移動中の金の軌跡
@@ -327,7 +327,7 @@ function fireAnnihilation(now){
   const rr = BS * 24;
   for (const m of mobs) if (!m.dead && Math.hypot(m.x - player.x, m.y - player.y) <= rr) damageMob(m, (m.hp + m.maxHp) * 10 + 1e6, null);   // 範囲内のモンスターは即死
   queueDestroyCircle(w2g(player.x), w2g(player.y), 24);
-  sndBoom();
+  sndBoom(true);
 }
 // 母艦の照準: 自機周辺の候補点 (ブロック群・モンスター) を半径4セルのブロック密度で採点し、最も密集した地点を選ぶ
 function mothershipTarget(){
@@ -522,10 +522,10 @@ function skillsUpdate(dt, fdt, bdt, now){
     }
   }
   // --- 仲間系パッシブ ---
-  const w = WEAPONS[state.weapon];
+  const w = evoW(state.weapon);   // 覚醒込み (僚機・影分身のガトリングも加速が伸びる)
   if (sk("d_wing")){
     wing.fireT -= bdt;
-    if (wing.fireT <= 0){ const p = wingPos(); wing.fireT = fireDelay(w, wing, shoot(p.x, p.y, shotDamage() * (0.3 + (sk("d_wing2") ? 0.3 : 0) + (sk("d_formation") ? 0.2 : 0)), state.weapon, false)); }
+    if (wing.fireT <= 0){ const p = wingPos(); wing.fireT = fireDelay(w, wing, shoot(p.x, p.y, shotDamage() * (0.3 + (sk("d_wing2") ? 0.3 : 0) + (sk("d_formation") ? 0.2 : 0)) * masteryMul("d"), state.weapon, false)); }
   }
   if (sk("d_shadow")){
     hist.push({ x: player.x, y: player.y, angle: player.angle });
@@ -533,7 +533,7 @@ function skillsUpdate(dt, fdt, bdt, now){
     shadows.forEach((s, k) => {
       if (k >= shadowCount()) return;
       s.fireT -= fdt;
-      if (s.fireT <= 0){ const p = shadowPos(k); s.fireT = fireDelay(w, s, shoot(p.x, p.y, shotDamage() * ((sk("d_shadow3") ? 0.4 : 0.3) + (sk("d_formation") ? 0.2 : 0)), state.weapon, false)); }
+      if (s.fireT <= 0){ const p = shadowPos(k); s.fireT = fireDelay(w, s, shoot(p.x, p.y, shotDamage() * ((sk("d_shadow3") ? 0.4 : 0.3) + (sk("d_formation") ? 0.2 : 0)) * masteryMul("d"), state.weapon, false)); }
     });
   } else hist.length = 0;
   if (sk("d_sat")){

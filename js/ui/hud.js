@@ -38,7 +38,8 @@ function weaponTipHTML(k){
     ${weaponStatsHTML(k, w)}
     <div class="tip-line">個性: ${[`弾は${FORM_INFO[w.form || w.shape] || "特殊な形"}`, w.move ? MOVE_INFO[w.move][1] : "", w.mine ? MOVE_INFO.mine[1] : "", w.spin ? "回転しながら飛ぶ" : "", w.pulse ? "脈動する" : "", w.trail ? "残像を引く" : "", w.glow ? "光を放つ" : ""].filter(Boolean).join(" ・ ")}</div>
     ${w.desc ? `<p class="tip-desc">${w.desc}</p>` : ""}
-    ${owned ? `<div class="tip-line">強化 Lv.${lv} → ${lv + 1} : 威力 +8%${Math.floor(lv / 10) > 0 ? ` ・ 発射数 +${Math.floor(lv / 10)}` : ""}${Math.floor((lv + 1) / 10) > Math.floor(lv / 10) ? ` ・ <b style="color:#57e39a">次の強化で発射数 +1!</b>` : ""}</div>` : `<div class="tip-line">製作レシピ (素材が揃うと製作できる)</div>${recipeChips(w.recipe, true)}`}`;
+    <div class="tip-line">覚醒特性: ${EVO_FAM_OF[k].map(f => f.name).join(" + ")}${owned && evoStar(k) ? ` ・ 現在 ★${evoStar(k)}「${EVO_TITLE[evoStar(k)]}」 ${evoTraitsText(k, evoStar(k)).map(t => t.split(": ")[1]).join(" ・ ")}` : ""}</div>
+    ${owned ? `<div class="tip-line">強化 Lv.${lv} → ${lv + 1} : 威力 +8%${Math.floor((lv + 1) / 10) > Math.floor(lv / 10) ? ` ・ <b style="color:#57e39a">節目で威力 +50%!</b>` : ""}${EVO_LV.includes(lv + 1) ? ` ・ <b style="color:${EVO_COLORS[evoStarAt(lv + 1)]}">★${evoStarAt(lv + 1)}「${EVO_TITLE[evoStarAt(lv + 1)]}」覚醒!</b>` : evoNextLv(k) ? ` ・ 次の覚醒 Lv.${evoNextLv(k)}` : ""}</div>` : `<div class="tip-line">製作レシピ (素材が揃うと製作できる)</div>${recipeChips(w.recipe, true)}`}`;
 }
 function buyTipHTML(arg){
   const head = (icon, color, name, tag) => `<div class="tip-head">${iconBadge(icon, color)}<div class="tip-main"><div class="tip-name">${name}</div><div class="tip-tag">${tag}</div></div></div>`;
@@ -53,7 +54,7 @@ function buyTipHTML(arg){
   }
   if (arg.startsWith("wupgrade:")){
     const k = arg.slice(9), w = WEAPONS[k], lv = weaponLvOf(k), d = buyDef(arg);
-    return head(w.icon, w.accent, `${w.name} を強化`, "武器の強化") + `<p class="tip-desc">この武器の威力が +8% 上がる。その武器を使う自機・攻撃ボット・僚機すべてに効く。さらに Lv が 10 上がるごとに発射数も +1 される。</p><div class="tip-line">Lv.${lv} → Lv.${lv + 1} の素材${Math.floor((lv + 1) / 10) > Math.floor(lv / 10) ? ` ・ <b style="color:#57e39a">発射数 +1!</b>` : ""}</div>${recipeChips(d.mats, true)}${matSubHTML(arg)}`;
+    return head(w.icon, w.accent, `${w.name} を強化`, "武器の強化") + `<p class="tip-desc">この武器の威力が +8% 上がる。その武器を使う自機・攻撃ボット・僚機すべてに効く。Lv が 10 上がるごとに威力 +50%、Lv ${EVO_LV.join(" / ")} で<b>覚醒</b> (★1〜★5: 威力 +${Math.round(EVO_POWER * 100)}%・特性が伸び・見た目が化ける)。</p><div class="tip-line">Lv.${lv} → Lv.${lv + 1} の素材${Math.floor((lv + 1) / 10) > Math.floor(lv / 10) ? ` ・ <b style="color:#57e39a">威力 +50%!</b>` : ""}${EVO_LV.includes(lv + 1) ? ` ・ <b style="color:${EVO_COLORS[evoStarAt(lv + 1)]}">★${evoStarAt(lv + 1)}「${EVO_TITLE[evoStarAt(lv + 1)]}」覚醒!</b>` : ""}</div>${recipeChips(d.mats, true)}${matSubHTML(arg)}`;
   }
   return "";
 }

@@ -256,9 +256,50 @@ const spLeft  = () => spTotal() - spSpent();
 const skillUnlocked = n => (!n.parent || sk(n.parent.id)) && state.lv >= (n.reqLv || 0);
 const canLearn = n => !sk(n.id) && skillUnlocked(n) && spLeft() >= n.cost;
 const levelDmgMul = () => 1 + 0.015 * (state.lv - 1);
+
+/* ---------- 系統マスタリー: 同じ系統のスキルを習得するほど、その系統そのものが強くなる ----------
+   習得数が 3 / 7 / 12 / 18 / 25 / 34 (全習得) に届くたびにランクアップ (I〜V, MAX)。
+   どのスキルを取っても1つ進むので、小さなスキル1つにも「次のランクまであと何個」という意味が生まれる。
+   ランクに応じて系統の主役ステータスが大きく伸び、自機のまわりを系統色の光球が回る (render/draw.js) */
+const MASTERY_AT = [3, 7, 12, 18, 25, 34];
+const MASTERY_RANK = ["—", "I", "II", "III", "IV", "V", "MAX"];
+const MASTERY = {
+  a: { stat: "全ダメージ",       mul: [1, 1.1, 1.25, 1.45, 1.75, 2.2, 3],  crit: [0, 0, 0.02, 0.04, 0.06, 0.08, 0.12], fx: "深紅の光球" },
+  b: { stat: "状態異常ダメージ", mul: [1, 1.15, 1.35, 1.6, 2, 2.6, 3.5], elem: [0, 0, 0.02, 0.04, 0.06, 0.08, 0.12], fx: "五色に揺らぐ光球" },
+  c: { stat: "コイン",           mul: [1, 1.15, 1.35, 1.6, 2, 2.6, 3.5], xp: [1, 1.05, 1.1, 1.2, 1.35, 1.5, 2], fx: "黄金の光球" },
+  d: { stat: "仲間の威力",       mul: [1, 1.15, 1.35, 1.6, 2, 2.6, 3.5], spd: [0, 0.03, 0.06, 0.1, 0.14, 0.18, 0.25], fx: "翠の光球" },
+  e: { stat: "素材ドロップ",     mul: [1, 1.1, 1.25, 1.45, 1.75, 2.2, 3],  fx: "琥珀の光球" },
+};
+let mastLen = 0;   // 習得のたびに増やして、キャッシュを捨てる合図にする (skilltree.js の onSkillsChanged / probeWith)
+let mastCache = null;   // { obj: state.skills, r: {a:rank,...}, n: {a:count,...} }  (習得・振り直しで作り直す)
+function masteryData(){
+  if (mastCache && mastCache.obj === state.skills && mastCache.len === mastLen) return mastCache;
+  const n = { a: 0, b: 0, c: 0, d: 0, e: 0 }, r = {};
+  for (const id in state.skills) if (SKILL[id]) n[SKILL[id].br.key]++;
+  for (const k in n){ let rk = 0; for (const t of MASTERY_AT) if (n[k] >= t) rk++; r[k] = rk; }
+  mastCache = { obj: state.skills, len: mastLen, n, r };
+  return mastCache;
+}
+const masteryInvalidate = () => { mastLen++; };
+const masteryRank = br => masteryData().r[br];
+const masteryCount = br => masteryData().n[br];
+const masteryMul = br => MASTERY[br].mul[masteryRank(br)];
+const masteryNextAt = br => { const c = masteryCount(br); for (const t of MASTERY_AT) if (c < t) return t; return 0; };
+const mastBursts = [];   // ランクアップの瞬間、自機から系統色の輪が広がる {t, color} (render/draw.js)
+// ランクの効果を1行で (ツリー画面・通知で使う)
+function masteryEffectText(br, rk){
+  const M = MASTERY[br], x = v => "×" + (Math.round(v * 100) / 100);
+  if (!rk) return "効果なし";
+  let t = `${M.stat} ${x(M.mul[rk])}`;
+  if (M.crit && M.crit[rk]) t += `・会心率 +${Math.round(M.crit[rk] * 100)}%`;
+  if (M.elem && M.elem[rk]) t += `・全元素の付与率 +${Math.round(M.elem[rk] * 100)}%`;
+  if (M.xp && M.xp[rk] > 1) t += `・経験値 ${x(M.xp[rk])}`;
+  if (M.spd && M.spd[rk]) t += `・移動速度 +${Math.round(M.spd[rk] * 100)}%`;
+  return t;
+}
 const blockXP = (gx, gy) => Math.max(1, Math.round(Math.sqrt(blockMaxHP(gx, gy) / 5)));
 function gainXP(n){
-  state.xp += n * (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1) * (sk("c_ultimate") ? 3 : 1);   // 星屑の王笏: 経験値 ×2 (乗算キー) / 無限財宝: ×1.5 / 無限黄金郷 (究極): ×3
+  state.xp += n * (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1) * (sk("c_ultimate") ? 3 : 1) * MASTERY.c.xp[masteryRank("c")];   // 財宝マスタリー: 経験値   // 星屑の王笏: 経験値 ×2 (乗算キー) / 無限財宝: ×1.5 / 無限黄金郷 (究極): ×3
   while (state.xp >= xpNeed(state.lv)){
     state.xp -= xpNeed(state.lv); state.lv++;
     if (typeof onLevelUpHeal === "function") onLevelUpHeal();   // レベルアップでHP全回復
@@ -268,13 +309,13 @@ function gainXP(n){
 
 // ---------- 派生ステータス (各所から参照) ----------
 const atkRange   = () => ATTACK_RANGE;
-const crewMul    = () => (sk("d_command") ? 1.15 : 1) * (1 + artVal("cbot"));
+const crewMul    = () => (sk("d_command") ? 1.15 : 1) * (1 + artVal("cbot")) * masteryMul("d");   // 艦隊マスタリー: 仲間の威力
 const crewCount  = () => state.bots + state.coinBots;
 const botCount     = () => act("bots") + (sk("d_reinforce") ? 1 : 0) + (sk("d_reinforce2") ? 1 : 0);
 const coinBotCount = () => act("coinBots") + (sk("d_drone") ? 1 : 0) + cbLv("replicator");
 const playerRate = () => (sk("a_rapid") ? 1.08 : 1) * (sk("a_rapid2") ? 1.2 : 1) * (1 + artVal("rate"));
 const crewRate   = () => (sk("d_rate") ? 1.15 : 1) * (sk("d_rate2") ? 1.25 : 1);
 // 素材ドロップ倍率 (装備の触媒効果はヒット時に別に掛かる)
-const matDropMul = () => (1 + artVal("drop")) * (1 + (sk("c_vein") ? 0.15 : 0)) * (sk("e_master") ? 2 : 1) * (sk("e_master2") ? 2 : 1) * (sk("e_god") ? 3 : 1) * (sk("c_eldorado") ? 1.5 : 1) * (sk("c_philosopher") ? 1.5 : 1) * (sk("e_rights") ? 2 : 1) * (sk("c_ultimate") ? 3 : 1);   // 無限黄金郷 (究極): 素材 ×3
-const elemMul    = () => (sk("b_elem") ? 1.2 : 1) * (1 + artVal("elem")) * (artHas("lg_crown") ? 1.75 : 1) * (sk("b_singularity") ? 2 : 1) * (sk("b_core") ? 1.5 : 1) * (sk("b_ultimate") ? 5 : 1);   // 元素の心得: 状態異常ダメージ / 元素の王冠: ×1.75 / 特異点: ×2 / 原初元素炉: ×1.5 / ビッグバン元素炉 (究極): ×5
+const matDropMul = () => (1 + artVal("drop")) * (1 + (sk("c_vein") ? 0.15 : 0)) * (sk("e_master") ? 2 : 1) * (sk("e_master2") ? 2 : 1) * (sk("e_god") ? 3 : 1) * (sk("c_eldorado") ? 1.5 : 1) * (sk("c_philosopher") ? 1.5 : 1) * (sk("e_rights") ? 2 : 1) * (sk("c_ultimate") ? 3 : 1) * masteryMul("e");   // 無限黄金郷 (究極): 素材 ×3 / 採掘マスタリー
+const elemMul    = () => (sk("b_elem") ? 1.2 : 1) * (1 + artVal("elem")) * (artHas("lg_crown") ? 1.75 : 1) * (sk("b_singularity") ? 2 : 1) * (sk("b_core") ? 1.5 : 1) * (sk("b_ultimate") ? 5 : 1) * masteryMul("b");   // 元素マスタリー / 元素の心得: 状態異常ダメージ / 元素の王冠: ×1.75 / 特異点: ×2 / 原初元素炉: ×1.5 / ビッグバン元素炉 (究極): ×5
 const burnSetMul = () => elemMul() * (sk("b_burn") ? 1.5 : 1) * (sk("b_plasma") ? 2 : 1) * (1 + artVal("burn"));   // 燃焼の付与倍率

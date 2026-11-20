@@ -42,7 +42,7 @@ function buildTree(){
   }
   for (const br of BRANCHES){
     const r = treeRadius(6) + 78, x = TREE_C + Math.cos(br.ang) * r, y = TREE_C + Math.sin(br.ang) * r;
-    labels += `<div class="t-label" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;color:${br.color}"><b>${br.name}</b><span>${br.en}</span></div>`;
+    labels += `<div class="t-label" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;color:${br.color}"><b>${br.name}</b><span>${br.en}</span><em class="t-mast" id="tlm-${br.key}"></em></div>`;
   }
   $("treeWorld").style.width = $("treeWorld").style.height = TREE_SIZE + "px";
   $("treeWorld").innerHTML = `<svg class="t-lines" width="${TREE_SIZE}" height="${TREE_SIZE}">${lines}</svg>
@@ -67,6 +67,11 @@ function refreshTree(){
     const n = SKILL[el.dataset.ln];
     el.setAttribute("class", sk(n.id) ? "on" : skillUnlocked(n) ? "open" : "");
   });
+  for (const br of BRANCHES){   // 系統ラベルの下にマスタリーのランクと進み具合
+    const el = $("tlm-" + br.key); if (!el) continue;
+    const rk = masteryRank(br.key), c = masteryCount(br.key), nx = masteryNextAt(br.key);
+    el.innerHTML = `<i class="rk${rk}">マスタリー ${MASTERY_RANK[rk]}</i>${nx ? `<u style="--p:${Math.round(c / nx * 100)}%"></u><small>${c} / ${nx}</small>` : `<small>${c} / ${c} 完全制覇</small>`}`;
+  }
   $("treeCoreLv").textContent = state.lv;
   $("treeSp").innerHTML = `スキルポイント <b>${sp}</b>`;
   $("treeCount").textContent = `習得 ${Object.keys(state.skills).length} / ${SKILLS.length}`;
@@ -81,11 +86,11 @@ function probeStats(){
   const ec = elemChances();
   return {
     dmg: globalDmgMul(),
-    critP: (sk("a_crit") ? 0.06 : 0) + (sk("a_apex") ? 0.10 : 0) + artVal("crit") / 100 + (artHas("lg_void") ? 0.20 : 0),
+    critP: (sk("a_crit") ? 0.06 : 0) + (sk("a_apex") ? 0.10 : 0) + MASTERY.a.crit[masteryRank("a")] + artVal("crit") / 100 + (artHas("lg_void") ? 0.20 : 0),
     critX: Math.max((sk("a_critx") ? 3 : 2) + artVal("critd") / 100, artHas("lg_void") ? 3 : 0),
     rate: playerRate(), bot: botMul(), crate: crewRate(),
     elem: elemMul(), burnD: burnSetMul(), drop: matDropMul(), speed: playerSpeed(),
-    coin: coinMulStatic(), xp: (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1) * (sk("c_ultimate") ? 3 : 1), vacuum: magnetRange(),
+    coin: coinMulStatic(), xp: (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1) * (sk("c_ultimate") ? 3 : 1) * MASTERY.c.xp[masteryRank("c")], vacuum: magnetRange(),
     bots: botCount(), cbots: coinBotCount(),
     ec_burn: ec.burn, ec_frost: ec.frost, ec_acid: ec.acid, ec_rad: ec.rad, ec_shock: ec.shock,
   };
@@ -93,8 +98,10 @@ function probeStats(){
 function probeWith(id, on){
   const had = state.skills[id];
   if (on) state.skills[id] = 1; else delete state.skills[id];
+  masteryInvalidate();   // マスタリーのランクも付け外し後で測る
   const p = probeStats();
   if (had) state.skills[id] = 1; else delete state.skills[id];
+  masteryInvalidate();
   return p;
 }
 const _fxX = v => "×" + v.toFixed(2), _fxPct = v => Math.round(v * 100) + "%", _fxInt = v => "" + Math.round(v);
@@ -209,7 +216,10 @@ function renderDetail(){
       <p>中心から外へ、線でつながった順に習得できる。スキルは全てパッシブ (常時発動)。外周の大きなスキルは各系統の切り札。</p>
       <p>${TOUCH_UI ? "ノードをタップで選択、下に出る「習得」ボタンで習得。" : "ノードをクリックすると、近くに詳細と「習得」ボタンが出る。ダブルクリックか Enter でも習得できる。"}</p>
       <p>習得済みノードの<b>緑の点は「いま発動中」</b>、灰色の点は「条件待ち」の印。画面上の「発動状況」バーで、現在の付与率と今セッションの発動回数がいつでも確認できる。詳細では効果が現在値でどう変わるかも数値で出る。</p>
-      ${BRANCHES.map(b => `<div class="td-br" style="color:${b.color}"><b>${b.name}</b><span>${b.sub}</span></div>`).join("")}</div>`;
+      ${BRANCHES.map(b => `<div class="td-br" style="color:${b.color}"><b>${b.name}</b><span>${b.sub}</span></div>`).join("")}
+      <div class="td-mast-head">系統マスタリー</div>
+      <p>同じ系統のスキルを <b>${MASTERY_AT.join(" / ")}</b> 個習得するたびにランクアップ。系統の主役ステータスが大きく伸び、自機のまわりを系統色の光球が回り始める。</p>
+      ${BRANCHES.map(b => { const rk = masteryRank(b.key), nx = masteryNextAt(b.key); return `<div class="td-mast" style="--c:${b.color}"><b>${b.name} ${MASTERY_RANK[rk]}</b><span>${masteryEffectText(b.key, rk)}</span>${nx ? `<small>次 (${masteryCount(b.key)}/${nx}): ${masteryEffectText(b.key, rk + 1)}</small>` : `<small>完全制覇</small>`}</div>`; }).join("")}</div>`;
     positionDetail();
     return;
   }
@@ -226,6 +236,7 @@ function renderDetail(){
     <p>${n.desc}</p>
     <div class="td-cost">必要スキルポイント <b>${n.cost}</b>${n.reqLv ? ` ・ 必要Lv <b>${n.reqLv}</b>` : ""}</div>
     ${status}
+    ${masteryLineHTML(n)}
     ${skillEffectLines(n)}
     ${skillProcLines(n)}
     ${!on && n.id === selId ? `<button class="buy-btn" id="learnBtn" ${canLearn(n) ? "" : "disabled"}><span>習得する</span><span>${TOUCH_UI ? "" : "Enter"}</span></button>` : ""}`;
@@ -253,15 +264,41 @@ function positionDetail(){
   el.style.right = el.style.bottom = "auto";
   el.style.left = left + "px"; el.style.top = top + "px";
 }
+// 詳細: このスキルが系統マスタリーをどう進めるか (習得でランクアップするなら強調)
+function masteryLineHTML(n){
+  const b = n.br.key, rk = masteryRank(b), c = masteryCount(b), nx = masteryNextAt(b);
+  if (sk(n.id)) return `<div class="td-mastline" style="--c:${n.br.color}">${n.br.name}マスタリー <b>${MASTERY_RANK[rk]}</b> (${c}${nx ? " / " + nx : ""}) ・ ${masteryEffectText(b, rk)}</div>`;
+  if (nx && c + 1 >= nx) return `<div class="td-mastline up" style="--c:${n.br.color}">習得で <b>${n.br.name}マスタリー ${MASTERY_RANK[rk + 1]}</b> にランクアップ! → ${masteryEffectText(b, rk + 1)}</div>`;
+  return `<div class="td-mastline" style="--c:${n.br.color}">習得で ${n.br.name}マスタリー +1 (${c + 1} / ${nx || c + 1}${nx ? ` ・ ${MASTERY_RANK[rk + 1]}まであと ${nx - c - 1}` : ""})</div>`;
+}
 function tryLearn(id){
   const n = SKILL[id];
   if (!n || !canLearn(n)){ sndFail(); return; }
   state.skills[id] = 1;
   sndLevel();
   onSkillsChanged();
+  const el = document.querySelector(`#treeWorld .tn[data-id="${id}"]`);   // 習得の瞬間: ノードが系統色に弾ける
+  if (el){ el.classList.remove("just"); void el.offsetWidth; el.classList.add("just"); setTimeout(() => el.classList.remove("just"), 1100); }
+}
+// 系統マスタリーのランクアップ検出 (振り直しで下がった時は何もしない)
+const mastSeen = {};
+for (const br of BRANCHES) mastSeen[br.key] = masteryRank(br.key);
+function masteryCheck(){
+  for (const br of BRANCHES){
+    const rk = masteryRank(br.key);
+    if (rk > mastSeen[br.key]){
+      toast(`${br.name}マスタリー ${MASTERY_RANK[rk]} に到達! ${masteryEffectText(br.key, rk)}`, "good");
+      if (mastBursts.length < 4) mastBursts.push({ t: 0, color: br.color });   // t は画面に戻った瞬間に入れる (ツリーを開いている間は見えないので)
+      [523, 784, 1046, 1568].forEach((f, i) => tone(f, .25, "triangle", .05, 0, .35 + i * .09));
+      const lb = $("tlm-" + br.key);
+      if (lb){ lb.classList.remove("rankup"); void lb.offsetWidth; lb.classList.add("rankup"); }
+    }
+    mastSeen[br.key] = rk;
+  }
 }
 // 習得 / 振り直しのあと: スキルで増減する機体数や表示を合わせ直す
 function onSkillsChanged(){
+  masteryInvalidate(); masteryCheck();
   syncBots(); syncCoinBots();
   gMul = globalDmgMul();
   save(); refreshTree(); renderPanels(true); hudSig = "";

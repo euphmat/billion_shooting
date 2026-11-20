@@ -50,7 +50,7 @@ const bursts = [];    // 破壊バースト {x,y,c,c2,style,t,seed}
 function burstAt(x, y, fx, mat){
   if (fxBurstBudget <= 0 || bursts.length >= MAX_BURSTS || !onScreen(x, y, BS * 2)) return;
   fxBurstBudget--;
-  bursts.push({ x, y, c: fx ? fx.accent : (mat ? mat.color : "#ffffff"), c2: fx && fx.c2 ? fx.c2 : "#ffffff", style: fx && fx.burst ? fx.burst : "shard", t: nowMs, seed: Math.random() * 10 });
+  bursts.push({ x, y, c: fx ? fx.accent : (mat ? mat.color : "#ffffff"), c2: fx && fx.c2 ? fx.c2 : "#ffffff", style: fx && fx.burst ? fx.burst : "shard", t: nowMs, seed: Math.random() * 10, sc: fx && fx.evo ? 1 + 0.14 * fx.evo : 1 });   // sc: 覚醒 (★) で着弾が大きく弾ける
 }
 const labels = [];    // 浮かぶ文字 (+1 鉄鉱石 など) {x,y,text,color,chip,w,fs,t,rare}
 const dmgLabels = []; // ダメージ数値 {x,y,text,color,fs,t} (プールで使い回す)
@@ -58,7 +58,7 @@ const dmgPool = [];
 const dmgAcc = new Map();   // idx -> {x,y,total,crit,max} 命中ごとに貯めて 0.15秒ごとにまとめて表示 (大量ヒット対策)
 const dmgEntryPool = [];
 const MAX_BEAMS = 160, MAX_RINGS = 48, MAX_BURSTS = 60, MAX_LABELS = 12;   // 同時に出す演出の上限
-const MAX_DMG_LABELS = 24, DMG_LABEL_TTL = 650;   // ダメージ数値の上限と表示時間(ms)
+const MAX_DMG_LABELS = 28, DMG_LABEL_TTL = 720;   // ダメージ数値の上限と表示時間(ms)
 let dmgCritFlag = false;   // いま処理中の命中がクリティカルか (弾の命中経路が立てる)
 let dmgVoidFlag = false;   // 虚無の単眼のクリティカルか (紫の特大ダメージ数字 + バースト用)
 const MAT_LABEL_FONT = fs => `700 ${fs}px "Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif`;
