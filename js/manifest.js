@@ -31,6 +31,7 @@ const APP_SCRIPTS = [
   "js/core/audio.js",           // 効果音
   "js/data/skills.js",          // スキルツリーのデータ / レベル
   "js/game/skill-hooks.js",     // スキルの命中時・撃破時フック
+  "js/game/skill-early.js",     // 序盤スキル (各系統の内側24種) の効果 ※作業途中: 一部は未実装
   // --- UI (パネル) ---
   "js/ui/common.js",
   "js/ui/notify.js",

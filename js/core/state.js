@@ -29,9 +29,10 @@ const state = {
   lastSeenUpdate: 0,   // アップデート履歴を最後に見たバージョン
   endingSeen: false,   // エンディング (主惑星の破壊完了) を見たか。自動再生は1回だけ
   playTime: 0,   // 累計プレイ時間 (秒)。エンディングの統計表示用
+  deepRec: 0,    // 主惑星で到達した最深記録 (深さ%。序盤スキル「地層踏破」用)
 };
 const SAVE_FIELDS = ["coins", "totalCoins", "destroyed", "weapon", "weaponsOwned", "weaponLv", "bots", "coinBots", "botLv",
-  "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "atkMuted", "fxLow", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode", "visitedBodies", "lastSeenUpdate", "endingSeen", "playTime"];
+  "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "atkMuted", "fxLow", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode", "visitedBodies", "lastSeenUpdate", "endingSeen", "playTime", "deepRec"];
 let migrated = false;
 try {
   // 本番の置き場所は IndexedDB (store.js が起動時に読み終えている)。
@@ -57,7 +58,7 @@ state.destroyed = TARGET_TOTAL - alive;
 
 const isObj = v => v && typeof v === "object" && !Array.isArray(v);
 // 自機の最大HP: レベルで伸びる (アーティファクト等はここに倍率が掛かる)
-const playerMaxHP = () => Math.round((100 + (state.lv - 1) * 30) * (1 + (typeof artVal === "function" ? artVal("hp") : 0)));
+const playerMaxHP = () => Math.round((100 + (state.lv - 1) * 30) * (1 + (typeof artVal === "function" ? artVal("hp") : 0)) * (typeof sk === "function" && sk("d0_armor") ? 1.25 : 1));   // 増加装甲 (序盤スキル): +25%
 for (const k of ["weaponLv", "cbMod", "inv", "seen", "skills", "off", "weaponsOwned", "artifacts"]) if (!isObj(state[k])) state[k] = {};
 state.botLv |= 0; state.bots |= 0; state.coinBots |= 0; state.crafted |= 0;
 state.lv = Math.max(1, state.lv | 0); state.xp = Math.max(0, +state.xp || 0);
@@ -69,6 +70,7 @@ state.lastSeenUpdate = Math.max(0, state.lastSeenUpdate | 0);
 state.endingSeen = !!state.endingSeen;
 state.fxLow = !!state.fxLow;
 state.playTime = Math.max(0, +state.playTime || 0);
+state.deepRec = Math.max(0, Math.min(100, state.deepRec | 0));
 for (const k of Object.keys(state.inv)) if (!MAT[k]) delete state.inv[k];
 // 稼働中の数 (OFFにした種類は0として扱う。所持数 state[k] はそのまま)
 const act = k => state.off[k] ? 0 : state[k];

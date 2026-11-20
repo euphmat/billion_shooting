@@ -28,7 +28,7 @@ function frame(now){
   if (ax || ay) idleT = 0; else { [ax, ay] = autopilot(dt); amp = 1; }   // オートパイロット (スキル)
   player.moving = !!(ax || ay);
   boostOn = manual && (boostKey || boostTouchOn);   // ブーストは手動入力の間だけ (放置の自動移動は速くしない)
-  const al = Math.hypot(ax, ay) || 1, sp = playerSpeed() * amp * (boostOn ? BOOST_MUL : 1);
+  const al = Math.hypot(ax, ay) || 1, sp = playerSpeed() * amp * (boostOn ? BOOST_MUL * earlyBoostMul() : 1);   // アフターバーナー (序盤スキル)
   player.vx = ax / al * sp * (ax || ay ? 1 : 0); player.vy = ay / al * sp * (ax || ay ? 1 : 0);
   // 高速時は 1 フレームの移動量がブロック (BS=24) を超えるので、小刻みに進めて各歩で衝突を解く (game/physics.js)
   moveWithCollision(player, player.vx * dt, player.vy * dt, 10);
@@ -298,14 +298,14 @@ function frame(now){
     }
     let dead = bl.life <= 0;
     if (mobHit){   // モンスターに命中
-      curPl = !!bl.pl; curFx = bl.fx || null;
+      curPl = !!bl.pl; curBot = !!bl.bot; curCrew = !!bl.crew; curFx = bl.fx || null;
       damageMob(mobHit, bl.dmg, bl);
-      curFx = null; curPl = false;
+      curFx = null; curPl = false; curBot = false; curCrew = false;
       if (bl.pierce > 0){ bl.pierce--; bl.lastMob = mobHit.id; }
       else dead = true;
     }
     if (hit){
-      curPl = !!bl.pl; curEcho = !!bl.echo; curFx = bl.fx || null; curCarry = true;
+      curPl = !!bl.pl; curBot = !!bl.bot; curCrew = !!bl.crew; curEcho = !!bl.echo; curFx = bl.fx || null; curCarry = true;
       curCoinMul = bl.coinMul || 1; novaLeft = bl.nova || 0;
       const hitDmg = bl.dmg;
       dmgCritFlag = !!bl.crit;
@@ -341,7 +341,7 @@ function frame(now){
       }
       else if (over > 0.01){ bl.dmg = over; bl.lastHit = idx; }   // 余剰ダメージ: 壊して余った威力で、奥のブロックへ
       else dead = true;
-      curPl = false; curEcho = false;
+      curPl = false; curBot = false; curCrew = false; curEcho = false;
       if (dead && bl.frags) evoEvent("cluster", bl.fx, bl.x, bl.y, hitDmg, bl.pl);   // 固有覚醒: 子弾
       if (dead && bl.frags && bullets.length < 900){   // クラスター: 子弾をばらまく
         const life = 0.28 / BULLET_SPD_MUL;

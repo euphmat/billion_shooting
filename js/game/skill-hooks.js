@@ -8,12 +8,13 @@ function elemChances(){
   const all = (sk("b_kindling") ? 0.05 : 0) + MASTERY.b.elem[masteryRank("b")];   // 元素活性: 全ての付与率アップ / 元素マスタリー
   const crown = artHas("lg_crown") ? 0.20 : 0;   // 元素の王冠: 全元素の付与率 +20% (絶対値)
   const apex = (sk("b_singularity") ? 0.25 : 0) + (sk("b_core") ? 0.25 : 0) + (sk("b_ultimate") ? 0.50 : 0);   // 奥義: 特異点 +25pt / 原初元素炉 +25pt / 究極: ビッグバン元素炉 +50pt
+  const ea = eElemAdd;   // 序盤スキル「元素の巡り」: いまの得意元素だけ付与率アップ (game/skill-early.js が毎フレーム更新)
   return {
-    burn:  (sk("b_burn")  ? 0.08 : 0) + all + crown + apex,
-    frost: (sk("b_frost") ? 0.08 : 0) + all + crown + apex,
-    acid:  (sk("b_acid")  ? 0.08 : 0) + all + crown + apex,
+    burn:  (sk("b_burn")  ? 0.08 : 0) + all + crown + apex + ea.burn,
+    frost: (sk("b_frost") ? 0.08 : 0) + all + crown + apex + ea.frost,
+    acid:  (sk("b_acid")  ? 0.08 : 0) + all + crown + apex + ea.acid,
     rad:   (sk("b_radio") ? 0.05 : 0) + all + crown + apex,
-    shock: (sk("b_shock") ? 0.08 : 0) + (sk("b_tesla") ? 0.08 : 0) + all + crown + apex,
+    shock: (sk("b_shock") ? 0.08 : 0) + (sk("b_tesla") ? 0.08 : 0) + all + crown + apex + ea.shock,
   };
 }
 // 現在の武器 + スキル込みで「命中時にその状態異常が付く確率」(武器特性は命中時常時付与 = 100%扱い)
@@ -128,6 +129,10 @@ let doomN = 0, ringN = 0, breakN = 0, jackN = 0, quakeN = 0;
 let piggy = 0, piggyT = 60, interestT = 10;
 let dmgDepth = 0;          // damageBlock の入れ子の深さ (0 = 攻撃そのもの / 1以上 = 余波・誘爆)
 let curPl = false;         // いま処理中の攻撃が「自機の攻撃」か
+let curBot = false;        // いま処理中の攻撃が「攻撃ボット (ファンネル含む)」の攻撃か
+let curCrew = false;       // いま処理中の攻撃が「仲間 (攻撃ボット・僚機・影分身・ファンネル)」の攻撃か
+let curProto = false;      // いま処理中の攻撃が「プロト・簡易砲台・自爆ドローン」(序盤の機兵スキル) の攻撃か
+let curMach = false;       // いま処理中の攻撃が「自律機兵」(game/machines.js) の攻撃か
 let curEcho = false;       // いま処理中の弾がエコーショットか (エコーはエコーを呼ばない)
 let shattering = false;    // 破砕のダメージを与えている最中か (破砕は破砕を呼ばない)
 let resonating = false, firestorming = false, blasting = false;    // 共鳴/火炎嵐/発破の処理中か (再入防止)
@@ -241,6 +246,7 @@ function globalDmgMul(){
   if (sk("c_god")) m *= 1 + 0.06 * Math.floor(Math.log10(Math.max(1, state.totalCoins)) + 1);
   if (sk("d_god")) m *= 1 + Math.min(0.4, 0.02 * crewCount());
   else if (sk("d_synergy")) m *= 1 + Math.min(0.2, 0.01 * crewCount());
+  m *= earlyGlobalMul();   // 序盤スキル (game/skill-early.js)
   return m;
 }
 
@@ -250,8 +256,8 @@ function skillHitMods(idx, gx, gy, dmg, hp){
   const max = blockMaxHP(gx, gy);
   if (hp >= max && sk("a_first")) m *= 1.2;
   { const voidEye = artHas("lg_void");   // 虚無の単眼: 会心率 +25%、会心ダメは最低でも ×3、専用演出フラグを立てる
-    const ac = (sk("a_crit") ? 0.06 : 0) + (sk("a_apex") ? 0.10 : 0) + MASTERY.a.crit[masteryRank("a")] + artVal("crit") / 100 + (voidEye ? 0.25 : 0);   // 破壊マスタリー: 会心率
-    if (ac > 0 && Math.random() < ac){ let cm = (sk("a_critx") ? 3 : 2) + artVal("critd") / 100; if (voidEye){ cm = Math.max(cm, 3); dmgVoidFlag = true; } m *= cm; } }   // 会心 (スキル+アーティファクト合算)
+    const ac = (sk("a_crit") ? 0.06 : 0) + (sk("a_apex") ? 0.10 : 0) + MASTERY.a.crit[masteryRank("a")] + artVal("crit") / 100 + (voidEye ? 0.25 : 0) + earlyCritAdd(hp, max);   // 破壊マスタリー: 会心率 / 序盤スキル
+    if (ac > 0 && Math.random() < ac){ let cm = (sk("a_critx") ? 3 : 2) + artVal("critd") / 100; if (voidEye){ cm = Math.max(cm, 3); dmgVoidFlag = true; } m *= cm; earlyOnCrit(); } }   // 会心 (スキル+アーティファクト合算)
   if (sk("a_deep")) m *= 1 + (sk("a_deep2") ? 2.0 : 1.0) * blockDepth(gx, gy);
   if (artVal("deep")) m *= 1 + artVal("deep") * blockDepth(gx, gy);   // アーティファクト: 深さダメ
   if (sk("a_abyss") && blockDepth(gx, gy) >= 0.5) m *= 1.25;
@@ -269,6 +275,7 @@ function skillHitMods(idx, gx, gy, dmg, hp){
   if (embers.has(idx)) m *= 1.2;   // 残り火
   if (overloads.has(idx)) m *= 1.25;   // 過負荷
   if (evoVuln.size){ const ev = evoVuln.get(idx); if (ev){ if (nowMs < ev.u) m *= ev.x; else evoVuln.delete(idx); } }   // 固有覚醒: 弱点露出
+  m *= earlyHitMul(idx, gx, gy, hp, max);   // 序盤スキル (game/skill-early.js)
   dmg *= m;
   if (sk("a_ap")) dmg += max * 0.0005;
   if (curFx && curFx.ap) dmg += max * curFx.ap;   // 装備の徹甲
@@ -326,7 +333,9 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
       if (!cand.length) break;
       const j = cand[(Math.random() * cand.length) | 0];
       addBeam({ x1:g2w(fx), y1:g2w(fy), x2:g2w(j % D), y2:g2w((j / D) | 0), t:performance.now(), w:1.5, color:(curFx && curFx.accent) || "#ffe14d", zig:true, life:100 });
-      rawDamage(() => damageBlock(j, dealt, 0));
+      const sd = dealt * (sk("b0_superc") && frosts.has(j) ? 2 : 1);   // 超伝導 (序盤スキル): 氷結中は ×2
+      rawDamage(() => damageBlock(j, sd, 0));
+      earlyOnShock(j, sd);   // 焦雷 (序盤スキル)
       if (sk("b_overload")) overloads.set(j, 2);
       hitSet.add(j); from = j; dealt *= 0.7;
     }
@@ -338,6 +347,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
       infuseElements(idx, gx, gy, dmg);   // 元素付与 (スキル): どの武器でも状態異常が乗る
     }
   }
+  earlyAfterHit(idx, gx, gy, dmg, cur);   // 序盤スキル (game/skill-early.js)
 }
 
 // ---------- 撃破時 ----------
@@ -354,6 +364,7 @@ function coinMulStatic(){
   if (sk("c_ultimate")) m *= 5;   // 無限黄金郷 (究極)
   if (sk("c_bonus3")) m *= 1.25;
   if (sk("c_king3")) m *= 1.2;
+  m *= earlyCoinMul();   // 序盤スキル (game/skill-early.js)
   return m;
 }
 function coinSkillMul(){
@@ -369,8 +380,10 @@ function skillOnBreak(idx, gx, gy, kind, rare){
   if (curFx && curFx.xpMul) xp *= curFx.xpMul;
   xp *= evoXpMul();   // 固有覚醒: 経験値の加速 (夢見の加護)
   const dfx = dungeonFxAt(gx, gy); if (dfx) xp *= dfx.xp;   // ダンジョン固有効果: 経験値倍率
+  xp *= earlyBreakXpMul(idx, gx, gy);   // 序盤スキル: 初物 / 霜の学び / 撃破の学び / 採掘の経験
   gainXP(xp);
   combo++; comboT = 3;
+  earlyOnBreak(idx, gx, gy, kind);   // 序盤スキル (状態異常を消す前に呼ぶ: 燃焼・腐食・ひびを見る)
   if (typeof machineOnBreak === "function") machineOnBreak(idx, gx, gy);   // 機兵系統: 狩猟本能 / 帯電連鎖
   const wasFrost = frosts.has(idx), frostG = frostGen.get(idx) || 0;
   vuln.delete(idx); frosts.delete(idx); frostGen.delete(idx);
@@ -531,8 +544,10 @@ function gainCoin(c, byBot){
     if (c.age > 2 && cbInterest() > 0) v *= 1 + cbInterest();
     if (cbScanChance() > 0){ const sc = cbScanChance(); for (let k = 0; k < n; k++) if (Math.random() < sc) scanMaterialAt(c.x, c.y); }   // 鉱物スキャナ
   }
+  v *= earlyCoinPickMul(c, byBot);   // 序盤スキル: 拾い得 / 早拾い
   v = Math.round(v);
   addCoins(v); sndCoin(n, c.chest, byBot);
+  earlyOnCoin(v, n, byBot);   // 序盤スキル: 金色の追い風 / 回収日誌
   if (!c.dup && sk("c_tycoon")){   // 大富豪の蓄財 (奥義): コイン獲得時 3% で ×20 バースト + 金の雨 + フィード
     const per = Math.max(1, Math.round(v / n));   // 1枚あたりの額 (n=1 では従来と完全一致)
     for (let k = 0; k < n; k++) if (Math.random() < 0.03){

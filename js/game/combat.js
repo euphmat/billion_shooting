@@ -151,6 +151,7 @@ function onBlockBroken(idx){
   if (kind === 1 && sk("c_gem")) value *= sk("c_gem2") ? 2.2 : 1.5;
   if (sk("e_deepfit")) value *= 1 + 0.2 * blockDepth(gx, gy);   // 深層適性: 深いほどコイン増
   value *= evoCoinMul();   // 固有覚醒: コインの加速 (黄金の洪水)
+  value *= earlyBreakPre(idx, gx, gy, m);   // 序盤スキル (初物は素材を拾う前に判定するので dropMaterial より先)
   if (goldSet.delete(idx)) value *= GOLD_MUL;
   const bfx = dungeonFxAt(gx, gy); if (bfx){ value *= bfx.coin; if (bfx.gold && Math.random() < bfx.gold) value *= GOLD_MUL; }   // ダンジョン固有効果
   const chest = sk("c_king") && Math.random() < (sk("c_king2") ? 0.015 : 0.005);   // ミダス王: 宝箱
@@ -208,6 +209,7 @@ function dropMaterial(gx, gy, m, kind){
     if (same >= (sk("e_vein2") ? 1 : 2)) n += sk("e_vein3") ? 4 : sk("e_vein2") ? 2 : 1;
     if (sk("e_vein4") && same >= 4) n *= 2;   // 鉱脈の心臓: 脈の中心は2倍
   }
+  n = earlyDropAdj(n, gx, gy, m);   // 序盤スキル (game/skill-early.js)
   if (n <= 0) return;
   invAdd(m.key, n);
   noteDrop(g2w(gx), g2w(gy), m, n);
@@ -285,9 +287,14 @@ function shoot(sx, sy, dmg, weaponKey, fromBot){
   const pl = !weaponKey && !fromBot;                      // 自機本人の射撃
   const doom = pl && doomN >= (sk("a_doom2") ? 4 : 9) && sk("a_doom");
   curPl = pl;                                             // プレイヤー自身の攻撃か (命中時スキルの判定用)
+  curBot = !!fromBot; curCrew = !pl;                      // 攻撃ボット / 仲間の攻撃か (序盤スキルの判定用)
+  if (!pl) dmg *= earlyCrewShotMul(sx, sy, fromBot);      // 序盤スキル: 編隊飛行 / 信号弾
   let fired = false;
-  try { fired = shootRaw(sx, sy, (doom ? dmg * 5 : dmg) * (pl ? evoDmgMul() : 1), weaponKey, fromBot, doom ? 2 : 0); }   // 固有覚醒: 威力の加速
-  finally { curPl = false; }
+  try {
+    fired = shootRaw(sx, sy, (doom ? dmg * 5 : dmg) * (pl ? evoDmgMul() : 1), weaponKey, fromBot, doom ? 2 : 0);   // 固有覚醒: 威力の加速
+    if (fired && fromBot && sk("d0_double") && Math.random() < 0.12) shootRaw(sx, sy, dmg, weaponKey, fromBot, 0);   // 予備弾倉 (序盤スキル): もう一発
+  }
+  finally { curPl = false; curBot = false; curCrew = false; }
   if (pl && fired){
     doomN = doom ? 0 : doomN + 1;
   }
@@ -302,20 +309,21 @@ function shootRaw(sx, sy, dmg, weaponKey, fromBot, xs){
   if (fromBot){
     if (weaponKey){
       curFx = w;
-      try { const ok = shootWeapon(w, sx, sy, dmg, atkRange() * (w.range || 1), w.splash || 0, false, sk("d_ap") ? 1 : 0); if (ok && w.evoU && !evoEchoing) evoShot(w, sx, sy, dmg); return ok; }
+      try { const ok = shootWeapon(w, sx, sy, dmg, atkRange() * (w.range || 1) * earlyBotRangeMul(), w.splash || 0, false, sk("d_ap") ? 1 : 0); if (ok && w.evoU && !evoEchoing) evoShot(w, sx, sy, dmg); return ok; }
       finally { curFx = null; curCarry = false; }
     }
-    const mb = nearestMob(sx, sy, atkRange());   // ボットもモンスター優先
-    const idx = mb ? -1 : findNearestBlock(sx, sy, atkRange());
+    const brng = atkRange() * earlyBotRangeMul();   // ボット長距離砲 (序盤スキル)
+    const mb = nearestMob(sx, sy, brng);   // ボットもモンスター優先
+    const idx = mb ? -1 : findNearestBlock(sx, sy, brng);
     if (!mb && idx < 0) return false;
     const a = mb ? Math.atan2(mb.y - sy, mb.x - sx) : Math.atan2(g2w((idx / D) | 0) - sy, g2w(idx % D) - sx);
-    bullets.push({ x:sx, y:sy, vx:Math.cos(a)*720*BULLET_SPD_MUL, vy:Math.sin(a)*720*BULLET_SPD_MUL, dmg, splash:0, life:0.6 / BULLET_SPD_MUL, lastHit:-1, color:"#ffffff", pierce: sk("d_ap") ? 1 : 0, shape:"dot", sz:3 });
+    bullets.push({ x:sx, y:sy, vx:Math.cos(a)*720*BULLET_SPD_MUL, vy:Math.sin(a)*720*BULLET_SPD_MUL, dmg, splash:0, life:0.6 / BULLET_SPD_MUL * brng / atkRange(), lastHit:-1, color:"#ffffff", pierce: sk("d_ap") ? 1 : 0, shape:"dot", sz:3, bot: true, crew: true });
     sndShoot();
     return true;
   }
-  const rng = atkRange() * (w.range || 1), splash = (w.splash || 0) + xs + artVal("splash");
+  const rng = atkRange() * (w.range || 1) * (mods ? earlyRangeMul() : 1), splash = (w.splash || 0) + xs + artVal("splash");   // 長銃身 (序盤スキル): 自機の射程
   curFx = w;
-  try { const ok = shootWeapon(w, sx, sy, dmg, rng, splash, mods); if (ok && w.evoU && !evoEchoing) evoShot(w, sx, sy, dmg); return ok; }   // 固有覚醒: 射撃時の発動条件
+  try { const ok = shootWeapon(w, sx, sy, dmg, rng, splash, mods, mods && sk("a0_pierce") && Math.random() < 0.15 ? 1 : 0); if (ok && w.evoU && !evoEchoing) evoShot(w, sx, sy, dmg); return ok; }   // 固有覚醒: 射撃時の発動条件
   finally { curFx = null; curCarry = false; }
 }
 // 照射系の余剰ダメージ: 命中点から射線の奥へ、壊れなくなるまで引き継ぐ
@@ -442,7 +450,7 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
         coinMul: w.coinMul || 1, nova: w.nova || 0, orb: w.orb ? w.orbR : 0, tickT: 0,
         move: w.move || null, seed: Math.random() * 6.283, age: 0, life0: rng / spd + 0.25, spd0: spd,
         baseSz: (w.size || 4) * (1 + 0.08 * ev), spin: w.spin || 0, pulse: w.pulse || 0, trail: !!w.trail || ev >= 2, glow: !!w.glow || ev >= 1, evo: ev,
-        mine: w.mine || 0, ox: sx, oy: sy,
+        mine: w.mine || 0, ox: sx, oy: sy, bot: curBot, crew: curCrew,
         form: w.form || w.shape || "dot", c2: w.c2 || "#ffffff", trailFx: w.trailFx || "ghost" });
     };
     const step = w.arc ? Math.PI * 2 / n : (w.spreadA || 0.16);
