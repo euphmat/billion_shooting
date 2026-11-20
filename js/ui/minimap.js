@@ -96,6 +96,7 @@ function drawMinimap(now){
     const mx2 = toX(m.x), my2 = toY(m.y);
     if (mx2 >= 0 && mx2 <= MM_SIZE && my2 >= 0 && my2 <= MM_SIZE) mm.fillRect(mx2 - 1.5, my2 - 1.5, 3, 3);
   }
+  machineMinimap(mm, toX, toY, MM_SIZE);   // 機兵系統: 自律機兵の位置
   // メインビューの表示範囲 (ビューポート枠)
   const vw = (CW / zoom) / scale, vh = (CH / zoom) / scale;
   mm.strokeStyle = "rgba(255,255,255,.85)"; mm.lineWidth = 1;

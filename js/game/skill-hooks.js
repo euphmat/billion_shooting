@@ -33,7 +33,8 @@ function elemTotals(){
 // ---------- 発動カウンタ (セッション内のみ・セーブしない。「本当に発動しているか」の見える化用) ----------
 const skillProc = { burn: 0, frost: 0, acid: 0, rad: 0, shock: 0, thermo: 0, bolt: 0, firestorm: 0, icebreak: 0, meteor: 0, treasure: 0, treasureBreak: 0, chain: 0, blast: 0, quake: 0, jackpot: 0,
   dimension: 0, planetkiller: 0, chainreact: 0, tycoon: 0, fleetburst: 0, automine: 0, stareater: 0,
-  annihilation: 0, elemnova: 0, goldify: 0, planetbeam: 0, devour: 0, diswave: 0 };
+  annihilation: 0, elemnova: 0, goldify: 0, planetbeam: 0, devour: 0, diswave: 0,
+  frip: 0, freplicate: 0, fdisch: 0, frail: 0, fmagma: 0, fbomb: 0, fshell: 0, fnuke: 0, fstomp: 0, fsalvo: 0, fomega: 0, fnano: 0, fsplit: 0 };   // 機兵系統 (game/machines.js)
 // x, y を渡すと、その場所にスキル名の発動タグを出す (ui/notify.js の procTag。間引きは向こうで行う)
 function bumpProc(k, x, y){ skillProc[k]++; if (x !== undefined) procTag(k, x, y); }
 // 奥義の大きな発動は、アーティファクトと同じ左上フィード (#artFeed) に名前を出す (チップのプール・集約は artifacts.js 側)
@@ -267,6 +268,7 @@ function skillHitMods(idx, gx, gy, dmg, hp){
   if (sk("b_melt") && burns.get(idx) && burns.get(idx).k === "acid") m *= 1.2;   // 溶解: 腐食中は脆い
   if (embers.has(idx)) m *= 1.2;   // 残り火
   if (overloads.has(idx)) m *= 1.25;   // 過負荷
+  if (evoVuln.size){ const ev = evoVuln.get(idx); if (ev){ if (nowMs < ev.u) m *= ev.x; else evoVuln.delete(idx); } }   // 固有覚醒: 弱点露出
   dmg *= m;
   if (sk("a_ap")) dmg += max * 0.0005;
   if (curFx && curFx.ap) dmg += max * curFx.ap;   // 装備の徹甲
@@ -365,9 +367,11 @@ function skillOnBreak(idx, gx, gy, kind, rare){
   if (sk("c_xp")) xp *= 1.15;
   if (rare && sk("c_know")) xp *= sk("c_know2") ? 12 : 5;
   if (curFx && curFx.xpMul) xp *= curFx.xpMul;
+  xp *= evoXpMul();   // 固有覚醒: 経験値の加速 (夢見の加護)
   const dfx = dungeonFxAt(gx, gy); if (dfx) xp *= dfx.xp;   // ダンジョン固有効果: 経験値倍率
   gainXP(xp);
   combo++; comboT = 3;
+  if (typeof machineOnBreak === "function") machineOnBreak(idx, gx, gy);   // 機兵系統: 狩猟本能 / 帯電連鎖
   const wasFrost = frosts.has(idx), frostG = frostGen.get(idx) || 0;
   vuln.delete(idx); frosts.delete(idx); frostGen.delete(idx);
   const x = g2w(gx), y = g2w(gy);   // 周囲への波及は余波キュー (aftershock) 経由なので、再帰の深さで打ち切る必要はない

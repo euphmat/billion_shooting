@@ -10,7 +10,7 @@
    ファイルを足すときは APP_SCRIPTS の「読み込み順」に注意: 全て通常の <script> と同じく
    グローバルを共有するので、読み込み時に実行されるコードは先に読まれたファイルにしか依存できない。
    ========================================================= */
-const APP_VERSION = 92;
+const APP_VERSION = 95;
 
 const APP_STYLES = ["css/style.css", "css/side.css", "css/mobile.css"];
 
@@ -26,7 +26,8 @@ const APP_SCRIPTS = [
   "js/data/weapons.js",         // 装備
   "js/data/crew.js",            // ボット
   "js/core/stats.js",           // 派生ステータス
-  "js/data/evolve.js",          // 武器の覚醒 (★1〜★5)
+  "js/data/evolve.js",          // 武器の覚醒 (★1〜★10)
+  "js/data/evo-unique.js",      // 固有覚醒 (武器ごとに1つ・全武器で別物)
   "js/core/audio.js",           // 効果音
   "js/data/skills.js",          // スキルツリーのデータ / レベル
   "js/game/skill-hooks.js",     // スキルの命中時・撃破時フック
@@ -47,6 +48,7 @@ const APP_SCRIPTS = [
   "js/game/coins.js",
   "js/game/bots.js",
   "js/game/combat.js",
+  "js/game/ultra.js",           // 最難関の武器 (超新星 / 流星群 / 銀河斬 / 特異点 / 創世)
   "js/game/physics.js",
   "js/game/dungeon.js",
   "js/game/view.js",
@@ -63,10 +65,10 @@ const APP_SCRIPTS = [
   "js/render/bullets.js",
   "js/render/coin-sprites.js",
   // --- 画面上の UI (キャンバス外) ---
-  "js/ui/target-bar.js",
   "js/ui/minimap.js",
   "js/ui/worldmap.js",
   "js/game/skill-fx.js",
+  "js/game/machines.js",        // 6系統目「機兵」: 独立稼働する自律機兵 (skill-fx.js の部品を使う)
   "js/ui/skilltree.js",
   "js/ui/mobile.js",
   // --- 起動 (最後) ---

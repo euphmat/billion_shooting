@@ -56,9 +56,10 @@ function frame(now){
   player.fireT -= pfdt;
   const w = evoW(state.weapon);   // 覚醒 (★) 込み (ガトリングの最大連射も伸びる)
   evoCheck(dt);                   // ★が上がった瞬間の演出 (data/evolve.js)
+  evoTick(dt);                    // 固有覚醒: 遅延・砲台・光球・自動発動 (data/evo-unique.js)
   if (player.fireT <= 0){
     const fired = shoot(player.x, player.y, shotDamage(), null, false);
-    player.fireT = fireDelay(w, player, fired);
+    player.fireT = fireDelay(w, player, fired) / evoRateMul();   // 固有覚醒: 連射の加速
     if (fired){
       player.muzzleT = now;   // 銃口の閃光 (render/draw.js)
       heatT = 0.5;                                                                        // ウォームアップ
@@ -68,6 +69,7 @@ function frame(now){
 
 
   skillsUpdate(dt, dt, bdt, now);   // スキルの継続効果・設置物・自動詠唱
+  updateUltra(dt);      // 最難関の武器の効果 (衝撃波・隕石・銀河の刃・特異点。game/ultra.js)
   updatePlayerHP(dt);   // 自機HP (無敵時間・自動回復)
   updateMobs(dt);       // 衛星のモンスター・敵弾
   updateArtifacts(dt);  // 宝箱・アーティファクトの継続効果
@@ -243,6 +245,7 @@ function frame(now){
       if (boom){
         const mr = (bl.mine || 2) * BS;
         damageRadius(bl.x, bl.y, mr, bl.dmg);
+        evoEvent("mine", bl.fx, bl.x, bl.y, bl.dmg, bl.pl);   // 固有覚醒
         addRing({ x: bl.x, y: bl.y, r: mr, t: performance.now(), color: hexRGB(bl.color) });
         removeBulletAt(i);
       }
@@ -276,7 +279,7 @@ function frame(now){
       bl.x += bl.vx * dt; bl.y += bl.vy * dt;
       bl.tickT -= dt;
       if (bl.tickT <= 0){ bl.tickT = 1 / 8; damageRadius(bl.x, bl.y, bl.orb, bl.dmg); }
-      if (bl.life <= 0) removeBulletAt(i);
+      if (bl.life <= 0){ evoEvent("orbEnd", bl.fx, bl.x, bl.y, bl.dmg, bl.pl); removeBulletAt(i); }   // 固有覚醒: 重力球の消滅
       continue;
     }
     // 速い弾がブロックを飛び越えないよう、1フレームの移動をブロック半分ずつに刻んで当たり判定する
@@ -323,7 +326,7 @@ function frame(now){
         }
       }
       // 貫通・跳弾は「威力を落とさずにもう1個」。使い切ったあとは、余剰ダメージを持ったまま奥へ進み続ける
-      if (bl.pierce > 0){ bl.pierce--; bl.lastHit = idx; }   // 貫通: 死なない (大口径で威力増)
+      if (bl.pierce > 0){ bl.pierce--; bl.lastHit = idx; evoEvent("pierce", bl.fx, bl.x, bl.y, hitDmg, bl.pl); }   // 貫通: 死なない (大口径で威力増)
       else if (bl.bounce > 0){                                     // 跳弾: 別のブロックへ
         const nxt = findNearestBlocks(bl.x, bl.y, 170, 1, new Set([idx]))[0];
         if (nxt !== undefined){
@@ -332,12 +335,14 @@ function frame(now){
           bl.vx = Math.cos(a) * spd; bl.vy = Math.sin(a) * spd;
           bl.x += bl.vx * 0.03; bl.y += bl.vy * 0.03;
           bl.bounce--; bl.lastHit = idx;
+          evoEvent("bounce", bl.fx, g2w(gx), g2w(gy), hitDmg, bl.pl);   // 固有覚醒: 跳弾
         } else if (over > 0.01){ bl.dmg = over; bl.lastHit = idx; }
         else dead = true;
       }
       else if (over > 0.01){ bl.dmg = over; bl.lastHit = idx; }   // 余剰ダメージ: 壊して余った威力で、奥のブロックへ
       else dead = true;
       curPl = false; curEcho = false;
+      if (dead && bl.frags) evoEvent("cluster", bl.fx, bl.x, bl.y, hitDmg, bl.pl);   // 固有覚醒: 子弾
       if (dead && bl.frags && bullets.length < 900){   // クラスター: 子弾をばらまく
         const life = 0.28 / BULLET_SPD_MUL;
         for (let k = 0; k < bl.frags; k++){
@@ -392,9 +397,6 @@ function frame(now){
   if (dmgFlushT <= 0){ dmgFlushT = 0.15; flushDmgLabels(); }
 
   draw(now);
-
-  // --- target HP bar ---
-  updateTargetBar();
 
   uiT -= dt; hudT -= dt;
   if (uiT <= 0){ uiT = 0.25; renderPanels(); updateHUD(); hudDirty = false; }

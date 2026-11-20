@@ -74,6 +74,11 @@ const MOB_TYPES = [
   { name:"ラストドローン",   color:"#a15c3f", shotColor:"#ffccbc", r:14, spd:80,  mode:"shoot",  atk:"burst", dmgMul:0.07,  hpMul:1.0, coinMul:0.045, xpMul:0.055, shotSpd:330, atkCd:2.6, burstN:3, burstGap:0.12, shotR:5, shotDmgMul:0.7, fam:"bot" },
   { name:"ペタルゴースト",   color:"#f06292", shotColor:"#fce4ec", r:15, spd:65,  mode:"shoot",  atk:"spit",  dmgMul:0.075, hpMul:1.2, coinMul:0.05,  xpMul:0.06,  shotSpd:340, atkCd:2.4, shotR:5, shotDmgMul:0.8, fam:"ghost", deco:"petal" },
   { name:"グラススパイク",   color:"#a7d7d0", shotColor:"#e0f2f1", r:16, spd:55,  mode:"shoot",  atk:"spread", dmgMul:0.085, hpMul:1.3, coinMul:0.05,  xpMul:0.06,  shotSpd:350, atkCd:2.5, spreadN:4, shotR:5, shotDmgMul:0.8, fam:"spike" },
+  // ===== 最難関ダンジョン (60-63): 群れで襲ってくる番人たち。倒せば看板素材を落としやすい =====
+  { name:"アストラルウォッチャー", color:"#8ec5ff", shotColor:"#dbeeff", r:30, spd:120, mode:"shoot", atk:"spread", atkAlt:"ring", ringN:18, dmgMul:2.4, hpMul:1.0, shotSpd:560, atkCd:1.9, spreadN:7, shotR:6, shotDmgMul:0.9, fam:"eye", deco:"horn", coinMul:40, xpMul:40 },
+  { name:"メテオドラゴン",     color:"#ff7a3d", shotColor:"#ffd0a8", r:30, spd:175, mode:"shoot", atk:"burst", dmgMul:2.6, hpMul:1.1, shotSpd:620, atkCd:1.7, burstN:6, burstGap:0.07, shotR:6, shotDmgMul:0.85, fam:"bat", deco:"horn", coinMul:60, xpMul:60 },
+  { name:"ギャラクシーサーペント", color:"#d77bff", r:32, spd:150, mode:"charge", dmgMul:3.4, hpMul:1.2, teleT:0.3, dashMul:4.6, dashT:0.42, chargeRange:820, postCd:1.2, fam:"spike", deco:"stem", coinMul:80, xpMul:80 },
+  { name:"ヴォイドイーター",   color:"#3dffc8", shotColor:"#b9fff0", r:34, spd:110, mode:"shoot", atk:"spread", atkAlt:"ring", ringN:24, dmgMul:3.0, hpMul:1.3, shotSpd:520, atkCd:1.8, spreadN:9, shotR:7, shotDmgMul:0.8, fam:"ghost", deco:"horn", coinMul:120, xpMul:120 },
 ];
 const mobs = [];        // {id, sat, type, x, y, vx, vy, hp, maxHp, atkT, burnT, burnD, slowT, flashT, mode/timer (charge用), hx, hy}
 const mobShots = [];    // 敵の弾 {x, y, vx, vy, dmg, t}
@@ -86,7 +91,7 @@ const satWorld = S => [(S.cx - GC) * BS, (S.cy - GC) * BS];   // 衛星中心の
 
 function spawnMob(si){
   const S = SATS[si], T = MOB_TYPES[si], [wx, wy] = satWorld(S);
-  const maxHp = Math.round(12 * Math.pow(10, S.exp * 0.52) * T.hpMul);
+  const maxHp = Math.round((S.mobHp || 12 * Math.pow(10, S.exp * 0.52)) * T.hpMul);   // 最難関は星ごとの固定HP (異次元)
   if (S.rect){   // 内部ダンジョン: 掘り開けられたマスにだけ湧く (開けた場所がなければ湧かない)
     let cell = null;
     for (let t = 0; t < 24 && !cell; t++){
@@ -114,7 +119,7 @@ function spawnMob(si){
     hp: maxHp, maxHp, atkT: Math.random(), burnT: 0, burnD: 0, slowT: 0, flashT: 0,
     ph: Math.random() * 7, mode: "idle", modeT: 0 });
 }
-function mobCountFor(si){ return si < 10 ? 5 + Math.min(5, si) : 3 + (si - 10) % 3; }   // 小惑星は小さいので少なめ
+function mobCountFor(si){ return SATS[si].ultra ? 9 : si < 10 ? 5 + Math.min(5, si) : 3 + (si - 10) % 3; }   // 小惑星は小さいので少なめ
 
 // ---------- 敵の攻撃 ----------
 function mobShot(m, T, a, spdMul = 1, dmgMul = 1){
@@ -207,11 +212,12 @@ function killMob(m){
   sndMobDie();
   if (typeof burstAt === "function") burstAt(m.x, m.y, m.lastFx || { accent: (m.type && m.type.color) || "#ffd24d", c2: "#ffffff", burst: "dots" }, null);
   const si = m.sat, S = SATS[si], T = m.type;
-  const total = Math.round((30 + si * 45) * T.hpMul * (T.coinMul || 1)), each = Math.max(1, Math.round(total / 4));
+  const total = S.ultra ? Math.round(m.maxHp / 8 * S.fx.coin) : Math.round((30 + si * 45) * T.hpMul * (T.coinMul || 1)), each = Math.max(1, Math.round(total / 4));   // 最難関の番人は HP に見合った大金
   for (let k = 0; k < 4; k++)
     spawnCoin({ x: m.x, y: m.y, vx: (Math.random() - .5) * 120, vy: (Math.random() - .5) * 120, value: each, chest: false, age: 0 });
-  gainXP(Math.round((8 + si * 6) * T.hpMul * (T.xpMul || 1) * (S.fx ? S.fx.xp : 1)));
-  if (Math.random() < 0.35 * (S.fx ? S.fx.drop : 1)){ const n = 1 + (Math.random() * 3 | 0); invAdd(S.sig, n); noteDrop(m.x, m.y, MAT[S.sig], n); }
+  gainXP(Math.round((S.ultra ? Math.sqrt(m.maxHp) * 3 : (8 + si * 6) * T.hpMul * (T.xpMul || 1)) * (S.fx ? S.fx.xp : 1)));
+  if (S.ultra){ const n = 6 + (Math.random() * 10 | 0); invAdd(S.sig, n); noteDrop(m.x, m.y, MAT[S.sig], n); }   // 最難関の番人は看板素材を必ずまとめて落とす
+  else if (Math.random() < 0.35 * (S.fx ? S.fx.drop : 1)){ const n = 1 + (Math.random() * 3 | 0); invAdd(S.sig, n); noteDrop(m.x, m.y, MAT[S.sig], n); }
   if (artSpecial("mobDrop")){ invAdd(S.sig, 1); noteDrop(m.x, m.y - 16, MAT[S.sig], 1); bumpArtProc("e_harv"); }   // 星屑の収穫者: 必ず落ちる
   m.hp = 0; m.dead = true;
 }

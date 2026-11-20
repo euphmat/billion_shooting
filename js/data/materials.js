@@ -33,6 +33,7 @@ const LAYERS = [
   { key:"satellite", name:"衛星惑星", min:99,   desc:"メイン惑星の周囲に浮かぶ、小さな惑星たちの素材。" },
   { key:"asteroid",  name:"小惑星",   min:99,   desc:"宇宙に点在する小さなダンジョン惑星たちの素材。それぞれの星に1種ずつ。" },
   { key:"cave",      name:"惑星内部", min:99,   desc:"メイン惑星の内部に封じられた、矩形のダンジョン空間の素材。掘り進んだ者だけが辿り着く。" },
+  { key:"ultimate",  name:"最難関",   min:99,   desc:"ワールドの四隅に浮かぶ最難関ダンジョンの素材。硬さは異次元。持ち帰れば、世界の理を超えた武器になる。" },
 ];
 const layerIndexOf = depth => { let i = LAYERS.length - 1; while (i > 0 && depth < LAYERS[i].min) i--; return i; };
 
@@ -219,6 +220,11 @@ const MAT_SRC = [
   ["rustite",     "ラスタイト",     "rock",    "#a15c3f", 1.05, 1.5, 9, 0, { note:"錆鉄の鉱脈の看板素材。赤茶の鉄" }],
   ["petalite",    "ペタライト",     "gem",     "#f06292", 0.95, 1.55, 9, 0, { note:"花弁の層の看板素材。散らない花びら" }],
   ["glassite",    "グラサイト",     "gem",     "#a7d7d0", 1.1, 1.6, 9, 0, { note:"硝子の浅層の看板素材。天然のガラス" }],
+  // ===== 最難関ダンジョン (ワールドの四隅) の看板素材 =====
+  ["astralite",   "アストラライト", "exotic",  "#8ec5ff", 3.0, 12, 10, 0, { xp:5, note:"星界の終点で結晶した、星そのものの欠片。光が中で何度も生まれ直している。" }],
+  ["meteorium",   "メテオリウム",   "exotic",  "#ff7a3d", 3.4, 15, 10, 0, { xp:6, note:"流星の墓場に積もる隕鉄。触れると、落ちてきた時の熱がまだ残っている。" }],
+  ["galaxium",    "ガラクシウム",   "exotic",  "#d77bff", 3.8, 19, 10, 0, { xp:7, note:"銀河の回廊で渦を巻く、紫の星雲が固まった金属。覗き込むと銀河が回っている。" }],
+  ["voidheart",   "ヴォイドハート", "exotic",  "#3dffc8", 4.2, 24, 10, 0, { xp:8, note:"虚空の胃袋の最奥で脈打つ、光を呑む心臓。重さが、周りの空間ごと歪めている。" }],
 ];
 const MATS = [], MAT = {};
 MAT_SRC.forEach(([key, name, cat, color, hard, coin, layer, w, opt], i) => {

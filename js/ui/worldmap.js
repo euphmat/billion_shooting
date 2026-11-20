@@ -26,6 +26,7 @@ const MAP_FX_CATS = [
   { key: "proc", label: "状態付与",   test: fx => !!fx && !!fx.proc },
   { key: "gold", label: "金塊",       test: fx => !!fx && (fx.gold || 0) > 0 },
   { key: "safe", label: "安全",       test: fx => !!fx && fx.hurt < 1 },
+  { key: "ultra", label: "最難関",    test: fx => !!fx && !!fx.ultra },
 ];
 function mapFxCat(key){ return MAP_FX_CATS.find(c => c.key === key) || null; }
 function mapFiltering(){ return !!(mapQuery || mapFxFilter); }
@@ -96,7 +97,7 @@ function renderMapList(){
     <div class="map-row ${r.visited ? "" : "unvisited"} ${r.cur ? "current" : ""} ${r.match ? "" : "dim"} ${mapSelected === r.si ? "selected" : ""}" data-si="${r.si}">
       <span class="map-dot" style="background:${r.visited ? MAT[r.sig].color : "#3a3f47"}"></span>
       <span class="map-row-main">
-        <span class="map-row-name">${r.name}${r.cur ? `<em class="map-cur">現在地</em>` : ""}</span>
+        <span class="map-row-name">${SATS[r.si].ultra ? `<em class="map-ultra">最難関</em>` : ""}${r.name}${r.cur ? `<em class="map-cur">現在地</em>` : ""}</span>
         <span class="map-row-sub">${r.fx ? r.fx.name : "効果なし"} ・ 看板素材 ${MAT[r.sig].name}</span>
       </span>
       <span class="map-row-side">
@@ -116,6 +117,7 @@ function setMapView(v){
 function mapPopHTML(si){
   const S = SATS[si], visited = state.visitedBodies.includes(si);
   return `<div class="mp-name"><span class="map-dot" style="background:${visited ? MAT[S.sig].color : "#3a3f47"}"></span>${S.name}${visited ? "" : "<em>未訪問</em>"}</div>`
+    + (S.ultra ? `<div class="mp-ultra">最難関 #${S.rank} ・ 地表HP ${fmt(S.hpBase)}〜 ・ 異次元の硬さ</div>` : "")
     + `<div>看板素材: ${MAT[S.sig].name}</div>`
     + (S.fx ? `<div>効果: <b>${S.fx.name}</b></div><div class="mp-desc">${S.fx.desc}</div>` : "")
     + `<div>宝箱: ${visited ? `残り ${chestsLeftFor(si)} / 3` : "?"} ・ 距離: ${visited ? fmtDist(bodyDist(si)) : "?"}</div>`
@@ -195,6 +197,18 @@ function drawBigMap(){
     }
     g.globalAlpha = 1;
   });
+  // 最難関ダンジョン (四隅): 未訪問でも存在がわかるよう、脈打つ金の輪と「最難関」の札を常に出す
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 320);
+  for (const S of SATS){
+    if (!S.ultra) continue;
+    const cx = px(S.cx), cy = px(S.cy), r = S.r * scale;
+    g.beginPath(); g.arc(cx, cy, r + 4 + pulse * 3, 0, 7); g.strokeStyle = `rgba(255,214,10,${0.45 + 0.4 * pulse})`; g.lineWidth = 2; g.stroke();
+    g.beginPath(); g.arc(cx, cy, r + 10 + pulse * 5, 0, 7); g.strokeStyle = `rgba(255,90,90,${0.25 + 0.25 * pulse})`; g.lineWidth = 1.2; g.stroke();
+    g.font = "bold 10px sans-serif"; g.textAlign = "center";
+    const tag = "最難関 #" + S.rank, tw = g.measureText(tag).width + 10, ty = S.cy > GC ? cy - r - 24 : cy + r + 18;   // 下の2つは枠からはみ出すので上に
+    g.fillStyle = "rgba(120,10,10,.85)"; g.fillRect(cx - tw / 2, ty - 10, tw, 14);
+    g.fillStyle = "#ffd60a"; g.fillText(tag, cx, ty + 1);
+  }
   // ラベルは訪問済みのみ (名前 + 効果名)。未訪問はグレーのマーカーだけ。絞り込み中は非該当のラベルを省く
   g.textAlign = "center";
   const placedLabels = [];

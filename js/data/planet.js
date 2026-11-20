@@ -246,6 +246,27 @@ CAVE_DEFS.forEach((d, j) => {
   [S.tab0, S.tab1, S.tab2] = S._t; delete S._t;
   SATS.push(S);
 });
+const CAVE_END = SATS.length;     // 60 (内部ダンジョンの範囲は CAVE_START..CAVE_END-1)
+// ===== 最難関ダンジョン x4 (v93): ワールドマップの四隅に浮かぶ要塞惑星 =====
+// 硬さは異次元: 地表ですら内核の深部並み (hpBase)、中心は主惑星の核の 10万倍以上。
+// 看板素材から「これまでにない超広範囲・超火力」の武器が作れる (data/weapons.js の ULTRA 系 / game/ultra.js)
+// [名前, 看板素材, 外層, 中層, 深層, 半径, HP指数(深さ方向), 地表HP, x方向(-1=左/1=右), y方向(-1=上/1=下), モンスターHP]
+const ULTRA_DEFS = [
+  ["星界の終点 アストラル",   "astralite", "starMetal",        "aether",      "coreQuartz",  360, 4.0, 1e11, -1, -1, 4e9],
+  ["流星の墓場 メテオグレイヴ", "meteorium", "stellarIron",      "adamant",     "corium",      380, 4.2, 1e12,  1, -1, 4e10],
+  ["銀河の回廊 ガラクシア",   "galaxium",  "aether",           "deepPlasma",  "quantumFoam", 400, 4.4, 1e13,  1,  1, 4e11],
+  ["虚空の胃袋 グラトニア",   "voidheart", "singularityShard", "abyssite",    "neutronDust", 440, 4.6, 1e14, -1,  1, 4e12],
+];
+const ULTRA_START = SATS.length;   // 60
+const ULTRA_OFF = 5900;            // 世界の中心から四隅への距離 (各軸)。外リングの小惑星 (中心から約7200) より外
+ULTRA_DEFS.forEach((d, j) => {
+  const tab = (a, b, c) => buildTable([[MAT[d[1]].i, a], [MAT[d[2]].i, b], [MAT[d[3]].i, c], [MAT[d[4]].i, 12]]);
+  const S = { name: d[0], sig: d[1], r: d[5], r2: d[5] * d[5], exp: d[6], hpBase: d[7], mobHp: d[10], salt: 3000 + j * 31 + 7, ultra: true, rank: j + 1,
+    cx: GC + d[8] * ULTRA_OFF, cy: GC + d[9] * ULTRA_OFF,
+    tab0: null, tab1: null, tab2: null, _t: [tab(40, 45, 15), tab(55, 15, 30), tab(70, 0, 10)] };
+  [S.tab0, S.tab1, S.tab2] = S._t; delete S._t;
+  SATS.push(S);
+});
 
 /* ---------- ダンジョン固有効果 (SATS と同じ順番: 衛星10 → 小惑星20 → 内部20) ----------
    dmg=ブロックへの与ダメ倍率 / coin=コイン倍率 / xp=経験値倍率 / hurt=被ダメ倍率 / drop=看板素材ドロップ率倍率
@@ -311,6 +332,11 @@ const DUNGEON_FX = [
   { name:"錆の浸食",     desc:"着弾の30%が腐食。錆はゆっくり蝕む",                   dmg:1,    coin:1,   xp:1,   hurt:1,   drop:1,   proc:"acid",  p:.3 },
   { name:"花弁の舞い",   desc:"会心率 +15%、コイン 1.3倍。花びらが舞う",              dmg:1,    coin:1.3, xp:1,   hurt:1,   drop:1,   crit:.15 },
   { name:"硝子の屈折",   desc:"会心率 +20%、ドロップ 1.3倍。光が乱反射する",          dmg:1,    coin:1,   xp:1,   hurt:1,   drop:1.3, crit:.2 },
+  // ===== 最難関ダンジョン (ultra: マップで特別に表示) =====
+  { name:"星界の重圧",   desc:"【最難関】与ダメ -40%・被ダメ 3倍。代わりにコイン・経験値 6倍、ドロップ 3倍、会心 +30%",          dmg:.6, coin:6,  xp:6,  hurt:3,   drop:3, crit:.3, ultra:1 },
+  { name:"終わらない流星雨", desc:"【最難関】着弾の50%に時限爆弾。被ダメ 3.5倍。コイン 8倍・経験値 8倍、ドロップ 3倍",       dmg:.6, coin:8,  xp:8,  hurt:3.5, drop:3, proc:"bomb", p:.5, ultra:1 },
+  { name:"銀河の渦潮",   desc:"【最難関】着弾の60%が感電。被ダメ 4倍。コイン 10倍・経験値 10倍、ドロップ 3.5倍",              dmg:.55, coin:10, xp:10, hurt:4,   drop:3.5, proc:"shock", p:.6, ultra:1 },
+  { name:"虚空の飢餓",   desc:"【最難関】与ダメ -50%・被ダメ 5倍。金塊 15%、コイン 15倍・経験値 12倍、ドロップ 4倍",         dmg:.5, coin:15, xp:12, hurt:5,   drop:4, gold:.15, ultra:1 },
 ];
 SATS.forEach((S, i) => { S.fx = DUNGEON_FX[i] || null; });
 // 座標のダンジョン効果 (メイン惑星・宇宙なら null)
@@ -321,11 +347,11 @@ function rectDepth(S, gx, gy){
   const dx = Math.min(gx - S.x0, S.x1 - gx), dy = Math.min(gy - S.y0, S.y1 - gy);
   return Math.max(0, Math.min(1, Math.min(dx, dy) / S.r));
 }
-// 座標が属する天体: 0=メイン惑星 / 1..40=衛星・小惑星・内部ダンジョン (SATS の index+1) / -1=宇宙空間
+// 座標が属する天体: 0=メイン惑星 / 1..64=衛星・小惑星・内部ダンジョン・最難関 (SATS の index+1) / -1=宇宙空間
 function bodyAt(gx, gy){
   const dx = gx - GC, dy = gy - GC;
   if (dx * dx + dy * dy <= R2){
-    for (let s = CAVE_START; s < SATS.length; s++){ const S = SATS[s]; if (gx >= S.x0 && gx <= S.x1 && gy >= S.y0 && gy <= S.y1) return s + 1; }
+    for (let s = CAVE_START; s < CAVE_END; s++){ const S = SATS[s]; if (gx >= S.x0 && gx <= S.x1 && gy >= S.y0 && gy <= S.y1) return s + 1; }
     return 0;
   }
   for (let s = 0; s < SATS.length; s++){
@@ -403,7 +429,7 @@ const layerBaseHP = depth => 5 * Math.pow(10, HP_EXP * Math.max(0, depth));
 function blockMaxHP(gx, gy){
   const depth = blockDepth(gx, gy), m = MATS[materialAt(gx, gy)];
   const b = bodyAt(gx, gy);
-  const base = b > 0 ? 5 * Math.pow(10, SATS[b - 1].exp * Math.max(0, depth)) : layerBaseHP(depth);   // 衛星は星ごとのHP指数
+  const base = b > 0 ? (SATS[b - 1].hpBase || 5) * Math.pow(10, SATS[b - 1].exp * Math.max(0, depth)) : layerBaseHP(depth);   // 衛星は星ごとのHP指数 (最難関は地表から hpBase)
   return Math.max(1, Math.floor(base * m.hard * (0.9 + hash01(gy * D + gx) * 0.2)));
 }
 // 種類: 0=通常 / 1=宝石 (コイン倍率が高い・きらめく) / 2=爆発性 (壊すと誘爆)

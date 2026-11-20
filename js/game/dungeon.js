@@ -18,8 +18,10 @@ function updateDungeonBanner(){
     if (!state.visitedBodies.includes(si)){ state.visitedBodies.push(si); save(); }   // 訪問記録 (ファストトラベル用)
     dfxEl.name.textContent = fx.name;
     dfxEl.desc.textContent = fx.desc;
-    dfxEl.body.textContent = S.name;
+    dfxEl.body.textContent = S.ultra ? `【最難関 #${S.rank}】${S.name}` : S.name;
+    dfxEl.box.classList.toggle("ultra", !!S.ultra);
     dfxEl.box.classList.add("show");
+    if (S.ultra && !ftSilent) toast(`最難関ダンジョン「${S.name}」に突入。ブロックの硬さは異次元だ`, "good");
     ftSilent = false;   // 入ったことは画面下のバナーが常時示すので、通知ログには出さない
   } else {
     dfxEl.box.classList.remove("show");

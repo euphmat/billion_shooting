@@ -116,10 +116,7 @@ body.pwa-ios-mode .pwa-ios { display:block; }
   #artFeed { top:calc(166px + env(safe-area-inset-top)); left:auto; right:calc(7px + env(safe-area-inset-right)); align-items:flex-end; }
   .art-chip { font-size:10.5px; padding:2px 7px 2px 6px; max-width:184px; }
 
-  /* ---- ターゲットバー / トースト ---- */
-  #targetBar { top:calc(80px + env(safe-area-inset-top)); width:auto; left:10px; right:10px; max-width:none; transform:none; padding:6px 10px 8px; }
-  #targetText { font-size:13px; }
-  #targetPct { font-size:13px; }
+  /* ---- トースト ---- */
   #dungeonFx { left:10px; right:10px; transform:none; max-width:none; top:calc(132px + env(safe-area-inset-top)); bottom:auto; font-size:11px; padding:3px 9px; }
   /* スマホの左下はメニュー列なので、通知ログは画面上部 (ダンジョンバナーの下) に出す */
   #noteLog { left:calc(10px + env(safe-area-inset-left)); bottom:auto; top:calc(166px + env(safe-area-inset-top)); max-width:78%; }
@@ -297,7 +294,6 @@ body.pwa-ios-mode .pwa-ios { display:block; }
   .mmbtn { width:52px; height:48px; border-radius:12px; }
   .mmbtn svg { width:20px; height:20px; }
   #minimap { width:76px; height:76px; bottom:calc(128px + env(safe-area-inset-bottom)); }
-  #targetBar { top:calc(76px + env(safe-area-inset-top)); left:150px; right:150px; }
   #hpHud { top:calc(46px + env(safe-area-inset-top)); }
   #artFeed { top:calc(74px + env(safe-area-inset-top)); }
   .art-chip { max-width:150px; }

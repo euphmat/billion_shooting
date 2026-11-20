@@ -35,42 +35,6 @@ img, canvas, svg { -webkit-user-drag:none; }
 /* ---------- left : main (残り全部) ---------- */
 #main { flex:1 1 auto; min-width:0; position:relative; border-right:1px solid #fff; overflow:hidden; }
 #game { display:block; width:100%; height:100%; background:#000; cursor:crosshair; }
-#targetBar {
-  --tc:#fff;   /* 攻撃中の素材のイメージカラー (JS が素材ごとに差し替える) */
-  position:absolute; top:38px; left:50%; transform:translateX(-50%);
-  width:330px; max-width:86%; display:none; pointer-events:none; text-align:left;
-  padding:8px 12px 10px; border-radius:11px;
-  background:linear-gradient(180deg, rgba(10,13,18,.88), rgba(10,13,18,.78));
-  border:1.5px solid var(--tc);
-  box-shadow:0 4px 18px rgba(0,0,0,.55), 0 0 14px -2px var(--tc), inset 0 0 18px -12px var(--tc);
-}
-#targetBar .target-head { display:flex; align-items:center; gap:8px; }
-#targetSwatch {
-  flex:none; width:16px; height:16px; border-radius:5px; background:var(--tc);
-  border:1.5px solid rgba(255,255,255,.9);
-  box-shadow:0 0 8px var(--tc), inset 0 0 4px rgba(255,255,255,.55);
-}
-#targetText {
-  flex:1; min-width:0; font-size:14.5px; font-weight:700; letter-spacing:.04em; color:#fff;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  font-variant-numeric:tabular-nums; text-shadow:0 1px 3px #000;
-}
-#targetText .hp-dim { opacity:.55; font-weight:400; font-size:12.5px; }
-#targetPct {
-  flex:none; font-size:15px; font-weight:800; color:var(--tc);
-  font-variant-numeric:tabular-nums; text-shadow:0 1px 3px #000, 0 0 8px rgba(0,0,0,.6);
-}
-#targetBar .target-sub { font-size:10.5px; letter-spacing:.14em; opacity:.75; margin:3px 0 0 24px; color:#fff; }
-#targetBar .bar {
-  height:10px; border-radius:6px; margin:6px 0 0 24px; overflow:hidden;
-  border:1px solid rgba(255,255,255,.55); background:rgba(255,255,255,.13);
-}
-#targetBar .fill {
-  height:100%; width:100%; border-radius:6px;
-  background:linear-gradient(90deg, var(--tc), rgba(255,255,255,.85));
-  box-shadow:0 0 8px var(--tc);
-  transition:width .08s linear;
-}
 #minimap {
   position:absolute; bottom:10px; right:10px; width:150px; height:150px;
   border:1px solid rgba(255,255,255,.75); border-radius:10px; background:rgba(0,0,0,.7); pointer-events:auto; cursor:pointer;
@@ -287,6 +251,10 @@ img, canvas, svg { -webkit-user-drag:none; }
 #dungeonFx .dfx-body { color:#fff; font-weight:700; }
 #dungeonFx .dfx-name { color:#ffb340; font-weight:700; margin:0 8px; }
 #dungeonFx .dfx-desc { color:#c9d1d9; }
+#dungeonFx.ultra { border-color:#ffd60a !important; box-shadow:0 0 14px rgba(255,214,10,.45), inset 0 0 10px rgba(255,60,60,.25); }
+#dungeonFx.ultra .dfx-body { color:#ffd60a; }
+.map-ultra { font-style:normal; font-size:10px; font-weight:800; color:#ffd60a; background:#7a0a0a; border-radius:4px; padding:0 5px; margin-right:5px; }
+.mp-ultra { color:#ffd60a; font-weight:700; }
 
 /* 通知ログ (ui/notify.js): 画面左下に小さく積む。中央には出さない */
 #noteLog { position:absolute; left:10px; bottom:10px; z-index:3; display:flex; flex-direction:column; align-items:flex-start; gap:4px; pointer-events:none; max-width:min(420px, 60%); }

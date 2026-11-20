@@ -117,6 +117,7 @@ function draw(now){
     }
     ctx.globalAlpha = 1; ctx.lineWidth = 1;
   }
+  drawUltra(now, toScreen, zoom);   // 最難関の武器 (game/ultra.js)
   // bullets (crit は黄色く大きく / リサイクルの弾はコインそのもの)
   for (const bl of bullets){
     const sx = bl.x * zoom + ox, sy = bl.y * zoom + oy, m = bl.orb ? bl.orb * zoom + 8 : 12;
@@ -243,6 +244,7 @@ function draw(now){
   }
   ctx.globalAlpha = 1;
   drawShipAuras(now, toScreen);   // 覚醒の光輪・銃口の閃光・覚醒の瞬間・系統マスタリーの光球
+  drawEvoUniques(now, toScreen);  // 固有覚醒: 光球・砲台・隕石の予告・加速中の輪 (data/evo-unique.js)
   ship(player.x, player.y, player.angle, 1);
   drawArtifactsFx(now, toScreen);   // LEGENDARY の常時演出 (残像 / オーラ / きらめき / サイコロ)
   if (boostVis && !fxLow()){
@@ -313,7 +315,7 @@ function draw(now){
 // 4. 系統マスタリー: ランク I 以上の系統ごとに、系統色の光球が自機を公転する (ランクで大きく・IV で尾・MAX で輪)
 function drawShipAuras(now, toScreen){
   const [px, py] = toScreen(player.x, player.y), low = fxLow();
-  const w = WEAPONS[state.weapon], ev = evoStar(state.weapon);
+  const w = WEAPONS[state.weapon], ev = evoVis(state.weapon);   // 見た目の段階 (★2つで1段)
   if (player.muzzleT && now - player.muzzleT < 70){
     const f = 1 - (now - player.muzzleT) / 70, nx = px + Math.cos(player.angle) * 13, ny = py + Math.sin(player.angle) * 13, R = (3 + 1.3 * ev) * f;
     ctx.fillStyle = w.accent; ctx.globalAlpha = 0.85 * f; ctx.beginPath();

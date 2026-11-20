@@ -14,7 +14,7 @@
 const POWER_STEP = 1.115, CRAFT_STEP = 1.33, YIELD_STEP = 0.015;
 const WEAPON_TIERS = LAYERS.map((L, i) => ({ name:L.name, en:L.key.toUpperCase(), note:[
   "最初の道具たち。手近な素材で作れる", "浅い鉱脈の金属と燃料", "岩盤の金属と宝石。弾が本格的になる",
-  "熱と圧力の素材。戦術兵器の域へ", "超高圧鉱物と重元素。地形を塗り替える", "液体金属とプラズマ。惑星の鼓動そのもの", "常識の外の物質。終わりと始まり", "衛星惑星の素材。星を巡る旅の成果", "小惑星の素材。小さな星々の、それぞれの答え", "惑星内部の素材。掘り進んだ先の、封じられた空間"][i] }));
+  "熱と圧力の素材。戦術兵器の域へ", "超高圧鉱物と重元素。地形を塗り替える", "液体金属とプラズマ。惑星の鼓動そのもの", "常識の外の物質。終わりと始まり", "衛星惑星の素材。星を巡る旅の成果", "小惑星の素材。小さな星々の、それぞれの答え", "惑星内部の素材。掘り進んだ先の、封じられた空間", "ワールド四隅の最難関ダンジョンの素材。これまでにない超広範囲・超火力"][i] }));
 const WEAPON_SRC = [
   // ===== 地表 =====
   ["handDrill",   "ハンドドリル",       null,         "標準",   "drill",    "dot",     { eff:1, rate:4 }, "効果なし。でも弾切れも反動もない、いつでも頼れる相棒", "最初から持っている手回しのドリル。まずはこれで素材を集めよう。", {}],
@@ -164,6 +164,29 @@ const WEAPON_SRC = [
   ["rustGatling", "ラストガトリング", "rustite",   "錆連射",   "rustgun",   "disc",   { rate:5, pellets:2, spreadA:.12, eff:1580, size:4 }, "錆びた銃身が2発ずつ吐き出す。粗いが速い", "錆鉄の鉱脈の鉄で組んだ連射銃", { rustite:70, gravel:35 }],
   ["petalChain",  "ペタルチェーン",   "petalite",  "花連鎖",   "petalchain","bolt",   { rate:2.6, mode:"chain", chains:6, eff:1660, size:4 }, "花びらの電撃が6回まで連鎖する", "花弁の層の稲妻は、花から花へ渡る", { petalite:70, quartz:35 }],
   ["glassCannon", "グラスキャノン",   "glassite",  "硝子砲",   "glassbeam", "beam",   { rate:5, mode:"beam", exec:.15, eff:1750 }, "HP15%以下を砕く硝子の光。儚く鋭い", "硝子の浅層の天然ガラスを磨いた砲", { glassite:75, sand:40 }],
+  // ===== 最難関 (ワールド四隅のダンジョンの看板素材で作る): これまでにない超広範囲・超火力 =====
+  // mode は game/ultra.js が処理する専用の撃ち方。1発の威力は下の ULTRA_TUNE で決める (index 由来の power は使わない)
+  ["supernovaHalo", "スーパーノヴァ・ハロー", "astralite", "超新星", "novahalo", "ring",
+    { rate:1.1, mode:"nova", ultra:1, novaR:110, novaSpd:150, exec:.5, eff:1 },
+    "自機を中心に超新星の衝撃波が半径110ブロックまで膨れ上がり、触れた全てを削り飛ばす。残りHP50%以下は消滅", "星界の終点で生まれ直し続ける星の光を、そのまま輪にして放つ。撃つたびに、ひとつ星が爆ぜる。",
+    { astralite:1500, starMetal:800, coreheart:400 }],
+  ["ragnaMeteor", "ラグナメテオ", "meteorium", "流星群", "ragnameteor", "meteor",
+    { rate:1.2, mode:"meteor", ultra:1, meteorN:16, meteorRange:75, meteorR:8, exec:.5, eff:1 },
+    "射程75ブロック以内に巨大隕石を16個同時に降らせる。1個ごとに半径8ブロックを吹き飛ばし、残りHP50%以下は消滅", "流星の墓場の隕鉄で鍛えた召喚杖。空が割れ、燃える星が雨のように降ってくる。",
+    { meteorium:1800, astralite:600, adamant:800 }],
+  ["galaxyEdge", "ギャラクシーエッジ", "galaxium", "銀河斬", "galaxyedge", "beam",
+    { rate:0.8, mode:"storm", ultra:1, blades:6, bladeLen:95, bladeW:2, spin:2.6, stormLife:1.3, exec:.5, eff:1 },
+    "長さ95ブロック・幅5ブロックの銀河の刃6本が自機の周りを回転し、薙いだ全てを0.1秒ごとに斬り刻む。残りHP50%以下は消滅", "銀河の回廊の渦を刃に変えた剣。振るう必要はない。銀河のほうが勝手に回る。",
+    { galaxium:2100, meteorium:700, aether:900 }],
+  ["worldEater", "ワールドイーター", "voidheart", "特異点", "worldeater", "void",
+    { rate:0.9, mode:"hole", ultra:1, holeN:2, holeRange:60, holeR:15, holeLife:3.2, collapseR:26, exec:.5, eff:1 },
+    "射程60ブロック以内に特異点を2つ生む。半径15ブロックまで育ち、3秒間すべてを呑み込み続け、最後に半径26ブロックを崩壊させる。モンスターも引きずり込む", "虚空の胃袋の心臓を砲身に詰めた。撃ち出すのは弾ではなく、穴だ。",
+    { voidheart:2400, galaxium:800, singularityShard:900 }],
+  ["omegaGenesis", "オメガ・ジェネシス", "voidheart", "創世", "omegagenesis", "sun",
+    { rate:1.5, mode:"omni", ultra:1, novaR:160, novaSpd:220, meteorN:28, meteorRange:110, meteorR:11, blades:10, bladeLen:135, bladeW:3, spin:3.2, stormLife:1.6,
+      holeN:3, holeRange:90, holeR:22, holeLife:3.6, collapseR:36, exec:.7, eff:1, accent:"#fff3b0" },
+    "超新星 → 流星群 → 銀河斬 → 特異点 を順番に、すべて最大級で撃ち続ける。残りHP70%以下は消滅。四隅の理を束ねた、終わりと始まりの兵器", "四つの最難関の心臓を一つに鍛え上げた。世界を壊すのに、もう理由はいらない。",
+    { astralite:3000, meteorium:3000, galaxium:3000, voidheart:3000 }],
 ];
 const WEAPONS = {};
 WEAPON_SRC.forEach(([key, name, mat, tag, icon, shape, o, feat, desc, recipe], i) => {
@@ -344,6 +367,23 @@ const WEAPON_BEHAVIOR = {
   glassCannon: { burst: "shard", dmg: 2.1, power: 2.1, cost: 700, yield: 1.13 },
 };
 for (const k in WEAPON_BEHAVIOR) if (WEAPONS[k]) Object.assign(WEAPONS[k], WEAPON_BEHAVIOR[k]);
+/* ---------- 最難関の武器 (v93) ----------
+   リストの末尾に足したので index 由来の power/cost は当てにせず、ここで「異次元」に上書きする。
+   どれも 1発で広大な範囲の全ブロックへ「実効DPS ÷ 連射」をそのまま叩き込む (eff=1: 範囲で割らない)。
+   内核 (最大HP 約1.6e13) を一撃で砕く火力から始まり、最後のオメガ・ジェネシスは 1e19 級を消し飛ばす */
+const ULTRA_TUNE = {
+  supernovaHalo: { power: 2e12, cost: 2e14, yield: 3 },
+  ragnaMeteor:   { power: 4e13, cost: 5e16, yield: 4 },
+  galaxyEdge:    { power: 8e14, cost: 1e19, yield: 5 },
+  worldEater:    { power: 2e16, cost: 3e21, yield: 6 },
+  omegaGenesis:  { power: 1e18, cost: 1e24, yield: 10 },
+};
+for (const k in ULTRA_TUNE){
+  const w = WEAPONS[k]; if (!w) continue;
+  Object.assign(w, ULTRA_TUNE[k]);
+  w.dmg = 5 * w.power / (w.rate * (w.eff || 1));
+  w.c2 = w.c2 || "#ffffff"; w.burst = w.burst || "star"; w.glow = 1;
+}
 const WEAPON_KEYS = Object.keys(WEAPONS);
 for (const k of Object.keys(state.weaponsOwned)) if (!WEAPONS[k]) delete state.weaponsOwned[k];
 state.weaponsOwned.handDrill = true;

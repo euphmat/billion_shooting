@@ -24,6 +24,7 @@ function updateSkillHUD(){
   const tags = [];
   if (combo > 1 && (sk("a_combo") || sk("c_combo"))) tags.push(`<b class="combo">${combo} COMBO</b>`);
   if (sk("a_warm") && heat > 0.05) tags.push(`<span>HEAT ${Math.round(heat * 100)}%</span>`);
+  if (fOmega > 0) tags.push(`<b class="combo" style="color:#ff6f8a">OMEGA 暴走 ${Math.ceil(fOmega)}s</b>`);   // 機兵系統: オメガ・プロトコル
   const bs = tags.join("");
   if (bs !== buffSig){ buffSig = bs; $("buffBox").innerHTML = bs; }
   if (treeOpen) renderTreeStats();   // ツリーを開いている間も発動状況バーを最新に保つ (中身が変わった時だけ再描画)
@@ -92,6 +93,7 @@ function probeStats(){
     elem: elemMul(), burnD: burnSetMul(), drop: matDropMul(), speed: playerSpeed(),
     coin: coinMulStatic(), xp: (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1) * (sk("c_ultimate") ? 3 : 1) * MASTERY.c.xp[masteryRank("c")], vacuum: magnetRange(),
     bots: botCount(), cbots: coinBotCount(),
+    fpow: fPowStatic(), frate: fRateStatic(), funits: fDesiredCount(),   // 機兵系統
     ec_burn: ec.burn, ec_frost: ec.frost, ec_acid: ec.acid, ec_rad: ec.rad, ec_shock: ec.shock,
   };
 }
@@ -122,6 +124,9 @@ const PROBE_DEFS = [
   { key: "speed", label: "移動速度",         fmt: _fxInt, diff: _dfInt, eps: 0.5 },
   { key: "bots",  label: "攻撃ボット",       fmt: _fxInt, diff: _dfInt, eps: 0.5 },
   { key: "cbots", label: "回収ボット",       fmt: _fxInt, diff: _dfInt, eps: 0.5 },
+  { key: "funits", label: "自律機兵",        fmt: _fxInt, diff: _dfInt, eps: 0.5 },
+  { key: "fpow",  label: "自律機兵の威力",   fmt: _fxX,   diff: _dfX,   eps: 0.001 },
+  { key: "frate", label: "自律機兵の動作速度", fmt: _fxX, diff: _dfX,   eps: 0.001 },
   { key: "ec_burn",  label: "燃焼付与率 (スキル分)", fmt: _fxPct, diff: _dfPct, eps: 0.0005 },
   { key: "ec_frost", label: "氷結付与率 (スキル分)", fmt: _fxPct, diff: _dfPct, eps: 0.0005 },
   { key: "ec_acid",  label: "腐食付与率 (スキル分)", fmt: _fxPct, diff: _dfPct, eps: 0.0005 },
@@ -166,6 +171,12 @@ const SKILL_PROC = {
   a_ultimate: [["annihilation", "消滅砲撃"]], b_ultimate: [["elemnova", "元素新星"]],
   c_ultimate: [["goldify", "黄金化"]], d_ultimate: [["planetbeam", "惑星破壊ビーム"]],
   e_ultimate: [["devour", "星喰い・真"], ["diswave", "解体波"]],
+  f_spider: [["frip", "解体"]], f_spider2: [["frip", "解体"]], f_spider3: [["frip", "解体"]],
+  f_replicate: [["freplicate", "子機の複製"]], f_replicate2: [["freplicate", "子機の複製"]],
+  f_tesla3: [["fdisch", "放電"]], f_railgun: [["frail", "レールガン"]], f_magma: [["fmagma", "マグマ噴出"]],
+  f_bomber: [["fbomb", "爆撃"]], f_carpet: [["fbomb", "爆撃"]], f_artillery: [["fshell", "砲撃"]], f_artillery2: [["fshell", "砲撃"]],
+  f_nuke: [["fnuke", "戦術核"]], f_titan: [["fstomp", "踏みつけ"], ["fsalvo", "ミサイル"]], f_omega: [["fomega", "暴走"]],
+  f_ultimate: [["fnano", "分解"], ["fsplit", "分裂"]],
 };
 function skillProcLines(n){
   if (!sk(n.id)) return "";
@@ -198,14 +209,15 @@ function renderTreeStats(){
   const el = $("treeStats");
   if (!el) return;
   const t = elemTotals(), P = skillProc;
-  const sig = [t.burn, t.frost, t.acid, t.rad, t.shock, elemMul(), P.burn, P.frost, P.acid, P.rad, P.shock, P.blast, P.chain, P.treasure, P.dimension, P.planetkiller, P.chainreact, P.tycoon, P.fleetburst, P.automine, P.stareater, P.annihilation, P.elemnova, P.goldify, P.planetbeam, P.devour, P.diswave].join("|");
+  const sig = [t.burn, t.frost, t.acid, t.rad, t.shock, elemMul(), P.burn, P.frost, P.acid, P.rad, P.shock, P.blast, P.chain, P.treasure, P.dimension, P.planetkiller, P.chainreact, P.tycoon, P.fleetburst, P.automine, P.stareater, P.annihilation, P.elemnova, P.goldify, P.planetbeam, P.devour, P.diswave, P.frip, P.fdisch, P.fbomb, P.fshell, P.fnuke, P.fstomp, P.fomega, P.fsplit, fCount, fOmega > 0].join("|");
   if (sig === treeStatsSig) return;
   treeStatsSig = sig;
   const pct = v => (v * 100).toFixed(v > 0 && v < 0.1 ? 1 : 0) + "%";
-  const procs = [["blast", "発破"], ["chain", "連破"], ["treasure", "お宝出現"], ["treasureBreak", "お宝破壊"], ["firestorm", "火炎嵐"], ["icebreak", "氷砕"], ["thermo", "熱衝撃"], ["meteor", "隕石"], ["bolt", "落雷"], ["quake", "地震"], ["jackpot", "JACKPOT"], ["dimension", "次元崩壊"], ["planetkiller", "軌道砲撃"], ["chainreact", "連鎖反応"], ["tycoon", "大当たり"], ["fleetburst", "一斉射撃"], ["automine", "自動採掘"], ["stareater", "星喰い"], ["annihilation", "消滅砲撃"], ["elemnova", "元素新星"], ["goldify", "黄金化"], ["planetbeam", "惑星破壊ビーム"], ["devour", "星喰い・真"], ["diswave", "解体波"]]
+  const procs = [["blast", "発破"], ["chain", "連破"], ["treasure", "お宝出現"], ["treasureBreak", "お宝破壊"], ["firestorm", "火炎嵐"], ["icebreak", "氷砕"], ["thermo", "熱衝撃"], ["meteor", "隕石"], ["bolt", "落雷"], ["quake", "地震"], ["jackpot", "JACKPOT"], ["dimension", "次元崩壊"], ["planetkiller", "軌道砲撃"], ["chainreact", "連鎖反応"], ["tycoon", "大当たり"], ["fleetburst", "一斉射撃"], ["automine", "自動採掘"], ["stareater", "星喰い"], ["annihilation", "消滅砲撃"], ["elemnova", "元素新星"], ["goldify", "黄金化"], ["planetbeam", "惑星破壊ビーム"], ["devour", "星喰い・真"], ["diswave", "解体波"], ["frip", "解体"], ["freplicate", "複製"], ["fdisch", "放電"], ["frail", "レールガン"], ["fbomb", "爆撃"], ["fshell", "砲撃"], ["fnuke", "戦術核"], ["fstomp", "踏みつけ"], ["fomega", "暴走"], ["fsplit", "分裂"]]
     .filter(([k]) => P[k] > 0).map(([k, l]) => `${l} <b>${P[k]}回</b>`).join(" ・ ");
   el.innerHTML = `<span class="ts-group"><b class="ts-title">発動状況</b>元素付与率 (${WEAPONS[state.weapon].name}) 燃焼 <b>${pct(t.burn)}</b> ・ 氷結 <b>${pct(t.frost)}</b> ・ 腐食 <b>${pct(t.acid)}</b> ・ 放射 <b>${pct(t.rad)}</b> ・ 放電 <b>${pct(t.shock)}</b> ／ 状態異常ダメージ <b>×${elemMul().toFixed(2)}</b></span>`
-    + `<span class="ts-group">付与回数 燃焼 <b>${P.burn}回</b> ・ 氷結 <b>${P.frost}回</b> ・ 腐食 <b>${P.acid}回</b> ・ 放射 <b>${P.rad}回</b> ・ 放電 <b>${P.shock}回</b>${procs ? ` ／ ${procs}` : ""}</span>`;
+    + `<span class="ts-group">付与回数 燃焼 <b>${P.burn}回</b> ・ 氷結 <b>${P.frost}回</b> ・ 腐食 <b>${P.acid}回</b> ・ 放射 <b>${P.rad}回</b> ・ 放電 <b>${P.shock}回</b>${procs ? ` ／ ${procs}` : ""}</span>`
+    + (fActive ? `<span class="ts-group">${machineStatusText()}</span>` : "");
 }
 function renderDetail(){
   const n = SKILL[hoverId || selId];
@@ -299,7 +311,7 @@ function masteryCheck(){
 // 習得 / 振り直しのあと: スキルで増減する機体数や表示を合わせ直す
 function onSkillsChanged(){
   masteryInvalidate(); masteryCheck();
-  syncBots(); syncCoinBots();
+  syncBots(); syncCoinBots(); syncMachines();   // 機兵系統の機数もすぐ合わせる
   gMul = globalDmgMul();
   save(); refreshTree(); renderPanels(true); hudSig = "";
 }
@@ -325,6 +337,7 @@ $("respecBtn").addEventListener("click", () => {
   if (!confirm("習得したスキルを全て解除して、スキルポイントを振り直しますか？ (無料)")) return;
   state.skills = {};
   burns.clear(); bombs.length = 0; bombSet.clear(); vuln.clear();
+  machineReset();   // 機兵系統: 子機・ナノマシン・落下物も片付ける
   selId = null;
   onSkillsChanged();
 });

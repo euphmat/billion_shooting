@@ -266,6 +266,7 @@ function capstoneUpdate(dt, bdt, now){
   // バースト演出の寿命
   for (let i = dimFx.length - 1; i >= 0; i--){ dimFx[i].t += dt; if (dimFx[i].t >= (dimFx[i].dur || 0.45)) dimFx.splice(i, 1); }
   ultimateUpdate(dt, bdt, now);
+  machineUpdate(dt, now);   // 機兵系統: 自律機兵 (game/machines.js)
 }
 
 // ---------- 究極: 毎フレーム処理 ----------
@@ -353,10 +354,11 @@ function capstoneDraw(now, toScreen){
     ctx.save(); ctx.translate(sx, sy); ctx.rotate(now / 2600); ctx.globalAlpha = 0.85;
     ctx.drawImage(auraSpr, -size / 2, -size / 2, size, size); ctx.restore();
   }
+  machineDraw(now, toScreen);   // 機兵系統: 自律機兵 (game/machines.js)
   for (const d of dimFx){   // 次元崩壊は回転させて歪み感を出す
     const spr = burstSprs[d.kind]; if (!spr) continue;
     const dur = d.dur || 0.45, p = Math.min(1, d.t / dur);
-    const base = d.kind === "annihilation" ? 560 : d.kind === "diswave" ? 430 : d.kind === "planetbeam" ? 400 : d.kind === "planet" ? 360 : d.kind === "spark" ? 95 : 175;
+    const base = d.size || (d.kind === "annihilation" ? 560 : d.kind === "diswave" ? 430 : d.kind === "planetbeam" ? 400 : d.kind === "planet" ? 360 : d.kind === "spark" ? 95 : 175);
     const size = base * (0.35 + 0.75 * p) * zoom;
     const [sx, sy] = toScreen(d.x, d.y);
     ctx.save(); ctx.translate(sx, sy); if (d.kind === "dimension") ctx.rotate(p * 1.4);
@@ -494,6 +496,7 @@ function skillsUpdate(dt, fdt, bdt, now){
     const p = blockPos(b.idx);
     addRing({ x: p.x, y: p.y, r: BS * 2, t: now, color: "255,90,70", dur: 240 });
     rawDamage(() => damageBlock(b.idx, b.dmg, 1));
+    if (b.fx) evoEvent("bomb", b.fx, p.x, p.y, b.dmg, true);   // 固有覚醒: 仕掛けた爆弾
   }
   for (let i = meteors.length - 1; i >= 0; i--){
     const m = meteors[i]; m.t -= dt;

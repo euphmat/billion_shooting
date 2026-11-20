@@ -61,6 +61,8 @@ function damageBlock(idx, dmg, splash){
   if (isDestroyed(idx)) return 0;
   const top = dmgDepth === 0, gx = idx % D, gy = (idx / D) | 0, hp = blockHP(idx), raw = dmg;
   if (top) dmg = skillHitMods(idx, gx, gy, dmg, hp);
+  const eu = top && curFx ? curFx.evoU : null;   // 固有覚醒 (data/evo-unique.js)
+  const evoPre = eu && (eu.t === "frozen" || eu.t === "burning") ? (frosts.has(idx) ? 1 : 0) | (burns.has(idx) ? 2 : 0) : 0;
   const dfx = top ? dungeonFxAt(gx, gy) : null;   // ダンジョン固有効果
   if (dfx){ dmg *= dfx.dmg; if (dfx.crit && Math.random() < dfx.crit){ dmg *= 2; dmgCritFlag = true; } }
   const voidHit = top && dmgVoidFlag;   // 虚無の単眼の会心 (skillHitMods か弾の経路が立てる)。読んだら消費する
@@ -68,7 +70,7 @@ function damageBlock(idx, dmg, splash){
   let cur = hp - dmg;
   if (top && cur > 0 && sk("a_execute") && cur <= blockMaxHP(gx, gy) * 0.1) cur = 0;   // 処刑
   if (top && cur > 0 && sk("b_zero") && frosts.has(idx) && cur <= blockMaxHP(gx, gy) * 0.1) cur = 0;   // 絶対零度: 氷結中は残り1割で砕ける
-  if (top && cur > 0 && curFx && curFx.exec && cur <= blockMaxHP(gx, gy) * curFx.exec) cur = 0;   // 装備の処刑
+  if (top && cur > 0 && curFx && curFx.exec && cur <= blockMaxHP(gx, gy) * curFx.exec){ cur = 0; if (eu) evoExecFlag = true; }   // 装備の処刑
   // ダメージ数値用に「実際に削れた量」をブロック単位で貯める (表示は flushDmgLabels がまとめて行う)
   const dealt = hp - Math.max(0, cur);
   if (dealt > 0){
@@ -110,8 +112,9 @@ function damageBlock(idx, dmg, splash){
         if (freshFrost && sk("b_permafrost")) for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && Math.random() < 0.5 && frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 2); frostGen.set(j, 1); bumpProc("frost"); } }   // 永久凍土 (伝播は1世代だけ)
       }
     }
-    if (curFx.bomb && !bombSet.has(idx) && bombs.length < 200){ bombSet.add(idx); bombs.push({ idx, t: 1.5, dmg: dmg * curFx.bomb }); }   // 時限爆弾
+    if (curFx.bomb && !bombSet.has(idx) && bombs.length < 200){ bombSet.add(idx); bombs.push({ idx, t: 1.5, dmg: dmg * curFx.bomb, fx: curFx }); }   // 時限爆弾
   }
+  if (eu) evoHit(idx, gx, gy, raw, hp, cur, evoPre);   // 固有覚醒: 命中時の発動条件
   if (top && cur > 0 && dfx && dfx.proc && Math.random() < dfx.p){   // ダンジョン固有効果: 状態付与
     const k = dfx.proc === "random" ? ["burn","frost","shock"][Math.random() * 3 | 0] : dfx.proc;
     if (k === "burn" && burns.size < 800){ burns.set(idx, { d: dmg * 0.5, t: 3, k: "burn" }); bumpProc("burn"); }
@@ -147,6 +150,7 @@ function onBlockBroken(idx){
   if (goldified) value *= 100;
   if (kind === 1 && sk("c_gem")) value *= sk("c_gem2") ? 2.2 : 1.5;
   if (sk("e_deepfit")) value *= 1 + 0.2 * blockDepth(gx, gy);   // 深層適性: 深いほどコイン増
+  value *= evoCoinMul();   // 固有覚醒: コインの加速 (黄金の洪水)
   if (goldSet.delete(idx)) value *= GOLD_MUL;
   const bfx = dungeonFxAt(gx, gy); if (bfx){ value *= bfx.coin; if (bfx.gold && Math.random() < bfx.gold) value *= GOLD_MUL; }   // ダンジョン固有効果
   const chest = sk("c_king") && Math.random() < (sk("c_king2") ? 0.015 : 0.005);   // ミダス王: 宝箱
@@ -164,6 +168,7 @@ function onBlockBroken(idx){
   }
   if (mainAlive <= 0) return gameClear();   // 主惑星の残数が 0 → エンディング
   skillOnBreak(idx, gx, gy, kind, rare);   // 経験値 / コンボ / 撃破時スキル
+  if (curFx && curFx.evoU) evoBreak(idx, gx, gy, kind);   // 固有覚醒: 撃破時の発動条件
   if (kind === 2){   // 爆発性ブロック: 5x5 を巻き込んで誘爆 (隣の爆発物にも連鎖する)。危険物取扱で 7x7・威力1.5倍
     const big = sk("c_bomb"), er = big ? 3 : 2;
     const dmg = blockMaxHP(gx, gy) * 1.5 * (big ? 1.5 : 1);
@@ -281,7 +286,7 @@ function shoot(sx, sy, dmg, weaponKey, fromBot){
   const doom = pl && doomN >= (sk("a_doom2") ? 4 : 9) && sk("a_doom");
   curPl = pl;                                             // プレイヤー自身の攻撃か (命中時スキルの判定用)
   let fired = false;
-  try { fired = shootRaw(sx, sy, doom ? dmg * 5 : dmg, weaponKey, fromBot, doom ? 2 : 0); }
+  try { fired = shootRaw(sx, sy, (doom ? dmg * 5 : dmg) * (pl ? evoDmgMul() : 1), weaponKey, fromBot, doom ? 2 : 0); }   // 固有覚醒: 威力の加速
   finally { curPl = false; }
   if (pl && fired){
     doomN = doom ? 0 : doomN + 1;
@@ -297,7 +302,7 @@ function shootRaw(sx, sy, dmg, weaponKey, fromBot, xs){
   if (fromBot){
     if (weaponKey){
       curFx = w;
-      try { return shootWeapon(w, sx, sy, dmg, atkRange() * (w.range || 1), w.splash || 0, false, sk("d_ap") ? 1 : 0); }
+      try { const ok = shootWeapon(w, sx, sy, dmg, atkRange() * (w.range || 1), w.splash || 0, false, sk("d_ap") ? 1 : 0); if (ok && w.evoU && !evoEchoing) evoShot(w, sx, sy, dmg); return ok; }
       finally { curFx = null; curCarry = false; }
     }
     const mb = nearestMob(sx, sy, atkRange());   // ボットもモンスター優先
@@ -310,7 +315,7 @@ function shootRaw(sx, sy, dmg, weaponKey, fromBot, xs){
   }
   const rng = atkRange() * (w.range || 1), splash = (w.splash || 0) + xs + artVal("splash");
   curFx = w;
-  try { return shootWeapon(w, sx, sy, dmg, rng, splash, mods); }
+  try { const ok = shootWeapon(w, sx, sy, dmg, rng, splash, mods); if (ok && w.evoU && !evoEchoing) evoShot(w, sx, sy, dmg); return ok; }   // 固有覚醒: 射撃時の発動条件
   finally { curFx = null; curCarry = false; }
 }
 // 照射系の余剰ダメージ: 命中点から射線の奥へ、壊れなくなるまで引き継ぐ
@@ -325,6 +330,8 @@ function carryRay(x, y, a, dmg, maxD, splash){
   }
 }
 function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
+  // 最難関の武器 (超新星 / 流星群 / 銀河斬 / 特異点 / 創世): 専用の撃ち方 (game/ultra.js)
+  if (w.ultra) return ultraFire(w, sx, sy, dmg, mods);
   // オーラ: 弾を撃たず、周囲の全ブロックを削る
   if (w.mode === "aura"){
     const r = w.auraR || 110, cgx = w2g(sx), cgy = w2g(sy), rb = Math.ceil(r / BS), r2 = r * r;
@@ -344,6 +351,10 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
       }
     }
     if (hitAny){ addRing({ x:sx, y:sy, r, t:performance.now(), color: hexRGB(w.accent), evo: w.evo || 0 }); sndShoot(w, mods); }
+    if (hitAny && w.evoU && w.evoU.t === "pulse" && evoIsReady(w.key)){   // 固有覚醒の発動点: 自機に一番近いブロック (無ければ自機)
+      const j = findNearestBlock(sx, sy, r);
+      evoAimX = j >= 0 ? g2w(j % D) : sx; evoAimY = j >= 0 ? g2w((j / D) | 0) : sy;
+    }
     return hitAny;
   }
 
@@ -353,6 +364,7 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
     let px = sx, py = sy, d = dmg;
     const mob0 = nearestMob(sx, sy, rng);   // 最初の一撃はモンスター優先
     if (mob0){
+      evoAimX = mob0.x; evoAimY = mob0.y;
       addBeam({ x1:px, y1:py, x2:mob0.x, y2:mob0.y, t:performance.now(), w:2.5, color:w.accent, zig:true, life:120, evo: w.evo || 0 });
       damageMob(mob0, d, { fx: w });
       px = mob0.x; py = mob0.y; d *= w.chainDecay || 0.7;
@@ -365,6 +377,7 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
       addBeam({ x1:px, y1:py, x2:tx, y2:ty, t:performance.now(), w:c ? 1.5 : 2.5, color:w.accent, zig:true, life:120, evo: w.evo || 0 });
       damageBlock(idx, d, splash);
       px = tx; py = ty; d *= w.chainDecay || 0.7;
+      evoAimX = tx; evoAimY = ty;   // 固有覚醒の発動点 = 連鎖の終点
       const cand = findNearestBlocks(px, py, 120, 8, seen);
       idx = cand.length ? cand[(Math.random() * cand.length) | 0] : undefined;
     }
@@ -379,6 +392,7 @@ function shootWeapon(w, sx, sy, dmg, rng, splash, mods, bonusPierce = 0){
   if (mobT) aims.push({ x: mobT.x, y: mobT.y, mob: mobT, idx: -1 });
   for (const idx of targets) aims.push({ x: g2w(idx % D), y: g2w((idx / D) | 0), mob: null, idx });
   if (!aims.length) return false;
+  evoAimX = aims[0].x; evoAimY = aims[0].y;   // 固有覚醒の発動点
 
   // ビーム: 射線上のブロックを全て貫く (狙ったモンスターにも当たる)
   if (w.mode === "beam"){

@@ -4,7 +4,9 @@
    一覧は1武器=1行。右端のボタンで「製作 / 強化」が1タップで済み、行を押すと詳細が開く。
    ========================================================= */
 
-const tierOpen = {};   // ステージ見出しの開閉 (未操作なら自動)
+const tierOpen = {};
+// ステージ (層) ごとの色: 見出しと一覧の左の帯に使う。地表=緑 → 表土=土色 → 地殻=青灰 → マントル=橙/紫 → 核=赤/金 → 宇宙=水色/菫/青緑
+const TIER_COLORS = ["#6fd38a", "#c9945a", "#8fb0d6", "#ff9a4d", "#b78cff", "#ff6b5e", "#ffd45c", "#5fd4f0", "#e08cf0", "#4fe0c0"];   // ステージ見出しの開閉 (未操作なら自動)
 let wQuery = "", wFilter = "all", wSort = "no", wSel = null;
 
 function weaponFeatTags(w){
@@ -44,22 +46,29 @@ function weaponRel(k){
 const relUp = rel => rel >= 10 ? "×" + fmtX(rel) : pctUp(rel);
 const relHTML = rel => rel > 1.0001 ? `<span class="up">${relUp(rel)}</span>` : rel < 0.9999 ? `<span class="down">-${Math.min(99, Math.round((1 - rel) * 100))}%</span>` : "";
 
-/* ---------- 覚醒 (★1〜★5): 強化の節目で武器が化ける (data/evolve.js) ---------- */
+/* ---------- 覚醒 (★1〜★10): 強化の節目で武器が化ける (data/evolve.js / data/evo-unique.js) ---------- */
+// 固有覚醒の札: 名前と、その★での効果
+function evoUniqueHTML(k, s, cls){
+  const u = EVO_UNIQUE[k];
+  if (!u) return "";
+  const shown = Math.max(1, s), col = EVO_COLORS[Math.max(1, s)];
+  return `<div class="evo-uniq${s ? "" : " locked"}${cls ? " " + cls : ""}" style="--ec:${col};--wc:${WEAPONS[k].accent}"><div class="eu-head"><span class="eu-badge">固有覚醒</span><b>${evoUName(k, s)}</b>${s ? `<span class="eu-st">★${s}</span>` : `<span class="eu-st">★1で目覚める</span>`}</div><div class="eu-txt">${evoUText(k, shown)}</div></div>`;
+}
 // 装備中カードの1行: 次の覚醒までのレベルと、その時に伸びるもの
 function evoNextHTML(k){
   const s = evoStar(k), nx = evoNextLv(k), lv = weaponLvOf(k);
-  if (!nx) return `<div class="evo-next max" style="--ec:${EVO_COLORS[5]}">★5「${EVO_TITLE[5]}」完全覚醒 ・ ${evoTraitsText(k, 5).join(" / ")}</div>`;
+  if (!nx) return `<div class="evo-next max" style="--ec:${EVO_COLORS[EVO_MAX]}">★${EVO_MAX}「${EVO_TITLE[EVO_MAX]}」完全覚醒 ・ 威力 ×${fmtX(evoPowerMul(k))}</div>${evoUniqueHTML(k, s, "mini")}`;
   const prev = s ? EVO_LV[s - 1] : 0, pct = Math.round((lv - prev) / (nx - prev) * 100);
-  return `<div class="evo-next" style="--ec:${EVO_COLORS[s + 1]}"><span class="evo-bar"><i style="width:${pct}%"></i></span>Lv.${nx} で <b>★${s + 1}「${EVO_TITLE[s + 1]}」</b> ・ ${evoTraitsText(k, s + 1).map(t => t.split(": ")[1]).join("・")} ・ ${EVO_FX_TEXT[s + 1]}</div>`;
+  return `<div class="evo-next" style="--ec:${EVO_COLORS[s + 1]}"><span class="evo-bar"><i style="width:${pct}%"></i></span>Lv.${nx} で <b>★${s + 1}「${EVO_TITLE[s + 1]}」</b> ・ 固有「${EVO_UNIQUE[k] ? EVO_UNIQUE[k].name : ""}」${s ? "強化" : "が目覚める"} (${evoUShort(k, s + 1)}) ・ ${EVO_FX_TEXT[s + 1]}</div>${s ? evoUniqueHTML(k, s, "mini") : ""}`;
 }
-// 詳細: 覚醒の道のり (★1〜★5 の各段階で何が起きるか)
+// 詳細: 覚醒の道のり (★1〜★10 の各段階で何が起きるか)
 function evoRoadHTML(k){
   const s = state.weaponsOwned[k] ? evoStar(k) : 0, fams = EVO_FAM_OF[k];
   const rows = EVO_LV.map((lv, i) => {
     const st = i + 1, done = st <= s, next = st === s + 1;
-    return `<li class="${done ? "done" : next ? "next" : ""}" style="--ec:${EVO_COLORS[st]}"><span class="er-lv">Lv.${lv}</span><b>★${st} ${EVO_TITLE[st]}</b><span class="er-fx">威力 ×${fmtX(1 + EVO_POWER * st)} ・ ${evoTraitsText(k, st).map(t => t.split(": ")[1]).join(" ・ ")} ・ ${EVO_FX_TEXT[st]}</span></li>`;
+    return `<li class="${done ? "done" : next ? "next" : ""}" style="--ec:${EVO_COLORS[st]}"><span class="er-lv">Lv.${lv}</span><b>★${st} ${EVO_TITLE[st]}</b><span class="er-fx">威力 ×${fmtX(1 + EVO_POWER * st)} ・ 固有: ${evoUShort(k, st)} ・ ${evoTraitsText(k, st).map(t => t.split(": ")[1]).join(" ・ ")}${st % 2 && st < EVO_MAX ? " ・ " + EVO_FX_TEXT[st] : st === EVO_MAX ? " ・ 真覚醒" : ""}</span></li>`;
   }).join("");
-  return `<div class="evo-road"><div class="wd-label">覚醒の道のり ・ 特性 <b>${fams.map(f => f.name).join(" + ")}</b></div><ol>${rows}</ol></div>`;
+  return `<div class="evo-road">${evoUniqueHTML(k, s)}<div class="wd-label">覚醒の道のり ${s ? evoStarsHTML(k) : ""} (★1〜★${EVO_MAX}) ・ 特性 <b>${fams.map(f => f.name).join(" + ")}</b></div><ol>${rows}</ol></div>`;
 }
 
 /* ---------- 装備中の武器カード (武器タブ・おすすめタブの先頭) ---------- */
@@ -69,14 +78,46 @@ function equippedCardHTML(){
   return `<div class="eqcard" style="--accent:${w.accent}" data-tip="weapon:${k}">
     <div class="ar-top">${iconBadge(w.icon, w.accent)}
       <div class="ar-main"><div class="eqc-label">装備中の武器</div>
-        <div class="ar-title"><span class="ar-name">${w.name}</span><span class="lv-pill">Lv.${lv}</span>${evoStarsHTML(k)}</div>
+        <div class="ar-title"><span class="ar-name">${w.name}</span><span class="lv-pill">Lv.${lv}</span>${evoStar(k) ? evoStarsHTML(k, "sm") : ""}</div>
         <div class="ar-eff">DPS <b>${fmtD(weaponDPS(w) * weaponPowerMul(k))}</b> ・ ${w.tag}${tierUp ? ` ・ <span class="up">次で威力 +50%</span>` : ""}</div>
         ${evoNextHTML(k)}</div>
       ${d ? `<button class="act-btn" data-buy="wupgrade:${k}" ${canBuy(d) ? "" : "disabled"}><span class="ab-label">強化</span>${upCostSpan("wupgrade:" + k, d)}</button>` : ""}
     </div>
     ${d ? `<div class="ar-foot">${recipeChips(d.mats, true)}</div>${matSubHTML("wupgrade:" + k)}${buyReasonHTML("wupgrade:" + k)}` : ""}
+    ${quickSwapHTML()}
   </div>`;
 }
+
+/* ---------- 持ち替え (装備中カードの中): 所持武器を強い順に並べ、1回押すだけで装備する ----------
+   上位 QS_N 件だけ見せ、「ほか n 件」で全部広げる。PC は Q / E で1つ弱い / 強い武器へ持ち替え */
+const QS_N = 6;
+let qsAll = false;
+const effPower = k => WEAPONS[k].power * weaponPowerMul(k);
+const ownedByPower = () => WEAPON_KEYS.filter(k => state.weaponsOwned[k]).sort((a, b) => effPower(b) - effPower(a) || WEAPONS[b].no - WEAPONS[a].no);
+function quickSwapHTML(){
+  const list = ownedByPower().filter(k => k !== state.weapon);
+  if (!list.length) return "";
+  const show = qsAll ? list : list.slice(0, QS_N);
+  const chips = show.map(k => {
+    const w = WEAPONS[k], rel = weaponRel(k), holder = typeof shelfHolder === "function" ? shelfHolder(k) : -1;
+    const relT = rel > 1.0001 ? `<span class="up">${relUp(rel)}</span>` : rel < 0.9999 ? `<span class="down">-${Math.min(99, Math.round((1 - rel) * 100))}%</span>` : `<span>同等</span>`;
+    return `<button type="button" class="qs-chip${rel > 1.0001 ? " stronger" : ""}" data-buy="equip:${k}" data-tip="weapon:${k}" style="--accent:${w.accent}" aria-label="${escAttr(w.name)}に持ち替え">
+      ${iconBadge(w.icon, w.accent)}<span class="qs-main"><span class="qs-name">${w.name}</span><span class="qs-sub">Lv.${weaponLvOf(k)}${holder >= 0 ? ` ・ ボット${holder + 1}から` : ""}</span></span><span class="qs-rel">${relT}</span></button>`;
+  }).join("");
+  const more = list.length > QS_N ? `<button type="button" class="qs-more" data-qsall>${qsAll ? "たたむ ▲" : `ほか ${list.length - QS_N} 件 ▼`}</button>` : "";
+  return `<div class="qswap"><div class="qs-head"><b>持ち替え</b><span>${TAP}ですぐ装備${TOUCH_UI ? "" : " ・ Q / E で弱い / 強い武器へ"}</span></div><div class="qs-grid">${chips}</div>${more}</div>`;
+}
+// Q = 1つ弱い武器へ / E = 1つ強い武器へ (所持武器を強化込みの強さで並べた順)
+function cycleWeapon(dir){
+  const list = ownedByPower(), i = list.indexOf(state.weapon), j = i - dir;
+  if (i < 0 || j < 0 || j >= list.length){ sndFail(); return; }
+  doBuy("equip:" + list[j]);
+}
+window.addEventListener("keydown", e => {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e)) return;
+  if (e.code === "KeyE") cycleWeapon(1);
+  else if (e.code === "KeyQ") cycleWeapon(-1);
+});
 
 /* ---------- 一覧の絞り込み・並び替え ---------- */
 const WFILTERS = [["all", "すべて"], ["craftable", "製作可"], ["owned", "所持"], ["unowned", "未所持"]];
@@ -103,7 +144,8 @@ function craftableSig(){
 }
 function weaponSearchText(k){
   const w = WEAPONS[k];
-  return (w.no + " " + w.name + " " + w.tag + " " + (w.mat ? MAT[w.mat].name : "") + " " + Object.keys(w.recipe).map(mk => MAT[mk].name).join(" ") + " " + (w.feat || "") + " " + (w.desc || "")).toLowerCase();
+  const u = EVO_UNIQUE[k];
+  return (w.no + " " + w.name + " " + w.tag + " " + (u ? u.name + " " + evoUText(k, 1) + " " : "") + (w.mat ? MAT[w.mat].name : "") + " " + Object.keys(w.recipe).map(mk => MAT[mk].name).join(" ") + " " + (w.feat || "") + " " + (w.desc || "")).toLowerCase();
 }
 function weaponListKeys(){
   let keys = WEAPON_KEYS.filter(k => weaponFilterMatch(k, wFilter));
@@ -134,7 +176,8 @@ function weaponRowHTML(k){
       : `<span class="wl-prog" title="製作素材の揃い具合 (行を${TAP}でレシピ)"><i style="width:${pct}%"></i><b>素材 ${pct}%</b></span>`;
   } else {
     const d = buyDef("wupgrade:" + k);
-    act = `<button class="act-btn" data-buy="wupgrade:${k}" ${canBuy(d) ? "" : "disabled"}><span class="ab-label">強化</span>${upCostSpan("wupgrade:" + k, d)}</button>`;
+    act = (eq ? "" : `<button class="act-btn ghost eq-btn${rel > 1.0001 ? " stronger" : ""}" data-buy="equip:${k}" title="${escAttr(w.name)}を装備する">装備</button>`)
+      + `<button class="act-btn" data-buy="wupgrade:${k}" ${canBuy(d) ? "" : "disabled"}><span class="ab-label">強化</span>${upCostSpan("wupgrade:" + k, d)}</button>`;
   }
   const pills = (eq ? `<span class="st-pill eq">装備中</span>` : "") + (holder >= 0 ? `<span class="st-pill">ボット${holder + 1}</span>` : "") + (craftable ? `<span class="st-pill go">製作可</span>` : "");
   return `<div class="wl-row${owned ? " owned" : ""}${eq ? " eq" : ""}${craftable ? " craftable" : ""}${open ? " open" : ""}" style="--accent:${w.accent}" data-wsel="${k}" data-tip="weapon:${k}" role="button" tabindex="0" aria-expanded="${open}">
@@ -183,10 +226,10 @@ function weaponListHTML(){
     // 未操作なら「全部そろったステージ」は畳む (装備中の武器があるステージと、絞り込み中は開く)
     const auto = !(have === all.length && WEAPONS[state.weapon].tier !== ti) || wFilter !== "all";
     const open = tierOpen[ti] !== undefined ? tierOpen[ti] : auto;
-    html += `<button type="button" class="stage-head${open ? " open" : ""}" data-tier="${ti}" aria-expanded="${open}">
+    html += `<button type="button" class="stage-head${open ? " open" : ""}" data-tier="${ti}" aria-expanded="${open}" style="--tc:${TIER_COLORS[ti % TIER_COLORS.length]}">
       <span class="sg-no">${ti + 1}</span><span class="sg-name">${t.name}</span><span class="sg-note">${t.note}</span>
       ${craftable ? `<span class="st-pill go">製作可 ${craftable}</span>` : ""}<span class="sg-count${have === all.length ? " done" : ""}">${have}/${all.length}</span><span class="sg-chev">${chevSVG}</span></button>
-      ${open ? `<div class="wlist">${tk.map(weaponRowHTML).join("")}</div>` : ""}`;
+      ${open ? `<div class="wlist tiered" style="--tc:${TIER_COLORS[ti % TIER_COLORS.length]}">${tk.map(weaponRowHTML).join("")}</div>` : ""}`;
   });
   return html;
 }

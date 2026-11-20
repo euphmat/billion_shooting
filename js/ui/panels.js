@@ -164,6 +164,7 @@ function applyBuy(dataBuy){
 function doBuy(dataBuy){
   if (!applyBuy(dataBuy)){ sndFail(); return false; }
   if (lastMatSubPlan && lastMatSubPlan.subTotal > 0) toast(`製作素材払い ${fmt(lastMatSubPlan.subTotal)} コイン分で強化した`);
+  if (dataBuy.startsWith("equip:")){ const w = WEAPONS[dataBuy.slice(6)]; toast(`${w.name} に持ち替えた (DPS ${fmtD(weaponDPS(w) * weaponPowerMul(dataBuy.slice(6)))})`); }
   sndBuy(); save(); renderPanels(true); updateHUD();
   return true;
 }
@@ -253,6 +254,9 @@ $("panels").addEventListener("click", e => {
 });
 $("panels").addEventListener("click", e => {
   if (e.target.closest("[data-boteq-open]")) openBotEq();
+});
+$("panels").addEventListener("click", e => {
+  if (e.target.closest("[data-qsall]")){ qsAll = !qsAll; renderPanels(true); }
 });
 $("panels").addEventListener("click", e => {
   const b = e.target.closest("[data-buyall]"); if (!b || b.disabled) return;

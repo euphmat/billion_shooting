@@ -72,6 +72,15 @@ const ICONS = {
   ultgold:     `<path d="M6.5 8.5c-2.2 0-4 1.6-4 3.5s1.8 3.5 4 3.5c3.8 0 7-7 10.5-7 2.2 0 4 1.6 4 3.5s-1.8 3.5-4 3.5c-3.5 0-6.7-7-10.5-7z" stroke-linejoin="round"/><circle cx="12" cy="18" r="2.6"/><path d="M10.8 18h2.4M12 16.8v2.4" stroke-linecap="round"/><path d="M19.5 1.6l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z" stroke-linejoin="round"/>`,
   ultmothership:`<path d="M21.5 12 16 8.8H8.5L4 6.8l1.2 5.2L4 17.2l4.5-2H16z" stroke-linejoin="round"/><path d="M8.5 8.8v6.4M13 9.5v5" stroke-linecap="round"/><circle cx="18.2" cy="12" r="1.3" fill="currentColor" stroke="none"/><path d="M2.2 9.8v4.4" stroke-linecap="round"/>`,
   ultdevour:   `<path d="M12 2.8l2 5.3 5.6.5-4.3 3.7 1.4 5.5L12 14.6l-4.7 3.2 1.4-5.5L4.4 8.6 10 8.1z" stroke-linejoin="round"/><path d="M12 10.1a1.9 1.9 0 1 1-1.9 1.9" stroke-linecap="round"/>`,
+  // --- 機兵系統 (自律機兵) ---
+  hunter:      `<path d="M21 12 8 5.5 4.5 7 7 12l-2.5 5L8 18.5z" stroke-linejoin="round"/><circle cx="12.5" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M1.5 10.5v3" stroke-linecap="round"/>`,
+  spider:      `<ellipse cx="12" cy="13" rx="4" ry="3.4"/><circle cx="12" cy="8.2" r="2"/><path d="M8.3 11.5 3.5 8.5M8.3 13.5 3 13.5M8.6 15.2 4 19M15.7 11.5l4.8-3M15.7 13.5H21M15.4 15.2 20 19" stroke-linecap="round"/>`,
+  warbomber:   `<path d="M21 12 9 3.5H6.5L9 10.5 4 12l5 1.5-2.5 7H9z" stroke-linejoin="round"/><circle cx="12" cy="19.5" r="1.6"/><path d="M12 15.5v2.4" stroke-linecap="round" stroke-dasharray="1 1.2"/>`,
+  artillery:   `<path d="M3.5 19.5h11l1.5-4h-14z" stroke-linejoin="round"/><circle cx="8" cy="13.5" r="3"/><path d="M10 12 19.5 5.5" stroke-linecap="round" stroke-width="2.6"/><path d="M21.5 3.5l1 1M20 2l.4 1.3" stroke-linecap="round"/>`,
+  nuke:        `<circle cx="12" cy="12" r="2"/><path d="M12 9.8 9.2 4.6a8.4 8.4 0 0 1 5.6 0zM13.9 13.1l5.9.2a8.4 8.4 0 0 1-2.8 4.9zM10.1 13.1 7 18.2a8.4 8.4 0 0 1-2.8-4.9z" stroke-linejoin="round"/>`,
+  titan:       `<rect x="7" y="3.5" width="10" height="9" rx="1.5"/><circle cx="12" cy="7.5" r="1.4" fill="currentColor" stroke="none"/><path d="M7 6.5H3.5v4M17 6.5h3.5v4M9.5 12.5l-1.5 8M14.5 12.5l1.5 8M6 20.5h4M14 20.5h4" stroke-linecap="round" stroke-linejoin="round"/>`,
+  hivemind:    `<circle cx="12" cy="5" r="2"/><circle cx="5" cy="17" r="2"/><circle cx="19" cy="17" r="2"/><circle cx="12" cy="13" r="2.4"/><path d="M12 7v3.6M6.6 15.8l3.4-1.7M17.4 15.8 14 14.1M7 17h10M10.8 5.9 6 15.3M13.2 5.9 18 15.3" stroke-linecap="round"/>`,
+  nanite:      `<path d="M12 4.5 16.3 7v5L12 14.5 7.7 12V7z" stroke-linejoin="round"/><path d="M5 14.5 7.6 16v3L5 20.5 2.4 19v-3zM19 14.5l2.6 1.5v3L19 20.5 16.4 19v-3z" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="1.3" fill="currentColor" stroke="none"/>`,
   drill:   `<path d="M7 4h10l-5 17z" stroke-linejoin="round"/><path d="M8.2 8.5l7.2 2M9.6 13l4.4 1.5" stroke-linecap="round"/>`,
   rare:    `<path d="M6 4h12l4 5.5L12 21 2 9.5z" stroke-linejoin="round"/><path d="M2 9.5h20M9 4l-2 5.5L12 21l5-11.5L15 4"/>`,
   double:  `<path d="M4 9h11M4 15h11" stroke-linecap="round"/><path d="M14 6.5 19 9l-5 2.5M14 12.5 19 15l-5 2.5" stroke-linejoin="round"/>`,
@@ -196,6 +205,11 @@ const ICONS = {
   chronorevolver: `<circle cx="12" cy="12" r="8.2"/><path d="M12 7.2V12l3.4 2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 1.5v2.2M12 20.3v2.2M1.5 12h2.2M20.3 12h2.2" stroke-linecap="round"/>`,
   seraph: `<path d="M12 2.8V15M12 15l-2.6 4.5M12 15l2.6 4.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 8C6.8 6 4.3 5.8 2.5 6.8c1.8 2.6 4.2 3.8 7 3.7M14.5 8c2.7-2 5.2-2.2 7-1.2-1.8 2.6-4.2 3.8-7 3.7" stroke-linejoin="round"/>`,
   demoncontract: `<rect x="5" y="2.8" width="14" height="18.4" rx="1.6"/><path d="M12 7.5l1.3 2.7 3 .4-2.2 2.1.6 3L12 14.2l-2.7 1.5.6-3-2.2-2.1 3-.4z" stroke-linejoin="round"/><path d="M8.5 18.5h7" stroke-linecap="round"/>`,
+  novahalo: `<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.6" stroke-dasharray="2.2 1.6"/><circle cx="12" cy="12" r="10"/><path d="M12 .8v2.6M12 20.6v2.6M.8 12h2.6M20.6 12h2.6" stroke-linecap="round"/>`,
+  ragnameteor: `<circle cx="15.5" cy="15.5" r="4.6"/><path d="M12.2 12.2 3 3M15 10.6 8.6 4.2M10.6 15 4.2 8.6" stroke-linecap="round"/><circle cx="6" cy="18.5" r="1.4"/><circle cx="19.5" cy="5" r="1.2"/>`,
+  galaxyedge: `<circle cx="12" cy="12" r="2.2"/><path d="M12 9.8C12 5 15.5 2.5 20 3M14.2 12c4.8 0 7.3 3.5 6.8 8M12 14.2c0 4.8-3.5 7.3-8 6.8M9.8 12C5 12 2.5 8.5 3 4" stroke-linecap="round"/>`,
+  worldeater: `<circle cx="12" cy="12" r="3.6" fill="currentColor" stroke="none"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(-25 12 12)"/><path d="M12 6.2a5.8 5.8 0 0 1 5.8 5.8M12 17.8A5.8 5.8 0 0 1 6.2 12" stroke-linecap="round"/>`,
+  omegagenesis: `<path d="M5.5 19.5h4.2v-2.2a6.5 6.5 0 1 1 4.6 0v2.2h4.2" stroke-linejoin="round" stroke-linecap="round"/><path d="M12 2v2.4M3.5 5.5l1.7 1.7M20.5 5.5l-1.7 1.7" stroke-linecap="round"/>`,
   yggdrasil: `<circle cx="12" cy="4.6" r="2.3"/><path d="M12 6.9V12M12 9.5C9.3 9.5 7.4 8.2 6.8 6M12 9.5c2.7 0 4.6-1.3 5.2-3.5M12 12c-2.2 1.8-4.2 2.8-6.5 3.3M12 12c2.2 1.8 4.2 2.8 6.5 3.3M12 12v3.8c0 2-1 3.6-2.6 5.2M12 15.8c0 2 1 3.6 2.6 5.2" stroke-linecap="round"/>`,
 };
 const iconSVG = (name, cls) => `<svg class="${cls || ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">${ICONS[name] || ""}</svg>`;

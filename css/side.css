@@ -312,10 +312,22 @@
 
 /* ---------- 武器の覚醒 (★1〜★5) ---------- */
 .evo-stars { display:inline-flex; gap:1px; flex:none; align-items:center; margin-left:2px; }
-.evo-stars i { width:9px; height:9px; background:#333; clip-path:polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.evo-stars i { width:8px; height:8px; background:#333; clip-path:polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
 .evo-stars i.on { background:var(--ec); filter:drop-shadow(0 0 3px var(--ec)); }
-.evo-stars.sm i { width:7px; height:7px; }
-.evo-stars.sm i:not(.on) { display:none; }
+.evo-stars i.gap { margin-left:3px; }
+.evo-stars.max i.on { animation:evoGlow 1.6s linear infinite; }
+@keyframes evoGlow { 0% { filter:drop-shadow(0 0 2px #fff3b0) hue-rotate(0deg); } 100% { filter:drop-shadow(0 0 4px #fff3b0) hue-rotate(360deg); } }
+.evo-pill { flex:none; margin-left:3px; padding:0 5px; border-radius:8px; font-size:10px; font-weight:800; line-height:15px; color:var(--ec); border:1px solid color-mix(in srgb, var(--ec) 55%, transparent); background:color-mix(in srgb, var(--ec) 12%, transparent); }
+.evo-pill.max { color:#1a1400; background:linear-gradient(90deg,#ffd60a,#ff6fa8,#d58bff,#7df9ff); border-color:transparent; }
+.evo-uniq { margin:6px 0; padding:6px 8px; border-radius:8px; border:1px solid color-mix(in srgb, var(--ec) 50%, transparent); background:linear-gradient(135deg, color-mix(in srgb, var(--wc) 16%, transparent), color-mix(in srgb, var(--ec) 6%, transparent)); }
+.evo-uniq.locked { opacity:.7; border-style:dashed; }
+.evo-uniq.mini { margin:4px 0 0; padding:4px 6px; }
+.evo-uniq .eu-head { display:flex; align-items:center; gap:6px; font-size:12px; }
+.evo-uniq .eu-head b { color:var(--ec); }
+.evo-uniq .eu-badge { font-size:9.5px; font-weight:800; padding:0 5px; border-radius:6px; color:#111; background:var(--ec); }
+.evo-uniq .eu-st { margin-left:auto; font-size:10px; color:#999; white-space:nowrap; }
+.evo-uniq .eu-txt { margin-top:3px; font-size:10.5px; line-height:1.45; color:#ccc; }
+.evo-uniq.mini .eu-txt { font-size:10px; }
 .sbadge.evo { color:var(--ec); border-color:color-mix(in srgb, var(--ec) 55%, transparent); background:color-mix(in srgb, var(--ec) 10%, transparent); }
 .evo-next { margin-top:4px; font-size:10.5px; line-height:1.45; color:#bbb; }
 .evo-next b { color:var(--ec); }
@@ -356,3 +368,69 @@
   25% { transform:translate(-50%,-50%) scale(1.35); box-shadow:0 0 0 10px color-mix(in srgb, var(--c) 60%, transparent), 0 0 30px 6px var(--c); }
   100% { transform:translate(-50%,-50%) scale(1); box-shadow:0 0 0 34px transparent, 0 0 16px var(--c); }
 }
+
+/* ---------- v93 武器一覧の配色 + 持ち替え ----------
+   ・ステージ (層) ごとに色 (--tc) を付け、見出しと一覧の左の帯で「今どの層の武器か」がひと目で分かる
+   ・所持武器の行は武器の色 (--accent) で薄く染める。未所持は落ち着いた色のまま
+   ・装備中の行は武器の色で縁取り + 光らせる */
+.stage-head {
+  margin-top:6px; padding:8px 8px 7px; border-bottom:none; border-radius:8px;
+  background:linear-gradient(90deg, color-mix(in srgb, var(--tc, #888) 22%, var(--s-bg)), color-mix(in srgb, var(--tc, #888) 6%, var(--s-bg)) 75%);
+  box-shadow:inset 3px 0 0 var(--tc, #888);
+}
+.stage-head .sg-no { background:var(--tc, #333); border-color:var(--tc, #333); color:#0b0b0b; }
+.stage-head .sg-name { color:color-mix(in srgb, var(--tc, #fff) 45%, #fff); }
+.stage-head .sg-chev { color:color-mix(in srgb, var(--tc, #888) 70%, #888); }
+.wlist.tiered { margin-left:4px; padding-left:6px; border-left:2px solid color-mix(in srgb, var(--tc) 40%, transparent); }
+
+.wl-row { background:#101114; }
+.wl-row.owned {
+  background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, #0e0e10), #111113 60%);
+  border-color:color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.wl-row.owned:hover, .wl-row.owned:focus-visible { border-color:color-mix(in srgb, var(--accent) 55%, transparent); background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, #101012), #141416 65%); }
+.wl-row.owned .wl-n { color:color-mix(in srgb, var(--accent) 22%, #fff); }
+.wl-row.owned .lv-pill { color:color-mix(in srgb, var(--accent) 60%, #fff); background:color-mix(in srgb, var(--accent) 14%, #111); border-color:color-mix(in srgb, var(--accent) 40%, #222); }
+.wl-row.eq {
+  border-color:var(--accent); box-shadow:inset 3px 0 0 var(--accent), 0 0 14px -6px var(--accent);
+  background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 28%, #0e0e10), #121214 70%);
+}
+.wl-row .st-pill.eq { background:var(--accent); border-color:var(--accent); color:#000; }
+.wl-row:not(.owned):not(.craftable) { background:#0c0c0e; }
+.wl-row.open { border-color:color-mix(in srgb, var(--accent) 60%, #444); }
+.wl-detail { border-color:color-mix(in srgb, var(--accent) 60%, #444); background:linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, #101010), #101010 50%); }
+.wl-act { display:flex; align-items:center; gap:4px; }
+.wl-act .eq-btn { padding:6px 8px; color:color-mix(in srgb, var(--accent) 55%, #fff); border-color:color-mix(in srgb, var(--accent) 55%, #3a3a3a); }
+.wl-act .eq-btn:hover:not(:disabled) { color:#000; background:var(--accent); border-color:var(--accent); }
+.wl-act .eq-btn.stronger { color:#03200f; background:var(--good); border-color:var(--good); box-shadow:0 0 10px rgba(87,227,154,.3); }
+
+/* 持ち替え (装備中カードの中) */
+.qswap { margin-top:2px; padding-top:8px; border-top:1px dashed color-mix(in srgb, var(--accent) 35%, #2a2a2a); }
+.qs-head { display:flex; align-items:baseline; gap:8px; margin-bottom:6px; }
+.qs-head b { font-size:11px; font-weight:800; letter-spacing:.1em; color:#fff; }
+.qs-head span { font-size:10px; color:var(--s-mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.qs-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:5px; }
+.qs-chip {
+  display:flex; align-items:center; gap:7px; min-width:0; padding:5px 7px; text-align:left; cursor:pointer;
+  font:inherit; color:#fff; border-radius:7px;
+  background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 20%, #0e0e10), #121214 80%);
+  border:1px solid color-mix(in srgb, var(--accent) 38%, #262626);
+  transition:border-color .12s, background .12s, transform .08s;
+}
+.qs-chip:hover { border-color:var(--accent); background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 32%, #0e0e10), #161618 85%); }
+.qs-chip:active { transform:scale(.97); }
+.qs-chip.stronger { border-color:var(--good-line); box-shadow:inset 0 0 0 1px rgba(87,227,154,.15); }
+#side .qs-chip .icon-badge { width:24px; height:24px; border-radius:6px; flex:none; }
+#side .qs-chip .icon-badge svg { width:14px; height:14px; }
+.qs-main { flex:1; min-width:0; display:flex; flex-direction:column; }
+.qs-name { font-size:11.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.qs-sub { font-size:9.5px; color:var(--s-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.qs-rel { flex:none; font-size:10.5px; color:var(--s-mute); font-variant-numeric:tabular-nums; }
+.qs-more {
+  display:block; width:100%; margin-top:5px; padding:4px 0; font:inherit; font-size:10.5px; color:var(--s-dim); cursor:pointer;
+  background:transparent; border:1px dashed #333; border-radius:6px;
+}
+.qs-more:hover { color:#fff; border-color:#666; }
+/* 装備ボタンが増えて幅が減った分、名前を削らずに Lv・★ を次の行へ回す */
+.wl-name { flex-wrap:wrap; row-gap:2px; }
+.wl-n { flex:0 1 auto; }

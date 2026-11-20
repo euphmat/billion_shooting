@@ -71,6 +71,18 @@ const PROC_TAG = {
   goldify:       ["黄金化",     "#ffd60a"],
   devour:        ["星喰い・真", "#ffbe5a"],
   diswave:       ["解体波",     "#ffb060"],
+  frip:          ["解体",       "#b9a8ff"],
+  freplicate:    ["自己複製",   "#b9a8ff"],
+  fdisch:        ["放電",       "#9ff0ff"],
+  frail:         ["レールガン", "#cfc4ff"],
+  fmagma:        ["マグマ噴出", "#ff7a3a"],
+  fbomb:         ["爆撃",       "#ffb070"],
+  fshell:        ["砲撃",       "#ffb070"],
+  fnuke:         ["戦術核",     "#c8ffaa"],
+  fstomp:        ["踏みつけ",   "#b9a8ff"],
+  fsalvo:        ["ミサイル",   "#d6ccff"],
+  fnano:         ["分解",       "#d8d4ea"],
+  fsplit:        ["分裂",       "#ff6fa8"],
 };
 const procTags = [];   // {x, y, text, color, t}
 const procTagLast = {};

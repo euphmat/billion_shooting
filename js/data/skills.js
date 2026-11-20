@@ -1,10 +1,10 @@
 "use strict";
 /* =========================================================
-   data/skills.js - レベル / 経験値 / スキルツリーのマスターデータ (全170種)
+   data/skills.js - レベル / 経験値 / スキルツリーのマスターデータ (全204種)
    (ダメージ・コイン・撃破に割り込むパッシブ効果の本体は game/skill-hooks.js)
 
    - レベルアップごとにスキルポイント +1 (5レベルごとにさらに +1)、全ダメージ +1.5%
-   - スキルは5系統 x 34種 (通常30種 + 奥義3種 + 究極1種)。各系統は同じ形の木 (TOPO) で、親を習得すると子が解放される
+   - スキルは6系統 x 34種 (通常30種 + 奥義3種 + 究極1種)。6系統目「機兵」は独立稼働する自律機兵 (game/machines.js) で、必要SPが高い各系統は同じ形の木 (TOPO) で、親を習得すると子が解放される
    - 効果は全て sk("id") で「習得しているか」を見るだけ。振り直しても状態が壊れない
    - 1000時間級の放置を見据え、個々の倍率は控えめに。積み重ねで効いてくる
    - スキルは全てパッシブ (常時発動)。毎フレーム処理は game/skill-fx.js、画面は ui/skilltree.js
@@ -16,17 +16,20 @@ const BRANCHES = [
   { key:"c", name:"財宝", en:"FORTUNE",     color:"#ffd60a", sub:"コイン・素材・経験値" },
   { key:"d", name:"艦隊", en:"FLEET",       color:"#57e39a", sub:"仲間と機動力" },
   { key:"e", name:"採掘", en:"EXCAVATION",  color:"#f2a65a", sub:"素材・お宝・連破・発破" },
+  { key:"f", name:"機兵", en:"WAR MACHINES", color:"#8c7dff", sub:"独立稼働する自律攻撃機兵 (必要SP高め)" },
 ];
 // 各系統共通の木の形: TOPO[i] = i番目のスキルの親 (-1 = 系統の入口)
 const TOPO = [-1, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 11, 13, 14, 16, 18, 19, 20, 21, 23, 25, 29, 30, 31, 32];   // スロット30-32 = 奥義、33 = 究極 (最深ノード29から直線に伸びる)
 const COST_BY_DEPTH = [0, 1, 1, 2, 3, 4, 6, 8, 10];   // 深い (強い) スキルほど高コスト
+const COST_BY_DEPTH_F = [0, 2, 2, 4, 6, 8, 12, 16, 20];   // 機兵系統は全て2倍 (独立稼働の機兵は強力なので高め)
 // 奥義・究極だけは深さコストを使わず、個別コスト (奥義は100単位、究極は一律1000)
 const COST_OVERRIDE = { a_apex: 100, a_dimension: 200, a_planetkiller: 300,
   b_singularity: 100, b_chainreaction: 200, b_core: 300,
   c_eldorado: 100, c_tycoon: 200, c_philosopher: 300,
   d_funnel: 100, d_orbital: 200, d_grandfleet: 300,
   e_rights: 100, e_automine: 200, e_stareater: 300,
-  a_ultimate: 1000, b_ultimate: 1000, c_ultimate: 1000, d_ultimate: 1000, e_ultimate: 1000 };
+  f_titan: 250, f_hivemind: 500, f_omega: 750,
+  a_ultimate: 1000, b_ultimate: 1000, c_ultimate: 1000, d_ultimate: 1000, e_ultimate: 1000, f_ultimate: 2500 };
 const REQ_LV_OLD = { 5: 15, 6: 25 }, REQ_LV_NEW = { 5: 18, 6: 28, 7: 40, 8: 55 };   // 深いスキルにはLv条件
 
 // [id, 名前, アイコン, 説明]
@@ -211,6 +214,42 @@ const SKILL_SRC = {
     ["e_stareater","星喰い",            "stareater","【奥義】100個破壊ごとに星喰いの一撃：破壊地点から十字4方向を最大20セル貫通破壊する。さらに連破の継続率と発破の頻度が上がる。"],
     ["e_ultimate","星喰い・真",         "ultdevour","【究極】ブロック破壊時25%で周囲 半径3セルを追加で全破壊。さらに25個破壊ごとに解体波が 半径10セルを全破壊する。星は、喰らい尽くされるためにある。"],
   ],
+  f: [   // 機兵: 自機から独立して戦域を動き回る自律機兵 (実装は game/machines.js)
+    ["f_core",     "自律機兵",         "hunter",   "自律機兵『ハンター』2機が起動する。自機には付いて来ず、自機の周りの戦域 (約70ブロック四方) に散らばって自分の判断で飛び回り、見つけたブロックとモンスターをレーザーで撃ち抜く (1機あたり自機DPSの20%)。"],
+    ["f_hunter2",  "量産ライン",       "bot",      "ハンターが +2機 (計4機)。"],
+    ["f_driller",  "掘削機兵",         "drill",    "掘削機兵『ドリラー』1機が起動。ブロックをすり抜けて惑星の内部を掘り進み、通り道の 半径約1.5ブロックを削り続ける (1ブロックあたり毎秒 自機DPSの20%)。"],
+    ["f_spider",   "解体機兵",         "spider",   "解体機兵『スパイダー』3機が起動。ブロックの表面を這い回り、1.5秒ごとに目の前のブロックを1個、HPに関係なく丸ごと引き剥がす。硬い深層ほど頼りになる。"],
+    ["f_overclock","オーバークロック", "rapid",    "全ての自律機兵の連射・動作速度 +25%。"],
+    ["f_mark",     "照準マーカー",     "eye",      "ハンターが撃ったブロックに照準マーカーが付く (5秒)。マーカー付きのブロックは、全ての自律機兵から +60% のダメージを受ける。"],
+    ["f_bomber",   "爆撃機兵",         "warbomber",   "爆撃機兵『ボマー』1機が起動。戦域の上空を旋回し、3秒ごとにブロックが最も密集した地点へ爆弾を投下する (半径3ブロック・自機DPSの300%)。"],
+    ["f_drill2",   "ツインドリル",     "twin",     "ドリラー +1機 (計2機)。掘削半径 +1ブロック。"],
+    ["f_tesla",    "雷撃機兵",         "thunder",  "雷撃機兵『テスラ』1機が起動。戦域を漂い、1秒ごとに稲妻を放つ。稲妻はブロックからブロックへ最大5回跳ね、それぞれに自機DPSの80%。"],
+    ["f_spider2",  "解体の群れ",       "spider",   "スパイダー +3機 (計6機)。引き剥がしの間隔が 1.5秒 → 1秒 になる。"],
+    ["f_hunter3",  "増産体制",         "bot",      "ハンター +2機 (計6機)。"],
+    ["f_pierce",   "貫通レーザー",     "pierce",   "ハンターのレーザーが射線上を貫き、奥のブロック最大3個にも同じダメージを与える。"],
+    ["f_carpet",   "絨毯爆撃",         "missile",  "ボマー +1機 (計2機)。爆弾が 1発 → 飛行方向に並ぶ3発 になる。"],
+    ["f_coredive", "コアダイブ",       "drill",    "ドリラーが惑星の深部へ向かって掘り進むようになり、深い層ほど掘削の威力が上がる (中心で ×3)。"],
+    ["f_tesla2",   "超電磁網",         "chain",    "テスラ +1機 (計2機)。稲妻の跳ねる回数が 5 → 10回 になる。"],
+    ["f_replicate","自己複製",         "recycle",  "スパイダーが合計50個のブロックを解体するごとに、子機スパイダーを1機複製する (40秒稼働・最大10機)。"],
+    ["f_instinct", "狩猟本能",         "skull",    "ハンターがブロックかモンスターを仕留めると、そのハンターは3秒間 連射 ×2 になる。"],
+    ["f_artillery","砲撃機兵",         "artillery","砲撃機兵『キャノン』1機が起動。戦域のブロックの上に降り立って砲台になり、4秒ごとに遠く (約50ブロック先まで) の密集地点へ砲弾を撃ち込む (半径5ブロック・自機DPSの500%)。"],
+    ["f_replicate2","増殖炉",          "recycle",  "複製に必要な解体数が 50 → 25個、子機スパイダーの上限が 10 → 25機 になる。"],
+    ["f_artillery2","多連装砲",        "artillery","キャノン +1機 (計2機)。砲撃が 3連射 になる。"],
+    ["f_shrapnel", "炸裂レーザー",     "split",    "ハンターのレーザーが着弾点で炸裂し、周囲8マスのブロックにも 50% のダメージ。"],
+    ["f_magma",    "マグマ噴出",       "vulcan",   "ドリラーの掘った穴から8秒ごとにマグマが噴き出し、周囲 半径4ブロックへ 自機DPSの400% のダメージと燃焼を与える。"],
+    ["f_tesla3",   "帯電連鎖",         "thunder",  "稲妻が当たったブロックは4秒間 帯電する。帯電したブロックが壊れると放電し、半径3ブロック以内のブロック最大4個へ 最大HPの25%ダメージを与えて帯電させる (放電は3世代まで連鎖する)。"],
+    ["f_hunter4",  "全自動工場",       "bot",      "ハンター +3機 (計9機)。ハンターの威力 +30%。"],
+    ["f_spider3",  "大顎",             "crusher",  "スパイダーが一度に 周囲3x3 のブロックをまとめて引き剥がす。"],
+    ["f_nuke",     "戦術核砲弾",       "nuke",     "キャノンが25秒ごとに戦術核を撃ち込む。着弾点の 半径5ブロックはHPに関係なく消し飛び、半径14ブロックへ 自機DPSの3000%。"],
+    ["f_railgun",  "レールガン換装",   "needle",   "ハンターの6発目ごとの射撃が、射線上 約25ブロックを一直線に貫くレールガンになる (威力400%)。"],
+    ["f_drill4",   "地殻粉砕機",       "quake",    "ドリラー +1機 (計3機)。掘削半径 さらに +1ブロック、掘削の威力 ×2。"],
+    ["f_legion",   "機兵軍団",         "crown",    "ハンター +3機 (計12機)。全ての自律機兵の威力 +30%。"],
+    ["f_overlord", "機兵統制AI",       "crown",    "全ての自律機兵の威力 ×2、連射・動作速度 +30%。"],
+    ["f_titan",    "巨神機兵タイタン", "titan",    "【奥義】巨大な二足歩行の巨神機兵が戦域に降り立ち、ブロックを踏み砕きながら密集地へ歩く。2秒ごとの踏みつけで足元 半径3ブロックを消し飛ばし、半径7ブロックへ 自機DPSの1500%。10秒ごとに肩部ミサイル16発を一斉発射する。"],
+    ["f_hivemind", "群体知性ネットワーク","hivemind","【奥義】全ての自律機兵がネットワークで結ばれる。稼働中の機兵1機につき全機兵の威力 +4%。さらに近くの機兵同士を結ぶリンク光線が、線上のブロックを焼き切り続ける (毎秒 自機DPSの100%)。"],
+    ["f_omega",    "オメガ・プロトコル","omega",   "【奥義】全ての自律機兵の威力 ×2.5。さらに25秒ごとに全機兵が8秒間の暴走状態に入り、動作速度 ×3、その間の攻撃はブロックのHPに関係なく一撃で破壊する。"],
+    ["f_ultimate", "惑星解体機群",     "nanite",   "【究極】自己増殖する解体ナノマシン群が惑星に放たれる。ナノマシンはブロックの中を食い進み、0.7秒ごとに周囲 半径2ブロックをHPに関係なく分解する。300個分解するたびに分裂して増え (6機から最大48機)、全ての自律機兵の威力 ×3。惑星は、機械に還る。"],
+  ],
 };
 
 // ---------- 木の組み立て (座標は放射状レイアウト) ----------
@@ -218,7 +257,7 @@ const TREE_SIZE = 2800, TREE_C = TREE_SIZE / 2;   // 奥義 (depth 9-11) の半�
 const treeRadius = depth => 140 + (depth - 1) * 105;
 const SKILLS = [], SKILL = {};
 (function buildSkills(){
-  const SECTOR = 60 * Math.PI / 180;
+  const SECTOR = (BRANCHES.length > 5 ? 50 : 60) * Math.PI / 180;   // 6系統では隣と重ならないよう扇を少し狭める
   BRANCHES.forEach((br, bi) => {
     const center = -Math.PI / 2 + bi * Math.PI * 2 / BRANCHES.length;
     const list = SKILL_SRC[br.key].map(s => ({ id:s[0], name:s[1], ic:s[2], desc:s[3], br, kids:[] }));
@@ -226,7 +265,7 @@ const SKILLS = [], SKILL = {};
       n.parent = TOPO[i] < 0 ? null : list[TOPO[i]];
       n.depth = n.parent ? n.parent.depth + 1 : 1;
       n.slot = i;
-      n.cost = COST_OVERRIDE[n.id] || COST_BY_DEPTH[Math.min(8, n.depth)];
+      n.cost = COST_OVERRIDE[n.id] || (br.key === "f" ? COST_BY_DEPTH_F : COST_BY_DEPTH)[Math.min(8, n.depth)];
       n.reqLv = (i >= 20 ? REQ_LV_NEW : REQ_LV_OLD)[n.depth] || 0;
       if (n.parent) n.parent.kids.push(n);
     });
@@ -269,12 +308,13 @@ const MASTERY = {
   c: { stat: "コイン",           mul: [1, 1.15, 1.35, 1.6, 2, 2.6, 3.5], xp: [1, 1.05, 1.1, 1.2, 1.35, 1.5, 2], fx: "黄金の光球" },
   d: { stat: "仲間の威力",       mul: [1, 1.15, 1.35, 1.6, 2, 2.6, 3.5], spd: [0, 0.03, 0.06, 0.1, 0.14, 0.18, 0.25], fx: "翠の光球" },
   e: { stat: "素材ドロップ",     mul: [1, 1.1, 1.25, 1.45, 1.75, 2.2, 3],  fx: "琥珀の光球" },
+  f: { stat: "機兵の威力",       mul: [1, 1.15, 1.35, 1.6, 2, 2.6, 3.5], frate: [0, 0.03, 0.06, 0.1, 0.14, 0.18, 0.25], fx: "蒼紫の光球" },
 };
 let mastLen = 0;   // 習得のたびに増やして、キャッシュを捨てる合図にする (skilltree.js の onSkillsChanged / probeWith)
 let mastCache = null;   // { obj: state.skills, r: {a:rank,...}, n: {a:count,...} }  (習得・振り直しで作り直す)
 function masteryData(){
   if (mastCache && mastCache.obj === state.skills && mastCache.len === mastLen) return mastCache;
-  const n = { a: 0, b: 0, c: 0, d: 0, e: 0 }, r = {};
+  const n = { a: 0, b: 0, c: 0, d: 0, e: 0, f: 0 }, r = {};
   for (const id in state.skills) if (SKILL[id]) n[SKILL[id].br.key]++;
   for (const k in n){ let rk = 0; for (const t of MASTERY_AT) if (n[k] >= t) rk++; r[k] = rk; }
   mastCache = { obj: state.skills, len: mastLen, n, r };
@@ -295,6 +335,7 @@ function masteryEffectText(br, rk){
   if (M.elem && M.elem[rk]) t += `・全元素の付与率 +${Math.round(M.elem[rk] * 100)}%`;
   if (M.xp && M.xp[rk] > 1) t += `・経験値 ${x(M.xp[rk])}`;
   if (M.spd && M.spd[rk]) t += `・移動速度 +${Math.round(M.spd[rk] * 100)}%`;
+  if (M.frate && M.frate[rk]) t += `・機兵の動作速度 +${Math.round(M.frate[rk] * 100)}%`;
   return t;
 }
 const blockXP = (gx, gy) => Math.max(1, Math.round(Math.sqrt(blockMaxHP(gx, gy) / 5)));
