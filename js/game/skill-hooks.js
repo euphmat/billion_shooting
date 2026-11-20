@@ -35,7 +35,8 @@ function elemTotals(){
 const skillProc = { burn: 0, frost: 0, acid: 0, rad: 0, shock: 0, thermo: 0, bolt: 0, firestorm: 0, icebreak: 0, meteor: 0, treasure: 0, treasureBreak: 0, chain: 0, blast: 0, quake: 0, jackpot: 0,
   dimension: 0, planetkiller: 0, chainreact: 0, tycoon: 0, fleetburst: 0, automine: 0, stareater: 0,
   annihilation: 0, elemnova: 0, goldify: 0, planetbeam: 0, devour: 0, diswave: 0,
-  frip: 0, freplicate: 0, fdisch: 0, frail: 0, fmagma: 0, fbomb: 0, fshell: 0, fnuke: 0, fstomp: 0, fsalvo: 0, fomega: 0, fnano: 0, fsplit: 0 };   // 機兵系統 (game/machines.js)
+  frip: 0, freplicate: 0, fdisch: 0, frail: 0, fmagma: 0, fbomb: 0, fshell: 0, fnuke: 0, fstomp: 0, fsalvo: 0, fomega: 0, fnano: 0, fsplit: 0,
+  f0drone: 0, f0mine: 0, f0kami: 0, f0pack: 0 };   // 序盤機兵 (f0_*: 自爆ドローン / 地雷 / 突撃 / 撤収爆破)
 // x, y を渡すと、その場所にスキル名の発動タグを出す (ui/notify.js の procTag。間引きは向こうで行う)
 function bumpProc(k, x, y){ skillProc[k]++; if (x !== undefined) procTag(k, x, y); }
 // 奥義の大きな発動は、アーティファクトと同じ左上フィード (#artFeed) に名前を出す (チップのプール・集約は artifacts.js 側)

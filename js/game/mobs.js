@@ -149,6 +149,7 @@ function damagePlayer(d){
   if (artSpecial("shield") && artShieldT <= 0){ artShieldT = 12; hurtFlash = Math.max(hurtFlash, 0.35); toast("結界が攻撃を防いだ"); bumpArtProc("r_shield"); return; }   // 結界の欠片
   d *= (1 - Math.min(0.6, artVal("def"))) * (1 - 0.04 * (state.botArmor || 0));
   { const pfx = dungeonFxAt(w2g(player.x), w2g(player.y)); if (pfx) d *= pfx.hurt; }   // ダンジョン固有効果: 被ダメ倍率   // アーティファクト軽減 × 衛星装甲
+  if (typeof f0OnPlayerHit === "function") d = f0OnPlayerHit(d);   // 序盤機兵: 囮装甲の軽減 / 修理プロトコルの回復キュー
   state.hp = Math.max(0, state.hp - d);
   player.iframes = 0.45; hurtT = 0; hurtFlash = 1; hudDirty = true;
   if (state.hp <= 0){
@@ -209,6 +210,7 @@ function damageMob(m, dmg, bl){
   if (m.hp <= 0) killMob(m);
 }
 function killMob(m){
+  if (typeof f0OnMobKill === "function") f0OnMobKill(m);   // 序盤機兵: 部品取り (倒すと臨時プロト +1)
   sndMobDie();
   if (typeof burstAt === "function") burstAt(m.x, m.y, m.lastFx || { accent: (m.type && m.type.color) || "#ffd24d", c2: "#ffffff", burst: "dots" }, null);
   const si = m.sat, S = SATS[si], T = m.type;

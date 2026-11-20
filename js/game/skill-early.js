@@ -6,7 +6,9 @@
      駆け出し支援・若葉の学び・富者の余裕・拾い得・早拾い・表層の財・希少素材・爆発の財・遠征手当・連鎖の駄賃・
      初物・霜の学び・撃破の学び・露頭・深掘り・爆発物の採取・星屑ふるい・余波の採掘・金属探知・分解抽出・
      超伝導・長銃身・ボット長距離砲・アフターバーナー・ボット照準器・連携射撃・編隊飛行・予備弾倉・徹し撃ち 等)
-     未実装: 毎フレーム処理 (プロト・砲台・雷雲・日当など)・モンスター/被弾フック・ツリー画面の環レイアウト調整
+     実装済み (機兵序盤 f0_*): プロト・簡易砲台・自爆ドローン・地雷は game/machines.js の f0 セクション、
+     被弾/撃破フックは mobs.js 経由、排熱利用は earlyRateMul、採掘モジュールは earlyDropAdj に接続済み。
+     未実装: 毎フレーム処理 (雷雲・日当など他系統の分)・ツリー画面の環レイアウト調整
    ========================================================= */
 const eElemAdd = { burn: 0, frost: 0, acid: 0, shock: 0 };
 const ePlHit = new Map();   // 連携射撃: 自機が撃ったブロック -> 時刻 (ms)
@@ -17,7 +19,8 @@ function eN4(gx, gy){ let n = 0; for (const [dx, dy] of N4) if (liveAt(gx + dx, 
 
 // ---------- 倍率 ----------
 function earlyGlobalMul(){ return 1; }
-function earlyRateMul(){ return 1; }
+// 序盤機兵 f0 排熱利用: プロト・砲台・自爆ドローン・自律機兵が壊すたび連射 +1% (最大+15%、3秒で冷める)。状態は machines.js の f0Heat
+function earlyRateMul(){ return 1 + (sk("f0_exhaust") ? f0Heat * 0.01 : 0); }
 function earlyCrewRateMul(){ return 1; }
 function earlySpeedMul(){ return 1; }
 function earlyBoostMul(){ return sk("d0_afterburn") ? 1.25 : 1; }
@@ -95,6 +98,7 @@ function earlyDropAdj(n, gx, gy, m){
   if (sk("e0_hard") && blockMaxHP(gx, gy) >= eAtk() * 20) add++;
   if (sk("e0_metal") && (m.cat === "metal" || m.cat === "ore") && Math.random() < 0.2) add++;
   if (sk("b0_extract")){ const f = burns.get(idx); if (f && f.k === "acid") add++; }
+  if (sk("f0_minemod") && curProto) add++;   // 序盤機兵 f0 採掘モジュール: プロト・砲台・自爆ドローンが壊したブロックは素材 +1 (自律機兵の破壊には付かない)
   if (mul !== 1){ const x = n * mul, w = Math.floor(x); n = w + (Math.random() < x - w ? 1 : 0); }
   return n + add;
 }

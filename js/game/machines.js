@@ -49,14 +49,16 @@ function fWant(){
 function fDesiredCount(){ const w = fWant(); return w.hunters + w.drillers + w.spiders + w.teslas + w.bombers + w.cannons + w.titan + w.nanites; }
 // 全機兵の威力倍率 (n = 群体知性で数える機数)
 function fPowWith(n){
+  // f0 共有修飾: 設計図 (レベル×1%、最大+60%) と自動戦闘プログラム (無操作30秒で ×1.5) は自律機兵にも効く
   return masteryMul("f") * (sk("f_legion") ? 1.3 : 1) * (sk("f_overlord") ? 2 : 1) * (sk("f_omega") ? 2.5 : 1) * (sk("f_ultimate") ? 3 : 1)
-    * (sk("f_hivemind") ? 1 + 0.04 * n : 1);
+    * (sk("f_hivemind") ? 1 + 0.04 * n : 1) * f0BlueprintMul() * f0IdleMul();
 }
 const fPow = () => fPowWith(fCount);
 const fPowStatic = () => fPowWith(fDesiredCount());
 // 連射・動作速度 (オメガの暴走中は ×3)
 const fRateStatic = () => (sk("f_overclock") ? 1.25 : 1) * (sk("f_overlord") ? 1.3 : 1) * (1 + MASTERY.f.frate[masteryRank("f")]);
-const fRate = () => fRateStatic() * (fOmega > 0 ? 3 : 1);
+// f0 急速充電: レベルアップ後 20秒間は自律機兵 (とプロト) の動作速度 ×2
+const fRate = () => fRateStatic() * (fOmega > 0 ? 3 : 1) * (f0ChargeT > 0 ? 2 : 1);
 
 // ---------- 戦域: 機兵ごとの持ち場 (自機のまわりに散らばる。自機が動けば戦域ごと動く) ----------
 function fHome(u){
@@ -103,20 +105,27 @@ function fMarked(idx){
   fMarks.delete(idx); return false;
 }
 const fMarkMul = idx => (fMarks.size && fMarked(idx)) ? 1.6 : 1;
+// f0 自動照準較正: 機兵 (プロト・砲台・自律機兵) の攻撃は 10% で会心 (ダメージ2倍)。ダメージチョークポイントで判定する
+const fCalibDmg = dmg => (sk("f0_calib") && Math.random() < 0.1) ? dmg * 2 : dmg;
 // 単体への攻撃 (攻撃そのもの = 全ダメージ倍率・会心が乗る)。オメガの暴走中はHP無視で一撃破壊
 function fHitBlock(idx, dmg){
   if (idx < 0 || isDestroyed(idx)) return;
-  if (fOmega > 0){ damageBlock(idx, blockMaxHP(idx % D, (idx / D) | 0) * 100, 0); return; }
-  damageBlock(idx, dmg * fMarkMul(idx), 0);
+  const pm = curMach; curMach = true;   // 発生源フラグ (f0 排熱利用の集計用)
+  try {
+    if (fOmega > 0){ damageBlock(idx, blockMaxHP(idx % D, (idx / D) | 0) * 100, 0); return; }
+    damageBlock(idx, fCalibDmg(dmg * fMarkMul(idx)), 0);
+  } finally { curMach = pm; }
 }
 // 余波としての攻撃 (炸裂・リンク光線など。全ダメージ倍率は手で掛ける)
 function fRawHit(idx, dmg){
   if (idx < 0 || isDestroyed(idx)) return;
-  rawDamage(() => damageBlock(idx, fOmega > 0 ? blockMaxHP(idx % D, (idx / D) | 0) * 100 : dmg * gMul * fMarkMul(idx), 0));
+  const pm = curMach; curMach = true;
+  try { rawDamage(() => damageBlock(idx, fOmega > 0 ? blockMaxHP(idx % D, (idx / D) | 0) * 100 : fCalibDmg(dmg * gMul * fMarkMul(idx)), 0)); }
+  finally { curMach = pm; }
 }
 function fMobsIn(x, y, r, dmg){
   const r2 = r * r;
-  for (const m of mobs){ if (m.dead) continue; const dx = m.x - x, dy = m.y - y; if (dx * dx + dy * dy <= r2) damageMob(m, fOmega > 0 ? dmg * 10 : dmg, null); }
+  for (const m of mobs){ if (m.dead) continue; const dx = m.x - x, dy = m.y - y; if (dx * dx + dy * dy <= r2) damageMob(m, fOmega > 0 ? dmg * 10 : fCalibDmg(dmg), null); }
 }
 // 範囲攻撃 (r: ワールド座標)。マーカーの上乗せつき。暴走中は範囲ごと全破壊キューへ
 function fRadius(x, y, r, dmg){
@@ -124,14 +133,17 @@ function fRadius(x, y, r, dmg){
   if (fOmega > 0){ queueDestroyCircle(w2g(x), w2g(y), Math.max(1, Math.round(r / BS))); return; }
   if (outOfPlanet(x, y, r)) return;
   const cgx = w2g(x), cgy = w2g(y), rb = Math.ceil(r / BS), r2 = r * r;
-  for (let gy = Math.max(0, cgy - rb); gy <= Math.min(D - 1, cgy + rb); gy++){
-    for (let gx = Math.max(0, cgx - rb); gx <= Math.min(D - 1, cgx + rb); gx++){
-      const i = gy * D + gx;
-      if (!blockExists(gx, gy) || isDestroyed(i)) continue;
-      const dx = g2w(gx) - x, dy = g2w(gy) - y;
-      if (dx * dx + dy * dy <= r2) damageBlock(i, dmg * fMarkMul(i), 0);
+  const pm = curMach; curMach = true;
+  try {
+    for (let gy = Math.max(0, cgy - rb); gy <= Math.min(D - 1, cgy + rb); gy++){
+      for (let gx = Math.max(0, cgx - rb); gx <= Math.min(D - 1, cgx + rb); gx++){
+        const i = gy * D + gx;
+        if (!blockExists(gx, gy) || isDestroyed(i)) continue;
+        const dx = g2w(gx) - x, dy = g2w(gy) - y;
+        if (dx * dx + dy * dy <= r2) damageBlock(i, fCalibDmg(dmg * fMarkMul(i)), 0);
+      }
     }
-  }
+  } finally { curMach = pm; }
 }
 // 線上の生きているブロック (近い順、重複なし)
 function fRayBlocks(x, y, a, d0, d1, n){
@@ -168,6 +180,13 @@ function fDensest(x, y, range, rad){
 
 // ---------- 撃破フック (game/skill-hooks.js の skillOnBreak から) ----------
 function machineOnBreak(idx, gx, gy){
+  // 序盤機兵 (f0) の撃破連動は自律機兵が稼働していなくても数える
+  if (sk("f0_exhaust") && (curProto || curMach)){ f0Heat = Math.min(15, f0Heat + 1); f0HeatT = 3; }   // 排熱利用: 機兵の破壊で自機の連射が上がる
+  if (sk("f0_scrap")){
+    f0ScrapN++;
+    const need = sk("f0_scrap2") ? 100 : 200;
+    if (f0ScrapN >= need){ f0ScrapN -= need; f0DroneQueue += sk("f0_scrap2") ? 2 : 1; }   // スクラップ工房: 自爆ドローンを組み立てる
+  }
   if (!fActive) return;
   if (fKiller && sk("f_instinct")) fKiller.frenzy = 3;   // 狩猟本能
   if (fMarks.size) fMarks.delete(idx);
@@ -219,10 +238,12 @@ function syncMachines(){
 function machineReset(){
   for (const k of ["hunters", "drillers", "spiders", "kids", "teslas", "bombers", "cannons", "nanites"]) MCH[k].length = 0;
   MCH.titan = null; fNanoInit = false; fDrops.length = 0; fLinks = []; fMarks.clear(); fCharged.clear(); fOmega = 0; fRipAcc = 0;
+  f0Reset();
 }
 
 function machineUpdate(dt, now){
   syncMachines();
+  f0Update(dt, now);   // 序盤機兵 (プロト・簡易砲台・自爆ドローン): 自律機兵が無くても動く
   if (!fActive) return;
   const U = playerDPS(), pow = fPow(), rate = fRate();
   // オメガ・プロトコル: 25秒ごとに8秒間の暴走
@@ -302,7 +323,7 @@ function updateHunter(h, dt, U, pow, rate){
   const mb = tmob && Math.hypot(tmob.x - h.x, tmob.y - h.y) <= F_HUNT_R ? tmob : null;
   if (mb){
     addBeam({ x1: h.x, y1: h.y, x2: mb.x, y2: mb.y, w: 2.2, color: "#b9a8ff", life: 110 });
-    damageMob(mb, fOmega > 0 ? dmg * 10 : dmg * gMul, null);
+    damageMob(mb, fOmega > 0 ? dmg * 10 : fCalibDmg(dmg * gMul), null);
     if (mb.dead && sk("f_instinct")) h.frenzy = 3;
     h.flash = 0.06; h.ang = Math.atan2(mb.y - h.y, mb.x - h.x);
     return;
@@ -418,7 +439,8 @@ function updateSpider(s, dt, rate){
   const targets = [];
   if (sk("f_spider3")){ for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) targets.push(j); } }
   else targets.push(s.ti);
-  rawDamage(() => { for (const j of targets) if (!isDestroyed(j)) damageBlock(j, blockMaxHP(j % D, (j / D) | 0) * 100, 0); });   // HP無視で引き剥がす
+  const pm = curMach; curMach = true;   // 発生源フラグ (f0 排熱利用の集計用)。HP無視の一撃なので会心は付けない
+  try { rawDamage(() => { for (const j of targets) if (!isDestroyed(j)) damageBlock(j, blockMaxHP(j % D, (j / D) | 0) * 100, 0); }); } finally { curMach = pm; }   // HP無視で引き剥がす
   s.bite = 0.22; s.ti = -1; s.retT = 0;   // 次の獲物をすぐ探す
   bumpProc("frip", p.x, p.y);
   addBeam({ x1: s.x, y1: s.y, x2: p.x, y2: p.y, w: 3, color: "#e0d8ff", life: 120 });
@@ -462,7 +484,7 @@ function updateTesla(t, dt, U, pow, rate){
   const dmg = U * 0.8 * pow;
   let px = t.x, py = t.y;
   const mb = nearestMob(t.x, t.y, 320);
-  if (mb){ addBeam({ x1: px, y1: py, x2: mb.x, y2: mb.y, w: 2.4, color: "#9ff0ff", zig: true, life: 160 }); damageMob(mb, fOmega > 0 ? dmg * 10 : dmg * gMul, null); px = mb.x; py = mb.y; }
+  if (mb){ addBeam({ x1: px, y1: py, x2: mb.x, y2: mb.y, w: 2.4, color: "#9ff0ff", zig: true, life: 160 }); damageMob(mb, fOmega > 0 ? dmg * 10 : fCalibDmg(dmg * gMul), null); px = mb.x; py = mb.y; }
   let cur = findNearestBlock(px, py, 320);
   if (cur < 0 && !mb){ t.zapT = 0.5; return; }
   const jumps = sk("f_tesla2") ? 10 : 5, seen = new Set();
@@ -736,6 +758,8 @@ burstSprs.fstomp = burstSprite("rgba(185,168,255,.95)", "rgba(140,125,255,.8)");
 burstSprs.fnuke = burstSprite("rgba(200,255,170,.98)", "rgba(255,250,210,.92)");
 
 function machineDraw(now, toScreen){
+  if (!fActive && !fDrops.length && !f0Active) return;
+  f0Draw(now, toScreen);   // 序盤機兵 (プロト・砲台・ドローン・地雷)
   if (!fActive && !fDrops.length) return;
   const low = fLowFx(), om = fOmega > 0;
   // リンク光線 (群体知性)
@@ -899,6 +923,12 @@ function fOmegaHalo(sx, sy, r, now){
 
 // ミニマップ: 機兵の位置 (独立して散らばっているのが見えるように)
 function machineMinimap(mm, toX, toY, size){
+  if (!fActive && !f0Active) return;
+  if (f0Active){
+    mm.fillStyle = "#7df9ff";
+    for (const p of F0.protos){ const x = toX(p.x), y = toY(p.y); if (x >= 0 && x <= size && y >= 0 && y <= size) mm.fillRect(x - 1, y - 1, 2.5, 2.5); }
+    if (f0Turret){ const x = toX(f0Turret.x), y = toY(f0Turret.y); if (x >= 0 && x <= size && y >= 0 && y <= size) mm.fillRect(x - 2, y - 2, 4, 4); }
+  }
   if (!fActive) return;
   mm.fillStyle = fOmega > 0 ? "#ff6f8a" : "#b9a8ff";
   for (const k of ["hunters", "drillers", "spiders", "kids", "teslas", "bombers", "cannons", "nanites"]){
@@ -908,10 +938,410 @@ function machineMinimap(mm, toX, toY, size){
 }
 // ツリー上部の発動状況バーに出す稼働状況
 function machineStatusText(){
-  if (!fActive) return "";
+  if (!fActive && !f0Active) return "";
   const parts = [];
   const add = (n, l) => { if (n) parts.push(`${l} <b>${n}</b>`); };
+  add(F0.protos.length, "プロト");
+  if (f0Turret) parts.push("簡易砲台 <b>展開中</b>");
   add(MCH.hunters.length, "ハンター"); add(MCH.drillers.length, "ドリラー"); add(MCH.spiders.length + MCH.kids.length, "スパイダー");
   add(MCH.teslas.length, "テスラ"); add(MCH.bombers.length, "ボマー"); add(MCH.cannons.length, "キャノン"); add(MCH.titan ? 1 : 0, "タイタン"); add(MCH.nanites.length, "ナノマシン");
-  return `自律機兵 ${parts.join(" ・ ")} ／ 威力 <b>×${fPow().toFixed(2)}</b>${fOmega > 0 ? " ／ <b style=\"color:#ff6f8a\">暴走中</b>" : ""}`;
+  const extra = [];
+  if (f0ChargeT > 0) extra.push("<b style=\"color:#7df9ff\">急速充電中</b>");
+  if (f0Heat > 0) extra.push(`排熱 <b>+${f0Heat}%</b>`);
+  return `機兵 ${parts.join(" ・ ")} ／ 威力 <b>×${fPow().toFixed(2)}</b>${fOmega > 0 ? " ／ <b style=\"color:#ff6f8a\">暴走中</b>" : ""}${extra.length ? " ／ " + extra.join(" ") : ""}`;
+}
+
+// =========================================================
+// 序盤機兵 (f0_*): 試作機プロト / 簡易砲台 / 自爆ドローン / 地雷
+// 自律機兵 (f_*) と同じ原則: 実行時状態はセーブせず、スキルから毎フレーム機数を合わせ直す。
+// 発生源フラグは curProto (skill-hooks.js)。自律機兵側は curMach を立て、素材+1 (f0_minemod) は付かない。
+// =========================================================
+const F0 = { protos: [], drones: [], mines: [] };
+let f0Turret = null;              // 展開中の簡易砲台 {x, y, ang, fireT, retT, ti, tm, flash}
+let f0StillT = 0, f0LastPX = 0, f0LastPY = 0, f0StillInit = false;   // 砲台の展開判定 (実移動量ベース)
+let f0ScrapN = 0;                 // スクラップ工房: 前回の組み立てからの破壊数
+let f0DroneQueue = 0, f0DroneT = 0;
+let f0Heat = 0, f0HeatT = 0;      // 排熱利用: 自機連射の上乗せ (%) と残り時間 (skill-early.js の earlyRateMul が読む)
+let f0ChargeT = 0;                // 急速充電: 残り時間 (fRate とプロト/砲台のタイマーが読む)
+let f0Heals = [];                 // 修理プロトコル: 継続回復キュー {left, rate}
+let f0RebuildT = 0;               // 突撃で失ったプロトの再構築時間
+let f0Active = false;
+
+// --- 共有倍率 (自律機兵側は fPowWith / fRate に組み込み済み) ---
+function f0BlueprintMul(){ return sk("f0_blueprint") ? 1 + Math.min(0.6, state.lv * 0.01) : 1; }   // 設計図: レベル×1%、最大+60%
+function f0IdleMul(){ return (sk("f0_idle") && idleT >= 30) ? 1.5 : 1; }                              // 自動戦闘プログラム: 無操作30秒で ×1.5 (タイマーは skill-fx.js の autopilot と共用)
+const f0Pow = () => f0BlueprintMul() * f0IdleMul();        // f0 ユニット (プロト・砲台・ドローン・地雷) の威力倍率
+const f0RateMul = () => (f0ChargeT > 0 ? 2 : 1);           // 急速充電中の動作速度
+
+// --- f0 ユニット専用のダメージチョークポイント (curProto を立て、自動照準較正の会心を判定する) ---
+function f0HitBlock(idx, dmg){
+  if (idx < 0 || isDestroyed(idx)) return;
+  const p = curProto; curProto = true;
+  try { damageBlock(idx, fCalibDmg(dmg), 0); } finally { curProto = p; }
+}
+function f0HitMob(m, dmg){ if (m && !m.dead) damageMob(m, fCalibDmg(dmg), null); }
+function f0MobsIn(x, y, r, dmg){
+  const r2 = r * r;
+  for (const m of mobs){ if (m.dead) continue; const dx = m.x - x, dy = m.y - y; if (dx * dx + dy * dy <= r2) damageMob(m, fCalibDmg(dmg), null); }
+}
+function f0Radius(x, y, r, dmg){
+  f0MobsIn(x, y, r, dmg);
+  if (outOfPlanet(x, y, r)) return;
+  const cgx = w2g(x), cgy = w2g(y), rb = Math.ceil(r / BS), r2 = r * r;
+  const p = curProto; curProto = true;
+  try {
+    for (let gy = Math.max(0, cgy - rb); gy <= Math.min(D - 1, cgy + rb); gy++){
+      for (let gx = Math.max(0, cgx - rb); gx <= Math.min(D - 1, cgx + rb); gx++){
+        const i = gy * D + gx;
+        if (!blockExists(gx, gy) || isDestroyed(i)) continue;
+        const dx = g2w(gx) - x, dy = g2w(gy) - y;
+        if (dx * dx + dy * dy <= r2) damageBlock(i, fCalibDmg(dmg), 0);
+      }
+    }
+  } finally { curProto = p; }
+}
+
+// --- 他ファイルからのフック ---
+function f0OnLevelUp(){ if (sk("f0_charge")) f0ChargeT = 20; }   // 急速充電 (skill-fx.js の levelUpFx から)
+function f0OnPlayerHit(d){                                        // mobs.js の damagePlayer から (HPを引く直前)
+  if (sk("f0_decoy")){                                            // 囮装甲: プロトが約5ブロック以内にいる間、被ダメージ -15%
+    const R2 = (BS * 5) * (BS * 5);
+    for (const p of F0.protos){ const dx = p.x - player.x, dy = p.y - player.y; if (dx * dx + dy * dy <= R2){ d *= 0.85; break; } }
+  }
+  if (sk("f0_repair") && F0.protos.length && state.hp - d > 0){   // 修理プロトコル: 受けたダメージの40%を5秒かけて回復
+    const amt = d * 0.4;
+    if (amt > 0){
+      if (f0Heals.length >= 8){ let s = amt; for (const h of f0Heals) s += h.left; f0Heals = [{ left: s, rate: s / 5 }]; }
+      else f0Heals.push({ left: amt, rate: amt / 5 });
+    }
+  }
+  return d;
+}
+function f0OnMobKill(m){                                          // mobs.js の killMob から
+  if (!sk("f0_salvage")) return;                                  // 部品取り: 倒すとプロト +1 (20秒間・最大+3)
+  let temp = 0;
+  for (const p of F0.protos) if (p.temp) temp++;
+  if (temp >= 3) return;
+  const p = f0NewProto(20);
+  p.x = m.x; p.y = m.y;
+  F0.protos.push(p);
+}
+function f0Reset(){
+  F0.protos.length = 0; F0.drones.length = 0; F0.mines.length = 0;
+  f0Turret = null; f0ScrapN = 0; f0DroneQueue = 0; f0DroneT = 0;
+  f0Heat = 0; f0HeatT = 0; f0ChargeT = 0; f0Heals = []; f0RebuildT = 0;
+  f0StillT = 0; f0StillInit = false; f0Active = false;
+}
+
+// --- プロト ---
+const f0BaseProtos = () => sk("f0_proto") ? 1 + (sk("f0_proto2") ? 1 : 0) : 0;
+function f0NewProto(temp, x, y){
+  const a = Math.random() * Math.PI * 2;
+  const p = { x: x !== undefined ? x : player.x + Math.cos(a) * 50, y: y !== undefined ? y : player.y + Math.sin(a) * 50, ang: a,
+    ha: Math.random() * Math.PI * 2, hr: 90 + Math.random() * 110,
+    fireT: Math.random() * 0.5, retT: Math.random() * 0.4, ti: -1, tm: 0,
+    lensKey: null, lensN: 0, mineT: 4 + Math.random() * 6, kamiT: 26 + Math.random() * 8, guardT: 0, collectT: Math.random() * 0.2,
+    temp: temp || 0, dive: null, flash: 0, born: nowMs };
+  addRing({ x: p.x, y: p.y, r: 22, color: "125,249,255", dur: 300 });
+  return p;
+}
+function syncProtos(){
+  const want = Math.max(0, f0BaseProtos() - (f0RebuildT > 0 ? 1 : 0));   // 突撃で失った1機は再構築が終わるまで欠員
+  let base = 0;
+  for (const p of F0.protos) if (!p.temp) base++;
+  while (base < want){ F0.protos.push(f0NewProto(0)); base++; }
+  if (base > want){
+    let rm = base - want;
+    for (let i = F0.protos.length - 1; i >= 0 && rm > 0; i--) if (!F0.protos[i].temp){ F0.protos.splice(i, 1); rm--; }
+  }
+  if (!sk("f0_salvage")) for (let i = F0.protos.length - 1; i >= 0; i--) if (F0.protos[i].temp) F0.protos.splice(i, 1);
+}
+function protoFire(p, U, pow){
+  const base = U * 0.10 * 0.5 * pow;   // 0.5秒間隔: 1発 = DPS×10% ÷ 毎秒2発
+  const range = BS * 10, mobRange = sk("f0_intercept") ? BS * 17 : range;
+  const shots = [];
+  const mb = p.tm ? mobById(p.tm) : null;
+  if (mb && Math.hypot(mb.x - p.x, mb.y - p.y) <= mobRange) shots.push({ mob: mb });
+  else if (p.ti >= 0 && !isDestroyed(p.ti)){ const bp = blockPos(p.ti); if (Math.hypot(bp.x - p.x, bp.y - p.y) <= range) shots.push({ idx: p.ti }); }
+  if (!shots.length){ p.lensKey = null; p.lensN = 0; return false; }
+  if (sk("f0_split")){   // 拡散レンズ: 近くの3目標同時 (各70%)
+    const have = new Set(shots.map(s => s.mob ? "m" + s.mob.id : "b" + s.idx));
+    for (const j of findNearestBlocks(p.x, p.y, range, 4)){
+      if (shots.length >= 3) break;
+      if (have.has("b" + j)) continue;
+      have.add("b" + j); shots.push({ idx: j });
+    }
+  }
+  shots.forEach((s, n) => {
+    let mult = n === 0 ? 1 : 0.7;
+    if (n === 0){   // 収束レンズ: 同じ目標を撃ち続けるほど +20%/発 (最大×2)
+      const key = s.mob ? "m" + s.mob.id : "b" + s.idx;
+      if (sk("f0_lens")){ if (p.lensKey === key) p.lensN++; else { p.lensKey = key; p.lensN = 0; } mult = Math.min(2, 1 + 0.2 * p.lensN); }
+      else { p.lensKey = key; p.lensN = 0; }
+    }
+    let dmg = base * mult;
+    const bp = s.mob ? null : blockPos(s.idx), tx = s.mob ? s.mob.x : bp.x, ty = s.mob ? s.mob.y : bp.y;
+    addBeam({ x1: p.x, y1: p.y, x2: tx, y2: ty, w: 1.6, color: "#7df9ff", life: 110 });
+    if (s.mob){ if (sk("f0_intercept")) dmg *= 2; f0HitMob(s.mob, dmg); }   // 迎撃プログラム: モンスターへのダメージ×2
+    else f0HitBlock(s.idx, dmg);
+  });
+  p.flash = 0.06;
+  const s0 = shots[0], bp0 = s0.mob ? null : blockPos(s0.idx);
+  p.ang = Math.atan2((s0.mob ? s0.mob.y : bp0.y) - p.y, (s0.mob ? s0.mob.x : bp0.x) - p.x);
+  return true;
+}
+function protoGuard(p){   // 護衛モード: 周囲約3ブロックの敵弾を撃ち落とす
+  const R2 = (BS * 3) * (BS * 3);
+  for (let i = 0; i < mobShots.length; i++){
+    const s = mobShots[i], dx = s.x - p.x, dy = s.y - p.y;
+    if (dx * dx + dy * dy <= R2){
+      addBeam({ x1: p.x, y1: p.y, x2: s.x, y2: s.y, w: 1.6, color: "#aef4ff", life: 100 });
+      mobShots.splice(i, 1);
+      p.flash = 0.06;
+      return true;
+    }
+  }
+  return false;
+}
+function protoCollect(p){   // 回収モジュール: 周囲約3ブロックのコインを拾う (通常の gainCoin 経路)
+  const R2 = (BS * 3) * (BS * 3);
+  for (let i = coinsArr.length - 1; i >= 0; i--){
+    const c = coinsArr[i];
+    if (c.gone) continue;
+    const dx = c.x - p.x, dy = c.y - p.y;
+    if (dx * dx + dy * dy <= R2){ gainCoin(c, false); removeCoinAt(i); hudDirty = true; }
+  }
+}
+function layMine(p){   // 地雷敷設: 近くのブロックへ地雷 (上限つき)
+  if (F0.mines.length >= 12) return;
+  const idx = findNearestBlock(p.x, p.y, BS * 6);
+  if (idx < 0 || F0.mines.some(mn => mn.idx === idx)) return;
+  const bp = blockPos(idx);
+  F0.mines.push({ idx, x: bp.x, y: bp.y, t: 1.5 });
+}
+function updateProto(p, dt, U, pow){
+  if (p.flash > 0) p.flash -= dt;
+  if (p.temp){ p.temp -= dt; if (p.temp <= 0) return false; }
+  if (p.dive){   // 突撃中: 密集地へ一直線
+    const d = fMoveTo(p, p.dive.x, p.dive.y, 950, dt, 0);
+    p.dive.t -= dt;
+    if (d <= 34 || p.dive.t <= 0){
+      bumpProc("f0kami", p.x, p.y);
+      addRing({ x: p.x, y: p.y, r: BS * 2.8, color: "255,170,90", dur: 420 });
+      f0Radius(p.x, p.y, BS * 2.5, U * 4 * pow);
+      if (onScreen(p.x, p.y, 60)) sndBoom();
+      if (!p.temp) f0RebuildT = 3;   // その場で組み直し: 少し置いて自機そばに復帰
+      return false;
+    }
+    return true;
+  }
+  const rate = f0RateMul();
+  if (sk("f0_kamikaze")){   // 突撃プロトコル: 30秒ごとに密集地へ突撃
+    p.kamiT -= dt;
+    if (p.kamiT <= 0){
+      const tp = fDensest(p.x, p.y, 700, 3);
+      if (tp){ p.dive = { x: tp.x, y: tp.y, t: 1.6 }; p.kamiT = 30; }
+      else p.kamiT = 4;
+    }
+  }
+  if (sk("f0_mines")){ p.mineT -= dt; if (p.mineT <= 0){ p.mineT = 8; layMine(p); } }
+  if (p.guardT > 0) p.guardT -= dt;
+  if (sk("f0_guard") && p.guardT <= 0 && protoGuard(p)) p.guardT = 0.4;
+  if (sk("f0_collect")){ p.collectT -= dt; if (p.collectT <= 0){ p.collectT = 0.15; protoCollect(p); } }
+  // 索敵 (間引き)
+  p.retT -= dt;
+  const range = BS * 10, mobRange = sk("f0_intercept") ? BS * 17 : range;
+  if (p.retT <= 0){
+    p.retT = 0.4 + Math.random() * 0.2;
+    const mb = nearestMob(p.x, p.y, mobRange);
+    if (mb){ p.tm = mb.id; p.ti = -1; }
+    else {
+      p.tm = 0;
+      const cur = p.ti >= 0 && !isDestroyed(p.ti) ? blockPos(p.ti) : null;
+      if (!cur || Math.hypot(cur.x - p.x, cur.y - p.y) > range) p.ti = findNearestBlock(p.x, p.y, range);
+    }
+  }
+  // 移動: 目標のそばでホバリング。自機から約10ブロック以上は追わない
+  const tmob = p.tm ? mobById(p.tm) : null;
+  let tx, ty, stop = 10;
+  if (tmob){ tx = tmob.x; ty = tmob.y; stop = 150; }
+  else if (p.ti >= 0 && !isDestroyed(p.ti)){ const bp = blockPos(p.ti); tx = bp.x; ty = bp.y; stop = 150; }
+  else { const hp = fHome(p); tx = hp.x; ty = hp.y; }
+  if (Math.hypot(tx - player.x, ty - player.y) > BS * 10){ const hp = fHome(p); tx = hp.x; ty = hp.y; stop = 10; }
+  fMoveTo(p, tx, ty, 300, dt, stop);
+  // 射撃
+  p.fireT -= dt * rate;
+  if (p.fireT > 0) return true;
+  p.fireT = 0.5;
+  if (!protoFire(p, U, pow)) p.fireT = 0.15;
+  return true;
+}
+
+// --- 簡易砲台 ---
+function packTurret(explode){
+  if (!f0Turret) return;
+  const T = f0Turret;
+  f0Turret = null;
+  if (explode && sk("f0_pack")){   // 撤収爆破: 畳むとき、その場で爆発
+    bumpProc("f0pack", T.x, T.y);
+    addRing({ x: T.x, y: T.y, r: BS * 3.4, color: "255,170,90", dur: 420 });
+    f0Radius(T.x, T.y, BS * 3, playerDamage() * 2 * f0Pow());
+    if (onScreen(T.x, T.y, 60)) sndBoom();
+  }
+}
+function updateTurret(dt, U, pow){
+  if (!f0StillInit){ f0StillInit = true; f0LastPX = player.x; f0LastPY = player.y; }
+  const moved = Math.hypot(player.x - f0LastPX, player.y - f0LastPY);
+  f0LastPX = player.x; f0LastPY = player.y;
+  if (moved > 2) f0StillT = 0; else f0StillT += dt;   // 静止判定はプレイヤーの実移動量で見る (オートパイロットの入力では誤判定しない)
+  if (!sk("f0_turret")){ if (f0Turret) packTurret(false); return; }
+  if (!f0Turret && f0StillT >= 2){   // 2秒以上止まっていると自機のそばに展開
+    f0Turret = { x: player.x + 34, y: player.y + 10, ang: -Math.PI / 2, fireT: 0.3, retT: 0, ti: -1, tm: 0, flash: 0 };
+    addRing({ x: f0Turret.x, y: f0Turret.y, r: 30, color: "125,249,255", dur: 350 });
+  }
+  if (!f0Turret) return;
+  if (moved > 2){ packTurret(true); return; }   // 動き出すと畳む
+  const T = f0Turret;
+  if (T.flash > 0) T.flash -= dt;
+  const range = BS * 12 * (sk("f0_range") ? 1.5 : 1);   // 砲台の測距儀: 射程 +50%
+  T.retT -= dt;
+  if (T.retT <= 0){
+    T.retT = 0.4;
+    const mb = nearestMob(T.x, T.y, range);
+    if (mb){ T.tm = mb.id; T.ti = -1; }
+    else { T.tm = 0; if (T.ti < 0 || isDestroyed(T.ti)) T.ti = findNearestBlock(T.x, T.y, range); }
+  }
+  T.fireT -= dt * f0RateMul();
+  if (T.fireT > 0) return;
+  T.fireT = 0.5;
+  const per = (sk("f0_range") ? 0.50 : 0.35) * 0.5;   // 0.5秒間隔: 1発 = DPS×35% (測距儀で50%) ÷ 毎秒2発
+  const shots = sk("f0_turret2") ? 2 : 1;              // 連装砲台: 1回に2発
+  for (let s = 0; s < shots; s++){
+    const mb = T.tm ? mobById(T.tm) : null;
+    let idx = T.ti >= 0 && !isDestroyed(T.ti) ? T.ti : -1;
+    if (!mb && idx < 0) idx = findNearestBlock(T.x, T.y, range);
+    if (mb){
+      addBeam({ x1: T.x, y1: T.y, x2: mb.x, y2: mb.y, w: 2, color: "#aef4ff", life: 110 });
+      f0HitMob(mb, U * per * pow);
+      T.ang = Math.atan2(mb.y - T.y, mb.x - T.x); T.flash = 0.06;
+    } else if (idx >= 0){
+      const bp = blockPos(idx);
+      addBeam({ x1: T.x, y1: T.y, x2: bp.x, y2: bp.y, w: 2, color: "#aef4ff", life: 110 });
+      f0HitBlock(idx, U * per * pow);
+      T.ang = Math.atan2(bp.y - T.y, bp.x - T.x); T.flash = 0.06;
+      if (isDestroyed(idx)) T.ti = -1;
+    } else { T.fireT = 0.15; break; }
+  }
+}
+
+// --- 自爆ドローン (スクラップ工房) ---
+function spawnScrapDrone(){
+  const tp = fDensest(player.x, player.y, 800, 3) || { x: player.x, y: player.y };
+  const a = Math.random() * Math.PI * 2;
+  F0.drones.push({ x: player.x + Math.cos(a) * 30, y: player.y + Math.sin(a) * 30, tx: tp.x, ty: tp.y, ang: a, t: 0 });
+}
+function updateScrapDrone(d, dt, U, pow){
+  d.t += dt;
+  const dist = fMoveTo(d, d.tx, d.ty, 720, dt, 0);
+  if (dist <= 30 || d.t > 2.5){
+    bumpProc("f0drone", d.x, d.y);
+    addRing({ x: d.x, y: d.y, r: BS * 3.4, color: "255,170,90", dur: 420 });
+    f0Radius(d.x, d.y, BS * 3, U * 3 * pow);
+    if (onScreen(d.x, d.y, 60)) sndBoom();
+    return false;
+  }
+  return true;
+}
+
+// --- f0 全体の更新 (machineUpdate から、自律機兵の有無にかかわらず呼ばれる) ---
+function f0Update(dt, now){
+  if (f0ChargeT > 0) f0ChargeT -= dt;
+  if (f0HeatT > 0){ f0HeatT -= dt; if (f0HeatT <= 0) f0Heat = 0; }   // 排熱は3秒で冷める
+  if (f0Heals.length && state.hp > 0){                               // 修理プロトコルの継続回復
+    for (let i = f0Heals.length - 1; i >= 0; i--){
+      const h = f0Heals[i], amt = Math.min(h.left, h.rate * dt);
+      h.left -= amt;
+      state.hp = Math.min(playerMaxHP(), state.hp + amt);
+      if (h.left <= 0.001) f0Heals.splice(i, 1);
+    }
+  }
+  const any = sk("f0_proto") || sk("f0_turret") || sk("f0_scrap") || sk("f0_salvage");
+  f0Active = !!(any || F0.protos.length || f0Turret || F0.drones.length || F0.mines.length);
+  if (!f0Active) return;
+  const U = playerDPS(), pow = f0Pow();
+  if (f0RebuildT > 0) f0RebuildT -= dt;
+  syncProtos();
+  for (let i = F0.protos.length - 1; i >= 0; i--) if (!updateProto(F0.protos[i], dt, U, pow)) F0.protos.splice(i, 1);
+  updateTurret(dt, U, pow);
+  if (f0DroneQueue > 0){ f0DroneT -= dt; if (f0DroneT <= 0){ f0DroneT = 0.3; f0DroneQueue--; spawnScrapDrone(); } }
+  for (let i = F0.drones.length - 1; i >= 0; i--) if (!updateScrapDrone(F0.drones[i], dt, U, pow)) F0.drones.splice(i, 1);
+  for (let i = F0.mines.length - 1; i >= 0; i--){
+    const mn = F0.mines[i];
+    if (isDestroyed(mn.idx)){ F0.mines.splice(i, 1); continue; }   // 土台のブロックが先に壊れたら地雷も消える
+    mn.t -= dt;
+    if (mn.t <= 0){
+      F0.mines.splice(i, 1);
+      bumpProc("f0mine", mn.x, mn.y);
+      addRing({ x: mn.x, y: mn.y, r: BS * 1.8, color: "255,120,60", dur: 380 });
+      f0Radius(mn.x, mn.y, BS * 1.5, U * 2 * pow);   // 半径1.5ブロック = 3x3を巻き込む
+    }
+  }
+}
+
+// --- f0 の描画 (machineDraw から) ---
+const protoSpr = makeSprite(36, (g, S) => {
+  const cx = S / 2, cy = S / 2;
+  g.fillStyle = "#12333d"; g.strokeStyle = "#7df9ff"; g.lineWidth = 1.6;
+  g.beginPath(); g.arc(cx, cy, 10, 0, 7); g.fill(); g.stroke();
+  g.fillStyle = "#2a5a68"; g.fillRect(cx - 13, cy - 3, 6, 6); g.fillRect(cx + 7, cy - 3, 6, 6);
+  g.fillStyle = "#d8fbff"; g.beginPath(); g.arc(cx, cy, 4.2, 0, 7); g.fill();
+});
+function f0Draw(now, toScreen){
+  const low = fLowFx();
+  // 地雷: 点滅する小さな信管
+  for (const mn of F0.mines){
+    if (!onScreen(mn.x, mn.y, 30)) continue;
+    const [sx, sy] = toScreen(mn.x, mn.y);
+    const blink = (now / 200 + mn.idx) % 2 < 1;
+    ctx.fillStyle = blink ? "#ff5340" : "#7a1f16";
+    ctx.beginPath(); ctx.arc(sx, sy, 3.4 * zoom, 0, 7); ctx.fill();
+    ctx.strokeStyle = "rgba(255,83,64,.6)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(sx, sy, (5 + 2 * Math.sin(now / 150)) * zoom, 0, 7); ctx.stroke();
+  }
+  // 簡易砲台: 台座 + 砲身
+  if (f0Turret){
+    const T = f0Turret;
+    if (onScreen(T.x, T.y, 60)){
+      const [sx, sy] = toScreen(T.x, T.y);
+      ctx.save(); ctx.translate(sx, sy);
+      ctx.fillStyle = "#1c2f38"; ctx.strokeStyle = "#7df9ff"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(-13 * zoom, 9 * zoom); ctx.lineTo(13 * zoom, 9 * zoom); ctx.lineTo(8 * zoom, -4 * zoom); ctx.lineTo(-8 * zoom, -4 * zoom); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.rotate(T.ang);
+      ctx.fillStyle = T.flash > 0 ? "#eafcff" : "#9adfe8";
+      ctx.fillRect(0, -2.4 * zoom, 17 * zoom, 4.8 * zoom);
+      ctx.restore();
+      ctx.fillStyle = "#7df9ff"; ctx.beginPath(); ctx.arc(sx, sy - 4 * zoom, 3 * zoom, 0, 7); ctx.fill();
+    }
+  }
+  // 自爆ドローン: オレンジの小型機
+  for (const d of F0.drones){
+    if (!onScreen(d.x, d.y, 40)) continue;
+    const [sx, sy] = toScreen(d.x, d.y);
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(d.ang);
+    ctx.fillStyle = "#ff9a3c"; ctx.strokeStyle = "#ffd9a0"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(8 * zoom, 0); ctx.lineTo(-6 * zoom, 5 * zoom); ctx.lineTo(-6 * zoom, -5 * zoom); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  // プロト: 小さなドローン (丸い機体+発光コア)。臨時機 (部品取り) は半透明で、消滅が近いと点滅
+  for (const p of F0.protos){
+    if (!onScreen(p.x, p.y, 50)) continue;
+    const [sx, sy] = toScreen(p.x, p.y), size = 36 * zoom;
+    ctx.save();
+    if (p.temp) ctx.globalAlpha = p.temp < 3 ? (0.35 + 0.4 * Math.abs(Math.sin(now / 120))) : 0.75;
+    ctx.translate(sx, sy); ctx.rotate(p.ang);
+    ctx.drawImage(protoSpr, -size / 2, -size / 2, size, size);
+    ctx.restore();
+    if (p.flash > 0){ ctx.fillStyle = "rgba(216,251,255,.85)"; ctx.beginPath(); ctx.arc(sx + Math.cos(p.ang) * 12 * zoom, sy + Math.sin(p.ang) * 12 * zoom, 3 * zoom, 0, 7); ctx.fill(); }
+    if (!low && p.dive){ ctx.strokeStyle = "rgba(255,120,60,.7)"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(sx, sy, 13 * zoom, 0, 7); ctx.stroke(); ctx.lineWidth = 1; }
+  }
 }

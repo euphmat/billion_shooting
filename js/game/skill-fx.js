@@ -19,6 +19,7 @@ function blast(x, y, r, dmg, color){
   sndBoom();
 }
 function levelUpFx(){
+  if (typeof f0OnLevelUp === "function") f0OnLevelUp();   // 序盤機兵: 急速充電 (20秒間、機兵の動作速度 ×2)
   sndLevel();
   if (typeof artHas === "function" && artHas("lg_scepter")) scepterStarfall();   // 星屑の王笏: 星が降り注ぐ
   addRing({ x: player.x, y: player.y, r: 260, t: performance.now(), color: "255,255,255", dur: 700 });

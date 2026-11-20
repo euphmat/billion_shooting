@@ -83,6 +83,10 @@ const PROC_TAG = {
   fsalvo:        ["ミサイル",   "#d6ccff"],
   fnano:         ["分解",       "#d8d4ea"],
   fsplit:        ["分裂",       "#ff6fa8"],
+  f0drone:       ["自爆ドローン", "#ffb070"],
+  f0mine:        ["地雷",       "#ff7a3a"],
+  f0kami:        ["突撃",       "#7df9ff"],
+  f0pack:        ["撤収爆破",   "#ffb070"],
 };
 const procTags = [];   // {x, y, text, color, t}
 const procTagLast = {};
