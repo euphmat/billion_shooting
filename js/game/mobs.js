@@ -149,9 +149,9 @@ function damagePlayer(d){
   if (state.hp <= 0){
     if (artHas("lg_phoenix") && artPhoenixT <= 0){   // 不死鳥の灰: 全HPで復活 + 周囲に大爆発 (45秒に1回)
       artPhoenixT = 45; state.hp = playerMaxHP(); player.iframes = 2.5; hurtFlash = 0; hudDirty = true;
-      phoenixBlast(); toast("不死鳥の灰が燃え上がり、蘇った！"); return;
+      phoenixBlast(); toast("不死鳥の灰が燃え上がり、蘇った！", "good"); return;
     }
-    if (artSpecial("revive") && Math.random() < 0.75){ state.hp = Math.round(playerMaxHP() * 0.75); player.iframes = 2; toast("不死の核が蘇らせた！"); bumpArtProc("l_revive"); return; }   // 不死の核
+    if (artSpecial("revive") && Math.random() < 0.75){ state.hp = Math.round(playerMaxHP() * 0.75); player.iframes = 2; toast("不死の核が蘇らせた！", "good"); bumpArtProc("l_revive"); return; }   // 不死の核
     respawnPlayer();
   }
 }
@@ -160,7 +160,7 @@ function respawnPlayer(){
   player.x = (R + 4) * BS; player.y = 0; player.vx = 0; player.vy = 0;
   player.iframes = 3; hurtFlash = 0;
   mobShots.length = 0;
-  toast("撃墜された… メイン惑星で復活");
+  toast("撃墜された… メイン惑星で復活", "warn");
 }
 function updatePlayerHP(dt){
   if (!hpInitDone){   // 初回: セーブのHPを妥当な範囲に
@@ -177,7 +177,7 @@ function updatePlayerHP(dt){
 }
 
 // ---------- モンスター ----------
-// ダメージ数値用: モンスター単位で集計し、game.js の flushDmgLabels がまとめて表示する
+// ダメージ数値用: モンスター単位で集計し、render/labels.js の flushDmgLabels がまとめて表示する
 const mobDmgAcc = new Map();   // mob.id -> {m, total, crit, max}
 function noteMobDmg(m, dmg, crit){
   if (!(dmg > 0)) return;
@@ -198,7 +198,7 @@ function damageMob(m, dmg, bl){
   noteMobDmg(m, dmg, !!(bl && bl.crit));
   if (voidCrit){   // 紫のリング + 特大数字フラグ
     const e = mobDmgAcc.get(m.id); if (e) e.void = true;
-    rings.push({ x: m.x, y: m.y, r: 70, t: performance.now(), color: "176,110,255", dur: 350 });
+    addRing({ x: m.x, y: m.y, r: 70, t: performance.now(), color: "176,110,255", dur: 350 });
   }
   if (bl && bl.fx) m.lastFx = bl.fx;
   if (m.hp <= 0) killMob(m);
@@ -208,7 +208,7 @@ function killMob(m){
   const si = m.sat, S = SATS[si], T = m.type;
   const total = Math.round((30 + si * 45) * T.hpMul * (T.coinMul || 1)), each = Math.max(1, Math.round(total / 4));
   for (let k = 0; k < 4; k++)
-    coinsArr.push({ x: m.x, y: m.y, vx: (Math.random() - .5) * 120, vy: (Math.random() - .5) * 120, value: each, chest: false, age: 0 });
+    spawnCoin({ x: m.x, y: m.y, vx: (Math.random() - .5) * 120, vy: (Math.random() - .5) * 120, value: each, chest: false, age: 0 });
   gainXP(Math.round((8 + si * 6) * T.hpMul * (T.xpMul || 1) * (S.fx ? S.fx.xp : 1)));
   if (Math.random() < 0.35 * (S.fx ? S.fx.drop : 1)){ const n = 1 + (Math.random() * 3 | 0); invAdd(S.sig, n); noteDrop(m.x, m.y, MAT[S.sig], n); }
   if (artSpecial("mobDrop")){ invAdd(S.sig, 1); noteDrop(m.x, m.y - 16, MAT[S.sig], 1); bumpArtProc("e_harv"); }   // 星屑の収穫者: 必ず落ちる

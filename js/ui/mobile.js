@@ -1,6 +1,6 @@
 "use strict";
 /* =========================================================
-   mobile.js - スマホ対応 (最後に読み込む)
+   ui/mobile.js - スマホ対応
      1. バーチャルスティック / ピンチズーム / タップ判定
      2. 工房パネルをボトムシートとして開閉
      3. スキルツリーのピンチズーム
@@ -10,7 +10,7 @@
 
 const MOBILE_Q = window.matchMedia("(max-width: 860px)");
 const isMobile = () => MOBILE_Q.matches;
-const COARSE = TOUCH_UI;   // ui.js で判定済み
+const COARSE = TOUCH_UI;   // ui/common.js で判定済み
 if (COARSE) document.body.classList.add("touch");
 
 /* =========================================================

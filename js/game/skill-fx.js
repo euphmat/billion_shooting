@@ -1,7 +1,7 @@
 "use strict";
 /* =========================================================
-   skillfx.js - スキル効果の毎フレーム処理 / 描画
-   (game.js の後に読み込む。データは skills.js)
+   game/skill-fx.js - スキル効果の毎フレーム処理 / 描画
+   (ゲーム本体の後に読み込む。データは data/skills.js、命中時フックは game/skill-hooks.js)
    ========================================================= */
 
 // ---------- カーソル位置 ----------
@@ -15,16 +15,16 @@ const blockPos = idx => ({ x: g2w(idx % D), y: g2w((idx / D) | 0) });
 const sndLevel = () => [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, .18, "square", .055, 0, i * .075));
 function blast(x, y, r, dmg, color){
   damageRadius(x, y, r, dmg);
-  rings.push({ x, y, r: r * 1.15, t: performance.now(), color: color || "255,255,255", dur: 480 });
+  addRing({ x, y, r: r * 1.15, t: performance.now(), color: color || "255,255,255", dur: 480 });
   sndBoom();
 }
 function levelUpFx(){
   sndLevel();
   if (typeof artHas === "function" && artHas("lg_scepter")) scepterStarfall();   // 星屑の王笏: 星が降り注ぐ
-  rings.push({ x: player.x, y: player.y, r: 260, t: performance.now(), color: "255,255,255", dur: 700 });
-  let msg = `LEVEL UP!  Lv.${state.lv}  スキルポイント獲得`;
+  addRing({ x: player.x, y: player.y, r: 260, t: performance.now(), color: "255,255,255", dur: 700 });
+  let msg = `レベルアップ  Lv.${state.lv} (スキルポイント +${state.lv % 5 === 0 ? 2 : 1})`;
   if (sk("c_bonus")){ const g = state.lv * 60; addCoins(g); msg += `  祝い金 +${fmt(g)}`; }
-  toast(msg);
+  toast(msg, "good", "levelup");
 }
 
 // ---------- 奥義: 専用スプライト (事前レンダリング。発光はスプライト側に焼き込む) ----------
@@ -182,10 +182,10 @@ function capstoneUpdate(dt, bdt, now){
       planetT = 30; bumpProc("planetkiller");
       skillFeed("planetkiller", "軌道砲撃", "☄️", "#ff6b4a");
       const R = Math.min(1500, Math.hypot(CW, CH) / 2 / zoom + BS * 2);
-      beams.push({ x1: player.x, y1: player.y - 1700, x2: player.x, y2: player.y, t: now, w: 30, color: "#ffb060", life: 320 });
-      beams.push({ x1: player.x, y1: player.y - 1700, x2: player.x, y2: player.y, t: now, w: 11, color: "#ffffff", life: 320 });
-      rings.push({ x: player.x, y: player.y, r: R * 0.55, t: now, color: "255,150,60", dur: 650 });
-      rings.push({ x: player.x, y: player.y, r: R * 0.3, t: now, color: "255,230,190", dur: 500 });
+      addBeam({ x1: player.x, y1: player.y - 1700, x2: player.x, y2: player.y, t: now, w: 16, color: "rgba(255,176,96,.7)", life: 320 });
+      addBeam({ x1: player.x, y1: player.y - 1700, x2: player.x, y2: player.y, t: now, w: 5, color: "#ffffff", life: 320 });
+      addRing({ x: player.x, y: player.y, r: R * 0.55, t: now, color: "255,150,60", dur: 650 });
+      addRing({ x: player.x, y: player.y, r: R * 0.3, t: now, color: "255,230,190", dur: 500 });
       dimFx.push({ x: player.x, y: player.y, t: 0, kind: "planet", dur: 0.6 });
       rawDamage(() => damageRadius(player.x, player.y, R, playerDamage() * 20 * gMul));
       sndBoom();
@@ -229,8 +229,8 @@ function capstoneUpdate(dt, bdt, now){
       for (const m of mobs){ if (!m.dead && m.maxHp > bHard && Math.hypot(m.x - player.x, m.y - player.y) <= range){ bHard = m.maxHp; bMob = m; } }
       if (bMob || bIdx >= 0){
         const tp = bMob ? { x: bMob.x, y: bMob.y } : blockPos(bIdx);
-        beams.push({ x1: o.x, y1: o.y, x2: tp.x, y2: tp.y, t: now, w: 7, color: "#7df9ff", life: 200 });
-        beams.push({ x1: o.x, y1: o.y, x2: tp.x, y2: tp.y, t: now, w: 2.5, color: "#ffffff", life: 200 });
+        addBeam({ x1: o.x, y1: o.y, x2: tp.x, y2: tp.y, t: now, w: 7, color: "#7df9ff", life: 200 });
+        addBeam({ x1: o.x, y1: o.y, x2: tp.x, y2: tp.y, t: now, w: 2.5, color: "#ffffff", life: 200 });
         dimFx.push({ x: tp.x, y: tp.y, t: 0, kind: "spark", dur: 0.28 });
         if (bMob) damageMob(bMob, dmg, null); else damageBlock(bIdx, dmg, 0);
         o.flash = 0.12;
@@ -270,7 +270,7 @@ function capstoneUpdate(dt, bdt, now){
 
 // ---------- 究極: 毎フレーム処理 ----------
 function ultimateUpdate(dt, bdt, now){
-  if (novaCd > 0) novaCd -= dt;   // 元素新星のクールダウン (skills.js)
+  if (novaCd > 0) novaCd -= dt;   // 元素新星のクールダウン (game/skill-hooks.js)
   processBreakQueue();            // 全破壊キュー: 1フレーム上限ぶんだけ処理
   if (whiteFlash > 0) whiteFlash = Math.max(0, whiteFlash - dt * 1.6);
   for (let i = debrisParts.length - 1; i >= 0; i--){
@@ -296,9 +296,9 @@ function ultimateUpdate(dt, bdt, now){
       if (tp){
         bumpProc("planetbeam");
         skillFeed("planetbeam", "惑星破壊ビーム", "🛸", "#7df9ff");
-        beams.push({ x1: mothership.x, y1: mothership.y, x2: tp.x, y2: tp.y, t: now, w: 20, color: "#7df9ff", life: 300 });
-        beams.push({ x1: mothership.x, y1: mothership.y, x2: tp.x, y2: tp.y, t: now, w: 7, color: "#ffffff", life: 300 });
-        rings.push({ x: tp.x, y: tp.y, r: BS * 8.5, t: now, color: "125,249,255", dur: 550 });
+        addBeam({ x1: mothership.x, y1: mothership.y, x2: tp.x, y2: tp.y, t: now, w: 9, color: "rgba(125,249,255,.7)", life: 260 });
+        addBeam({ x1: mothership.x, y1: mothership.y, x2: tp.x, y2: tp.y, t: now, w: 3, color: "#ffffff", life: 260 });
+        addRing({ x: tp.x, y: tp.y, r: BS * 8.5, t: now, color: "125,249,255", dur: 550 });
         dimFx.push({ x: tp.x, y: tp.y, t: 0, kind: "planetbeam", dur: 0.55 });
         rawDamage(() => damageRadius(tp.x, tp.y, BS * 8, playerDPS() * 50));
         mothership.flash = 0.18;
@@ -312,12 +312,12 @@ function ultimateUpdate(dt, bdt, now){
 function fireAnnihilation(now){
   bumpProc("annihilation");
   skillFeed("annihilation", "消滅砲撃", "💥", "#ffffff");
-  beams.push({ x1: player.x, y1: player.y - 2400, x2: player.x, y2: player.y, t: now, w: 44, color: "rgba(255,255,255,.95)", life: 420 });
-  beams.push({ x1: player.x, y1: player.y - 2400, x2: player.x, y2: player.y, t: now, w: 18, color: "#ffe9a8", life: 420 });
-  beams.push({ x1: player.x, y1: player.y - 2400, x2: player.x, y2: player.y, t: now, w: 6, color: "#ffffff", life: 420 });
-  rings.push({ x: player.x, y: player.y, r: BS * 24, t: now, color: "255,255,255", dur: 800 });
-  rings.push({ x: player.x, y: player.y, r: BS * 16, t: now, color: "255,233,168", dur: 650 });
-  rings.push({ x: player.x, y: player.y, r: BS * 8, t: now, color: "255,255,255", dur: 500 });
+  addBeam({ x1: player.x, y1: player.y - 2400, x2: player.x, y2: player.y, t: now, w: 24, color: "rgba(255,255,255,.6)", life: 420 });
+  addBeam({ x1: player.x, y1: player.y - 2400, x2: player.x, y2: player.y, t: now, w: 10, color: "#ffe9a8", life: 420 });
+  addBeam({ x1: player.x, y1: player.y - 2400, x2: player.x, y2: player.y, t: now, w: 6, color: "#ffffff", life: 420 });
+  addRing({ x: player.x, y: player.y, r: BS * 24, t: now, color: "255,255,255", dur: 800 });
+  addRing({ x: player.x, y: player.y, r: BS * 16, t: now, color: "255,233,168", dur: 650 });
+  addRing({ x: player.x, y: player.y, r: BS * 8, t: now, color: "255,255,255", dur: 500 });
   dimFx.push({ x: player.x, y: player.y, t: 0, kind: "annihilation", dur: 0.7 });
   whiteFlash = 1;
   for (let k = 0; k < 46 && debrisParts.length < 160; k++){
@@ -450,7 +450,7 @@ function skillsUpdate(dt, fdt, bdt, now){
     piggyT -= dt;
     if (piggyT <= 0){
       piggyT = 60;
-      if (piggy >= 1){ const g = Math.floor(piggy * (sk("c_piggy2") ? 2.5 : 1.5)); piggy = 0; addCoins(g); toast(`貯金箱が満期!  +${fmt(g)} コイン`); }
+      if (piggy >= 1){ const g = Math.floor(piggy * (sk("c_piggy2") ? 2.5 : 1.5)); piggy = 0; addCoins(g); toast(`貯金箱が満期  +${fmt(g)} コイン`, "good"); }
     }
   }
 
@@ -492,7 +492,7 @@ function skillsUpdate(dt, fdt, bdt, now){
     bombs.splice(i, 1); bombSet.delete(b.idx);
     if (isDestroyed(b.idx)) continue;
     const p = blockPos(b.idx);
-    rings.push({ x: p.x, y: p.y, r: BS * 2, t: now, color: "255,90,70", dur: 240 });
+    addRing({ x: p.x, y: p.y, r: BS * 2, t: now, color: "255,90,70", dur: 240 });
     rawDamage(() => damageBlock(b.idx, b.dmg, 1));
   }
   for (let i = meteors.length - 1; i >= 0; i--){
@@ -500,8 +500,8 @@ function skillsUpdate(dt, fdt, bdt, now){
     if (m.t > 0) continue;
     meteors.splice(i, 1);
     damageRadius(m.x, m.y, m.r, m.dmg);
-    rings.push({ x: m.x, y: m.y, r: m.r * 1.3, t: now, color: "255,170,80", dur: 420 });
-    beams.push({ x1: m.x + 500, y1: m.y - 1400, x2: m.x, y2: m.y, t: now, w: 5, color: "#ffb060", life: 150 });
+    addRing({ x: m.x, y: m.y, r: m.r * 1.3, t: now, color: "255,170,80", dur: 420 });
+    addBeam({ x1: m.x + 500, y1: m.y - 1400, x2: m.x, y2: m.y, t: now, w: 5, color: "#ffb060", life: 150 });
     sndBoom();
   }
 
@@ -544,7 +544,7 @@ function skillsUpdate(dt, fdt, bdt, now){
       for (const i of findNearestBlocks(player.x, player.y, atkRange(), 12)){ const hp = blockHP(i); if (hp > bestHP){ bestHP = hp; best = i; } }
       if (best >= 0){
         const p = blockPos(best);
-        beams.push({ x1: player.x, y1: player.y - 52, x2: p.x, y2: p.y, t: now, w: 4, color: "#57e39a", life: 160 });
+        addBeam({ x1: player.x, y1: player.y - 52, x2: p.x, y2: p.y, t: now, w: 4, color: "#57e39a", life: 160 });
         damageBlock(best, playerDamage() * (sk("d_sat2") ? 15 : 8), 0);
       } else satT = 0.5;
     }
@@ -571,7 +571,7 @@ function skillsUpdate(dt, fdt, bdt, now){
 function skillsDraw(now, toScreen){
   capstoneDraw(now, toScreen);
   const px = BS * zoom;
-  // 爆弾 (ブロックの状態異常は game.js の drawStatusFx でスプライト描画する)
+  // 爆弾 (ブロックの状態異常は render/status-fx.js の drawStatusFx でスプライト描画する)
   if (px > 4){
     for (const b of bombs){
       const [sx, sy] = toScreen(g2w(b.idx % D), g2w((b.idx / D) | 0));

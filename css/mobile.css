@@ -109,17 +109,22 @@ body.pwa-ios-mode .pwa-ios { display:block; }
   #hpHud .hp-label, #hpText { font-size:9px; }
   #buffBox { top:calc(50px + env(safe-area-inset-top)); right:calc(7px + env(safe-area-inset-right)); }
   #buffBox span { font-size:10px; padding:2px 6px; }
-  #buffBox .combo { font-size:16px; }
+  #buffBox .combo { font-size:11px; }
 
   /* ---- 発動フィード: ターゲットバー (top:80px〜) の下に小さく ---- */
-  #artFeed { top:calc(150px + env(safe-area-inset-top)); left:calc(7px + env(safe-area-inset-left)); }
+  /* 発動フィードは右側へ (左上はダンジョンバナーと通知ログが使う) */
+  #artFeed { top:calc(166px + env(safe-area-inset-top)); left:auto; right:calc(7px + env(safe-area-inset-right)); align-items:flex-end; }
   .art-chip { font-size:10.5px; padding:2px 7px 2px 6px; max-width:184px; }
 
   /* ---- ターゲットバー / トースト ---- */
   #targetBar { top:calc(80px + env(safe-area-inset-top)); width:auto; left:10px; right:10px; max-width:none; transform:none; padding:6px 10px 8px; }
   #targetText { font-size:13px; }
   #targetPct { font-size:13px; }
-  #toast { font-size:16px; letter-spacing:.1em; top:30%; max-width:92%; white-space:normal; text-align:center; line-height:1.6; }
+  #dungeonFx { left:10px; right:10px; transform:none; max-width:none; top:calc(132px + env(safe-area-inset-top)); bottom:auto; font-size:11px; padding:3px 9px; }
+  /* スマホの左下はメニュー列なので、通知ログは画面上部 (ダンジョンバナーの下) に出す */
+  #noteLog { left:calc(10px + env(safe-area-inset-left)); bottom:auto; top:calc(166px + env(safe-area-inset-top)); max-width:78%; }
+  #noteLog .note { font-size:11px; }
+  #main:has(#dungeonFx.show) #noteLog { bottom:auto; }
 
   /* ---- ミニマップ: 右下の操作系の上 ---- */
   #minimap {

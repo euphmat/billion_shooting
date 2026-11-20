@@ -262,7 +262,7 @@ const matRarity = m => { const s = matShare(m); return s < 0.012 ? 3 : s < 0.03 
 const RARITY_NAMES = ["ありふれた", "よく見る", "希少", "極稀"];
 
 // ---------- 所持数 ----------
-// state.inv[key] = 個数。state は core.js で定義される (materials.js の方が先に読み込まれるので、参照は関数の中でだけ行う)
+// state.inv[key] = 個数。state は core/state.js で定義される (materials.js の方が先に読み込まれるので、参照は関数の中でだけ行う)
 const invOf   = k => (state.inv && state.inv[k]) || 0;
 const invHas  = rec => Object.keys(rec).every(k => invOf(k) >= rec[k]);
 const invTake = rec => { for (const k in rec) state.inv[k] = Math.max(0, invOf(k) - rec[k]); invVersion++; };
@@ -279,9 +279,9 @@ function invAdd(k, n){
     }
   }
 }
-// 新素材の発見通知 (game.js の toast を使う。読み込み前に呼ばれたときは何もしない)
+// 新素材の発見通知 (ui/notify.js の toast を使う。読み込み前に呼ばれたときは何もしない)
 function newMaterialFound(m){
-  if (typeof toast === "function" && typeof started !== "undefined" && started) toast(`NEW  ${m.name} を発見`);
+  if (typeof toast === "function" && typeof started !== "undefined" && started) toast(`新素材「${m.name}」を発見`, "good");
 }
 // 不足分: { key: 不足数 }
 function invLack(rec){

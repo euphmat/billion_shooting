@@ -6,32 +6,20 @@
    ・それ以外の同一オリジンはキャッシュ優先 + 裏で更新 (stale-while-revalidate)
    ※ セーブデータは IndexedDB なので、キャッシュを消しても消えない
    ========================================================= */
-const V = "v89";                       // index.html の ?v= と合わせる
-const CACHE = "billion-shooting-" + V;
+// バージョンとファイル一覧は js/manifest.js が唯一の定義元 (ページと同じものを読む)。
+// importScripts したファイルもブラウザの更新チェック対象なので、APP_VERSION を上げれば SW も更新される
+importScripts("js/manifest.js");
+const CACHE = "billion-shooting-v" + APP_VERSION;
 
 const SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/style.css?v=" + V.slice(1),
-  "./css/mobile.css?v=" + V.slice(1),
-  "./js/store.js?v=" + V.slice(1),
-  "./js/materials.js?v=" + V.slice(1),
-  "./js/planet.js?v=" + V.slice(1),
-  "./js/core.js?v=" + V.slice(1),
-  "./js/audio.js?v=" + V.slice(1),
-  "./js/skills.js?v=" + V.slice(1),
-  "./js/ui.js?v=" + V.slice(1),
-  "./js/mobs.js?v=" + V.slice(1),
-  "./js/artifacts.js?v=" + V.slice(1),
-  "./js/game.js?v=" + V.slice(1),
-  "./js/skillfx.js?v=" + V.slice(1),
-  "./js/skilltree.js?v=" + V.slice(1),
-  "./js/mobile.js?v=" + V.slice(1),
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/maskable-512.png",
-  "./icons/apple-touch-icon.png",
+  "./js/manifest.js",
+  ...APP_STYLES.map(p => "./" + appAsset(p)),
+  "./" + appAsset(APP_BOOT_SCRIPT),
+  ...APP_SCRIPTS.map(p => "./" + appAsset(p)),
+  ...APP_ICONS.map(p => "./" + p),
 ];
 
 // アプリシェルをキャッシュへ。1つでも失敗すると addAll は全部諦めるので、個別に入れて取りこぼしを許容する
@@ -72,6 +60,16 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+
+  // manifest.js はバージョン付きで読めない (どのバージョンを読むかを決めるファイル) ので、
+  // HTML と同じくネットワーク優先にして、更新をすぐ拾う
+  if (url.pathname.endsWith("/js/manifest.js")){
+    e.respondWith(fetch(req).then(res => {
+      if (res && res.status === 200) caches.open(CACHE).then(c => c.put("./js/manifest.js", res.clone()));
+      return res;
+    }).catch(async () => (await (await caches.open(CACHE)).match("./js/manifest.js")) || Response.error()));
+    return;
+  }
 
   // HTML (ページ遷移): ネットワーク優先 → 落ちたらキャッシュ
   if (req.mode === "navigate"){

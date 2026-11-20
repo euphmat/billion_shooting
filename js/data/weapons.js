@@ -1,117 +1,7 @@
 "use strict";
 /* =========================================================
-   core.js - セーブ / マスターデータ (装備・ボット・回収ボット装備) / 派生ステータス
-   素材のカタログは materials.js、惑星データは planet.js を参照
+   data/weapons.js - 装備 (全137種) のマスターデータと強化コスト
    ========================================================= */
-
-// ---------- 数値表示 ----------
-// 100万未満はカンマ区切り、それ以上は K / M / B / T ... の略記
-const SUFFIX = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "Ud", "Dd", "Td", "Qad", "Qid"];
-function fmt(n){
-  n = Math.floor(n);
-  if (!isFinite(n)) return "∞";
-  if (n < 0) return "-" + fmt(-n);
-  if (n < 1e6) return n.toLocaleString();
-  const e = Math.min(SUFFIX.length - 1, Math.floor(Math.log10(n) / 3)), v = n / Math.pow(1000, e);
-  return (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)) + SUFFIX[e];
-}
-const niceRound = x => { const p = Math.pow(10, Math.max(0, Math.floor(Math.log10(x)) - 1)); return Math.round(x / p) * p; };
-// ダメージ表示専用: 常に小数第1位まで出す (1000以上は K/M... 略記でも .0 を含め必ず1桁)
-function fmtDmg(n){
-  if (!isFinite(n)) return "∞";
-  if (n < 0) return "-" + fmtDmg(-n);
-  if (n < 1000) return n.toFixed(1);
-  const e = Math.min(SUFFIX.length - 1, Math.floor(Math.log10(n) / 3));
-  return (n / Math.pow(1000, e)).toFixed(1) + SUFFIX[e];
-}
-
-// ---------- save / state ----------
-const SAVE_KEY = "billion_shooting_save_v2";
-const OLD_SAVE_KEY = "million_shooting_save_v1";
-const GAME_VERSION = 89;   // 現在のゲームバージョン (アップデート履歴の未読判定に使う)
-const state = {
-  coins: 0, totalCoins: 0, destroyed: 0,
-  weapon: "handDrill",
-  weaponsOwned: { handDrill:true },
-  weaponLv: {},
-  bots: 0, coinBots: 0, botLv: 0, botMode: "follow", cbMode: "follow",
-  botLoadout: [],   // 攻撃ボットの装備 (スロット番号 -> 装備キー。無いスロットは標準装備)
-  cbMod: {},        // 回収ボットの装備 (モジュールキー -> レベル)
-  inv: {}, seen: {},   // 素材の所持数 / 発見済み
-  crafted: 0,
-  muted: false,
-  atkMuted: false,   // 攻撃・破壊音だけオフ (発射/破壊/爆発チャンネル。他の効果音と全体ミュートとは独立)
-  xp: 0, lv: 1, skills: {},
-  artifacts: {},   // 所持アーティファクト {id: 1}
-  botCore: 0, botArmor: 0,   // 衛星テクノロジー (攻撃ボット兵装コア / 自機の衛星装甲)
-  hp: 100,   // 自機HP (最大値はレベルで伸びる: playerMaxHP)
-  off: {},   // 停止中の仲間 { bots:true, ... }
-  visitedBodies: [],   // 訪問済みダンジョン (SATS のインデックス。ファストトラベルの解放条件)
-  lastSeenUpdate: 0,   // アップデート履歴を最後に見たバージョン
-  endingSeen: false,   // エンディング (主惑星の破壊完了) を見たか。自動再生は1回だけ
-  playTime: 0,   // 累計プレイ時間 (秒)。エンディングの統計表示用
-};
-const SAVE_FIELDS = ["coins", "totalCoins", "destroyed", "weapon", "weaponsOwned", "weaponLv", "bots", "coinBots", "botLv",
-  "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "atkMuted", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode", "visitedBodies", "lastSeenUpdate", "endingSeen", "playTime"];
-let migrated = false;
-try {
-  // 本番の置き場所は IndexedDB (store.js が起動時に読み終えている)。
-  // 無ければ旧 localStorage のセーブを引っ越す (初回だけ)
-  let s = (window.SAVED && window.SAVED.state) || null;
-  if (!s){
-    s = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
-    if (!s){
-      // 旧バージョン (コイン購入制) のセーブからは、進行度だけ引き継ぐ。装備・スキルは作り直す
-      const o = JSON.parse(localStorage.getItem(OLD_SAVE_KEY) || "null");
-      if (o) s = { coins:o.coins, totalCoins:o.totalCoins, destroyed:o.destroyed, lv:o.lv, xp:o.xp, muted:o.muted };
-    }
-    if (s) migrated = true;
-    try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(OLD_SAVE_KEY); } catch(e){}
-  }
-  if (s) for (const k of SAVE_FIELDS) if (s[k] !== undefined) state[k] = s[k];
-} catch(e){}
-/* 破壊数は「惑星の実状」そのものなので、小さいセーブ (kv:state) ではなく
-   惑星側のセーブ (kv:world の alive) から必ず導く。
-   両者は書き込み周期が違うので、別々に持つとリロード後に数個ズレてしまう。
-   旧 localStorage からの引っ越しでも、惑星は手つかず = destroyed 0 になって正しい */
-state.destroyed = TARGET_TOTAL - alive;
-
-const isObj = v => v && typeof v === "object" && !Array.isArray(v);
-// 自機の最大HP: レベルで伸びる (アーティファクト等はここに倍率が掛かる)
-const playerMaxHP = () => Math.round((100 + (state.lv - 1) * 30) * (1 + (typeof artVal === "function" ? artVal("hp") : 0)));
-for (const k of ["weaponLv", "cbMod", "inv", "seen", "skills", "off", "weaponsOwned", "artifacts"]) if (!isObj(state[k])) state[k] = {};
-state.botLv |= 0; state.bots |= 0; state.coinBots |= 0; state.crafted |= 0;
-state.lv = Math.max(1, state.lv | 0); state.xp = Math.max(0, +state.xp || 0);
-state.coins = Math.max(0, +state.coins || 0); state.totalCoins = Math.max(0, +state.totalCoins || 0);
-if (!Array.isArray(state.botLoadout)) state.botLoadout = [];
-if (!Array.isArray(state.visitedBodies)) state.visitedBodies = [];
-state.visitedBodies = state.visitedBodies.filter(i => Number.isInteger(i) && i >= 0 && i < SATS.length);
-state.lastSeenUpdate = Math.max(0, state.lastSeenUpdate | 0);
-state.endingSeen = !!state.endingSeen;
-state.playTime = Math.max(0, +state.playTime || 0);
-for (const k of Object.keys(state.inv)) if (!MAT[k]) delete state.inv[k];
-// 稼働中の数 (OFFにした種類は0として扱う。所持数 state[k] はそのまま)
-const act = k => state.off[k] ? 0 : state[k];
-/* save() はクラフト・強化・スキル取得など至る所から呼ばれるので、
-   300ms にまとめて IndexedDB へ 1回だけ書く (構造化クローンなので JSON 化は不要)。
-   書き込み自体は非同期なのでゲームループは待たない */
-let saveTimer = 0;
-const stateSnapshot = () => { const o = {}; for (const k of SAVE_FIELDS) o[k] = state[k]; return o; };
-function saveNow(){
-  if (saveTimer){ clearTimeout(saveTimer); saveTimer = 0; }
-  SaveDB.put(ST_KV, [["state", stateSnapshot()]]);
-}
-function save(){
-  if (saveTimer) return;
-  saveTimer = setTimeout(() => { saveTimer = 0; SaveDB.put(ST_KV, [["state", stateSnapshot()]]); }, 300);
-}
-// セーブを全部消す (設定の「最初から」ボタン用)
-function wipeSave(){
-  if (saveTimer){ clearTimeout(saveTimer); saveTimer = 0; }
-  try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(OLD_SAVE_KEY); } catch(e){}
-  return SaveDB.clearAll();
-}
-if (migrated) saveNow();   // localStorage からの引っ越し分をすぐ IndexedDB へ
 
 /* ---------- 装備 (全137種・素材でクラフト) ----------
    設計の約束: 「リストの後ろにある装備ほど、必ず効率が良い」
@@ -128,17 +18,17 @@ const WEAPON_TIERS = LAYERS.map((L, i) => ({ name:L.name, en:L.key.toUpperCase()
 const WEAPON_SRC = [
   // ===== 地表 =====
   ["handDrill",   "ハンドドリル",       null,         "標準",   "drill",    "dot",     { eff:1, rate:4 }, "効果なし。でも弾切れも反動もない、いつでも頼れる相棒", "最初から持っている手回しのドリル。まずはこれで素材を集めよう。", {}],
-  ["woodBow",     "木の弓",             "wood",       "急所射ち",   "normal",   "arrow",   { eff:1, rate:5, critC:.15, critM:1.5 }, "15%で急所を射抜き、会心1.5倍", "枝をしならせて放つ、最初の一矢。木さえあれば作れる。", { wood:20 }],
-  ["stoneSling",  "石の投石器",         "stone",      "重撃",   "heavy",    "rock",    { eff:1.05, rate:2.2, size:6, pierce:1 }, "重い一発。1個貫通し、壊して余った威力で奥のブロックまで撃ち抜く", "大きな石を振り回して投げる。遅いが、重い。", { stone:30, wood:10 }],
-  ["sandBlaster", "砂の散弾",           "sand",       "拡散",   "spread",   "grain",   { rate:4, pellets:3, spreadA:.16, eff:3.06 }, "3方向へ同時に発射", "砂を握って投げつける。面で押していく気持ちよさ。", { sand:40, shell:5 }],
-  ["waterJet",    "水鉄砲",             "water",      "跳ね水",   "rapid",    "drop",    { eff:.928, rate:10, bounce:1 }, "水流は壁に当たると1回跳ね返り、隣のブロックも濡らして削る", "勢いよく噴き出す水流。柔らかい地表なら、これで十分。", { water:40, clay:10 }],
-  ["iceLance",    "氷の槍",             "ice",        "氷結",   "needle",   "shard",   { rate:7, bulletSpeed:1400, pierce:1, eff:2.2, size:3, frost:1 }, "1個貫通。当たったブロックは凍えて、3秒間受けるダメージ +30%", "細く鋭い氷柱。刺さった場所から、冷気が広がる。", { ice:40, snow:15 }],
-  ["clayBomb",    "粘土爆弾",           "clay",       "時限爆弾","bomber",  "bomb",    { rate:2.5, bomb:2, eff:2.14 }, "当てたブロックに爆弾を仕掛ける。1.5秒後に200%で起爆し、周囲も巻き込む", "こねた粘土に火薬を詰めて。撃って、待って、ドカン。", { clay:40, salt:10 }],
-  ["saltShard",   "塩の結晶弾",         "salt",       "分裂",   "split",    "crystal", { rate:4, split:4, eff:2.83 }, "当たると破片が周囲4個にも40%ダメージ", "着弾の瞬間、塩の結晶が四方へ飛ぶ。", { salt:40, sand:20 }],
-  ["coralNeedle", "珊瑚の二連針",       "coral",      "2連装",  "double",   "needle",  { rate:4.5, pellets:2, spreadA:.07, eff:2.05 }, "2発を並べて同時に撃つ", "珊瑚の枝を削った針を、二本並べて放つ。", { coral:30, shell:20 }],
-  ["shellBoomerang","貝殻ブーメラン",   "shell",      "跳弾",   "ricochet", "moon",    { rate:4, bounce:3, eff:3.81 }, "当たると近くの別のブロックへ跳ねていく (最大3回)", "一度の射撃で何度も仕事をする跳ね弾。密集地帯で本領発揮。", { shell:40, kelp:15 }],
+  ["woodBow",     "木の弓",             "wood",       "急所射ち",   "normal",   "arrow",   { eff:1, rate:5, critC:.15, critM:1.5 }, "15%で急所を射抜き、会心1.5倍", "枝をしならせて放つ、最初の一矢。木さえあれば作れる。", { wood:10 }],
+  ["stoneSling",  "石の投石器",         "stone",      "重撃",   "heavy",    "rock",    { eff:1.05, rate:2.2, size:6, pierce:1 }, "重い一発。1個貫通し、壊して余った威力で奥のブロックまで撃ち抜く", "大きな石を振り回して投げる。遅いが、重い。", { stone:6, wood:8 }],
+  ["sandBlaster", "砂の散弾",           "sand",       "拡散",   "spread",   "grain",   { rate:4, pellets:3, spreadA:.16, eff:3.06 }, "3方向へ同時に発射", "砂を握って投げつける。面で押していく気持ちよさ。", { sand:20, shell:2 }],
+  ["waterJet",    "水鉄砲",             "water",      "跳ね水",   "rapid",    "drop",    { eff:.928, rate:10, bounce:1 }, "水流は壁に当たると1回跳ね返り、隣のブロックも濡らして削る", "勢いよく噴き出す水流。柔らかい地表なら、これで十分。", { water:20, clay:6 }],
+  ["iceLance",    "氷の槍",             "ice",        "氷結",   "needle",   "shard",   { rate:7, bulletSpeed:1400, pierce:1, eff:2.2, size:3, frost:1 }, "1個貫通。当たったブロックは凍えて、3秒間受けるダメージ +30%", "細く鋭い氷柱。刺さった場所から、冷気が広がる。", { ice:20, snow:8 }],
+  ["clayBomb",    "粘土爆弾",           "clay",       "時限爆弾","bomber",  "bomb",    { rate:2.5, bomb:2, eff:2.14 }, "当てたブロックに爆弾を仕掛ける。1.5秒後に200%で起爆し、周囲も巻き込む", "こねた粘土に火薬を詰めて。撃って、待って、ドカン。", { clay:15, salt:5 }],
+  ["saltShard",   "塩の結晶弾",         "salt",       "分裂",   "split",    "crystal", { rate:4, split:4, eff:2.83 }, "当たると破片が周囲4個にも40%ダメージ", "着弾の瞬間、塩の結晶が四方へ飛ぶ。", { salt:15, sand:20 }],
+  ["coralNeedle", "珊瑚の二連針",       "coral",      "2連装",  "double",   "needle",  { rate:4.5, pellets:2, spreadA:.07, eff:2.05 }, "2発を並べて同時に撃つ", "珊瑚の枝を削った針を、二本並べて放つ。", { coral:12, shell:6 }],
+  ["shellBoomerang","貝殻ブーメラン",   "shell",      "跳弾",   "ricochet", "moon",    { rate:4, bounce:3, eff:3.81 }, "当たると近くの別のブロックへ跳ねていく (最大3回)", "一度の射撃で何度も仕事をする跳ね弾。密集地帯で本領発揮。", { shell:12, kelp:8 }],
   // ===== 表土 =====
-  ["flintGun",    "火打石の銃",         "flint",      "会心",   "crit",     "spark",   { rate:4, critC:.3, critM:4, eff:1.9 }, "30%の確率でダメージ4倍", "火花と一緒に撃ち出す。当たれば大きく崩れる。", { flint:60, wood:30 }],
+  ["flintGun",    "火打石の銃",         "flint",      "会心",   "crit",     "spark",   { rate:4, critC:.3, critM:4, eff:1.9 }, "30%の確率でダメージ4倍", "火花と一緒に撃ち出す。当たれば大きく崩れる。", { flint:50, peat:20 }],
   ["copperGun",   "銅の銃",             "copperOre",  "金運",   "normal",   "disc",    { eff:1, rate:5, coinMul:1.1 }, "コイン +10%", "初めての金属の銃。赤茶色の弾は、少しだけ重い。", { copperOre:60, gravel:30 }],
   ["tinRapid",    "錫のラピッド",       "tinOre",     "軽業",   "rapid",    "needle",  { eff:.928, rate:10, critC:.1, critM:2 }, "毎秒10発。軽い錫弾は10%の確率で会心2倍で突き刺さる", "軽い錫の弾を目にも止まらぬ速さで。", { tinOre:60, copperOre:20 }],
   ["coalBurner",  "石炭バーナー",       "coal",       "燃焼",   "burner",   "flame",   { rate:6, burn:.8, eff:1.28 }, "当たったブロックが燃え、3秒間ダメージを受け続ける", "撃ったあとも燃え続ける火炎弾。掘り残しも、じわじわ崩れていく。", { coal:80, flint:20 }],
@@ -463,127 +353,26 @@ if (!WEAPONS[state.weapon] || !state.weaponsOwned[state.weapon])
 const canCraft = k => { const w = WEAPONS[k]; return !state.weaponsOwned[k] && state.coins >= w.cost && invHas(w.recipe); };
 // 強化: コインは製作費の40%から x1.5、素材はレシピの 20% から x1.25 ずつ
 const weaponLvOf    = k => state.weaponLv[k] || 0;
-const weaponLvMul   = k => 1 + 0.08 * weaponLvOf(k);                       // 装備強化: +8%/Lv
-const weaponPellets = k => (WEAPONS[k].pellets || 1) + Math.floor(weaponLvOf(k) / 10);   // 装備強化: Lv10ごとに発射数 +1
+const weaponLvMul   = k => 1 + 0.08 * weaponLvOf(k);                       // 装備強化: +8%/Lv (スキル等の威力の土台にも使う)
+/* 強化の節目ボーナス: Lv10 ごとに威力 +50% (全装備共通)。
+   以前は「Lv10ごとに発射数 +1」が上限なしで、しかも表示 DPS に含まれていなかった。
+   1発撃ちの装備ほど得をし (Lv100 で隠れ ×11)、レーザー・ビーム・オーラ・チェインは恩恵ゼロ、
+   弾が増えすぎて重くもなっていた。節目ボーナスを全装備共通の威力倍率にし、DPS 表示にも含める */
+const UPGRADE_TIER_BONUS = 0.5;
+const weaponTierMul  = k => 1 + UPGRADE_TIER_BONUS * Math.floor(weaponLvOf(k) / 10);
+const weaponPowerMul = k => weaponLvMul(k) * weaponTierMul(k);         // 装備の威力倍率 (1発の威力・DPS 表示はこれ)
+// 弾を撃つ装備は Lv10・20 で発射数も +1 (手応えの演出。1発の威力は弾数で割るので DPS は変わらない)
+const PELLET_BONUS_MAX = 2;
+const weaponPellets = k => (WEAPONS[k].pellets || 1) + Math.min(PELLET_BONUS_MAX, Math.floor(weaponLvOf(k) / 10));
 const WEAPON_UP_COST = k => niceRound(Math.max(20, WEAPONS[k].cost * 0.4) * Math.pow(1.5, weaponLvOf(k)));
 function WEAPON_UP_MATS(k){
   const w = WEAPONS[k], lv = weaponLvOf(k), out = {};
   const keys = Object.keys(w.recipe);
-  if (!keys.length) out[["stone", "wood"][lv % 2]] = Math.ceil(10 * Math.pow(1.25, lv));   // ハンドドリルは石と木で
+  // ハンドドリル (レシピなし) はコインだけで強化できる。以前は石/木を交互に要求していたが、
+  // 地表は約68ブロックと薄く石は2〜4%しか出ないので、内側へ掘り進むと序盤で詰まっていた
   for (const m of keys) out[m] = Math.ceil(w.recipe[m] * 0.2 * Math.pow(1.25, lv));
   return out;
 }
-// 武器強化は素材代用払い (ui.js の matSubPlan) が効くので、判定も実質所持に合わせる (代用できるのは製作素材だけ)
+// 武器強化は素材代用払い (ui/common.js の matSubPlan) が効くので、判定も実質所持に合わせる (代用できるのは製作素材だけ)
 const canUpgradeWeapon = k => state.weaponsOwned[k] && invHas(WEAPON_UP_MATS(k)) &&
   (typeof matSubPlan === "function" ? matSubPlan(WEAPON_UP_COST(k), WEAPON_UP_MATS(k), Object.keys(WEAPONS[k].recipe)).ok : state.coins >= WEAPON_UP_COST(k));
-
-// ---------- 攻撃ボット (製造: コイン + 素材) ----------
-const BOT_MAX = 12, COINBOT_MAX = 8;
-const BOT_MATS = [
-  { wood:30, stone:30 }, { copperOre:40, flint:20 }, { tinOre:40, copperOre:60 }, { ironOre:80, coal:50 },
-  { ironOre:150, quartz:50 }, { magnetite:100, silverOre:60 }, { titaniumOre:120, ironOre:200 }, { tungstenOre:150, cobaltOre:100 },
-  { diamond:80, titaniumOre:200 }, { iridium:120, osmium:120 }, { stellarIron:200, neutronDust:100 }, { adamant:200, starMetal:200 },
-];
-const COINBOT_MATS = [
-  { wood:20, grass:20 }, { copperOre:30, sand:30 }, { magnetite:40, tinOre:40 }, { ironOre:100, goldOre:30 },
-  { silverOre:80, quartz:80 }, { platinumOre:60, titaniumOre:100 }, { palladium:80, helium3:40 }, { goldMelt:100, chronite:60 },
-];
-const BOT_COST     = n => niceRound(100 * Math.pow(2.2, n));
-const COINBOT_COST = n => niceRound(80 * Math.pow(2.0, n));
-const BOT_RECIPE     = n => BOT_MATS[Math.min(n, BOT_MATS.length - 1)];
-const COINBOT_RECIPE = n => COINBOT_MATS[Math.min(n, COINBOT_MATS.length - 1)];
-// 攻撃ボット強化: 威力 +12%/Lv。5レベルごとに要求素材の格が上がる
-const BOT_UP_MATS_LIST = ["copperOre", "ironOre", "titaniumOre", "tungstenOre", "diamond", "iridium", "stellarIron", "adamant", "singularityShard"];
-const BOT_UP_COST = () => niceRound(150 * Math.pow(1.55, state.botLv));
-const BOT_UP_MATS = () => { const o = {}; o[BOT_UP_MATS_LIST[Math.min(BOT_UP_MATS_LIST.length - 1, Math.floor(state.botLv / 5))]] = Math.ceil(20 * Math.pow(1.18, state.botLv % 5 + Math.floor(state.botLv / 5) * 2)); return o; };
-const botMul = () => (1 + 0.12 * state.botLv) * crewMul() * (sk("d_bot") ? 1.3 : 1) * (1 + (typeof artVal === "function" ? artVal("bot") : 0)) * (1 + 0.25 * (state.botCore || 0)) * (sk("d_grandfleet") ? 2 : 1) * (sk("d_ultimate") ? 3 : 1);   // 艦隊総攻撃 (奥義): 全ボット威力 ×2 / 惑星破壊艦隊 (究極): ×3
-// ---------- 衛星テクノロジー (ボット強化) ----------
-const BOT_CORE_MAX = 5, BOT_ARMOR_MAX = 5;
-const BOT_CORE_MATS  = [{ magmalite:60 }, { permaice:60, toxicite:40 }, { prismore:70 }, { voltore:70, duneglass:40 }, { novalite:90 }];
-const BOT_ARMOR_MATS = [{ magmalite:50 }, { permaice:50 }, { relicstone:60 }, { abyssite:60 }, { novalite:70 }];
-const BOT_CORE_COST  = lv => niceRound(80000 * Math.pow(3.5, lv));
-const BOT_ARMOR_COST = lv => niceRound(60000 * Math.pow(3.2, lv));
-
-// ---------- 回収ボットの装備 (モジュール) ----------
-/* key: { name, icon, accent, max, cost(lv), mats(lv), eff(lv) 説明, tagline, desc } */
-const scaleRec = (rec, lv, step) => { const o = {}; for (const k in rec) o[k] = Math.ceil(rec[k] * Math.pow(step, lv)); return o; };
-const CB_MODULES = {
-  coil:   { name:"磁気コイル",     icon:"magnet",  accent:"#8fd3ff", max:30, base:120, cstep:1.5, mats:{ magnetite:30, copperOre:30 }, mstep:1.22,
-            tagline:"吸い寄せる力を、巻き上げる。", desc:"磁鉄鉱を巻いたコイル。コインを引き寄せる吸引範囲が広がる。",
-            eff: lv => `吸引範囲 +${lv * 12}%` },
-  frame:  { name:"軽合金フレーム", icon:"speed",   accent:"#d8e0e8", max:30, base:150, cstep:1.5, mats:{ bauxite:30, titaniumOre:10 }, mstep:1.22,
-            tagline:"軽くなれば、速くなる。", desc:"アルミとチタンの骨格。機体が軽くなり、移動速度が上がる。",
-            eff: lv => `移動速度 +${lv * 10}%` },
-  plating:{ name:"金メッキ",       icon:"coin",    accent:"#ffd60a", max:20, base:300, cstep:1.6, mats:{ goldOre:20 }, mstep:1.3,
-            tagline:"金は金を呼ぶ。", desc:"機体を金で覆う。回収ボットが拾ったコインの額が増える。",
-            eff: lv => `ボット回収コイン +${lv * 5}%` },
-  hatch:  { name:"拡張ハッチ",     icon:"bag",     accent:"#c0c0c0", max:10, base:200, cstep:1.7, mats:{ ironOre:40, zincOre:20 }, mstep:1.3,
-            tagline:"大きく開けて、まとめて飲み込む。", desc:"回収口を広げる。すれ違うだけで拾える接触範囲が広がる。",
-            eff: lv => `接触回収の範囲 +${lv * 20}%` },
-  scanner:{ name:"鉱物スキャナ",   icon:"eye",     accent:"#9be15d", max:10, base:400, cstep:1.7, mats:{ quartz:30, silverOre:20 }, mstep:1.3,
-            tagline:"コインの下に、何かが埋まっている。", desc:"回収ボットがコインを拾うとき、その場所の地層の素材を一緒に見つけてくる。",
-            eff: lv => `コイン回収時 ${lv * 4}% で素材 +1` },
-  nozzle: { name:"推進ノズル",     icon:"flame",   accent:"#ff9346", max:5, base:500, cstep:2, mats:{ sulfur:40, magma:20 }, mstep:1.5,
-            tagline:"遠いコインほど、急いで取りに行く。", desc:"硫黄とマグマで燃える補助ブースター。目標まで400以上離れているときの速度が上がる。",
-            eff: lv => `長距離ブースト +${lv * 30}%` },
-  replicator:{ name:"複製回路",    icon:"twin",    accent:"#80ffc0", max:3, base:2000, cstep:5, mats:{ silicon:60, lithium:40 }, mstep:2,
-            tagline:"ひとつ作れば、もうひとつ生まれる。", desc:"シリコンとリチウムの自己複製回路。回収ボットが1機おまけで加わる。",
-            eff: lv => `回収ボット +${lv}機` },
-  interest:{ name:"利息回路",      icon:"clock",   accent:"#e8f0f8", max:10, base:1500, cstep:1.8, mats:{ platinumOre:30, silverOre:50 }, mstep:1.3,
-            tagline:"待てば、増える。", desc:"地面に落ちてから2秒以上たったコインは、回収ボットが拾うと利息がつく。",
-            eff: lv => `落ちて2秒以上のコイン +${lv * 10}%` },
-  gravLens:{ name:"重力レンズ",    icon:"hole",    accent:"#c792ff", max:5, base:1e5, cstep:2.5, mats:{ helium3:40, darkMatter:20 }, mstep:1.5,
-            tagline:"空間ごと、引き寄せる。", desc:"ヘリウム3と暗黒物質で空間を曲げる。吸引範囲と吸引力が大きく伸びる。",
-            eff: lv => `吸引範囲 +${lv * 40}%・吸引力 +${lv * 30}%` },
-  anchor: { name:"時空アンカー",   icon:"warp",    accent:"#40e0d0", max:1, base:1e6, cstep:1, mats:{ chronite:80 }, mstep:1,
-            tagline:"歩かない。跳ぶ。", desc:"クロナイトの錨。目標まで800以上離れていると、その手前へ瞬間移動する。",
-            eff: lv => lv ? "ワープ稼働中" : "ワープ" },
-  stargate:{ name:"星核ワープコア", icon:"warp",   accent:"#fff2b0", max:3, base:3e5, cstep:3, mats:{ novalite:30, nereidpearl:20 }, mstep:1.8,
-            tagline:"星の核で、距離を消す。", desc:"ノヴァライトの核で空間を折り畳む。吸引が大きく伸び、ワープの距離制限も緩む (アンカーなしでもワープできる)。",
-            eff: lv => `吸引範囲 +${lv * 30}%・吸引力 +${lv * 50}%・ワープ距離 -${lv * 150}` },
-};
-const CB_MOD_KEYS = Object.keys(CB_MODULES);
-const cbLv      = k => state.cbMod[k] || 0;
-const CB_COST   = k => { const m = CB_MODULES[k]; return niceRound(m.base * Math.pow(m.cstep, cbLv(k))); };
-const CB_MATS   = k => { const m = CB_MODULES[k]; return scaleRec(m.mats, cbLv(k), m.mstep); };
-const canUpgradeCB = k => state.coinBots > 0 && cbLv(k) < CB_MODULES[k].max && state.coins >= CB_COST(k) && invHas(CB_MATS(k));
-const coinBotSpeed  = () => 300 * (1 + 0.10 * cbLv("frame")) * (sk("d_drone") ? 1.2 : 1) * (sk("c_fleet") ? 1.15 : 1);
-const coinBotVacuum = () => 180 * (1 + 0.12 * cbLv("coil")) * (1 + 0.4 * cbLv("gravLens")) * (1 + 0.3 * cbLv("stargate")) * (sk("c_fleet") ? 1.2 : 1);
-const coinBotPull   = () => 3200 * (1 + 0.3 * cbLv("gravLens")) * (1 + 0.5 * cbLv("stargate"));
-const coinBotTouchR = () => 40 * (1 + 0.2 * cbLv("hatch"));
-const botCoinMul    = () => 1 + 0.05 * cbLv("plating");
-const cbScanChance  = () => 0.04 * cbLv("scanner");
-const cbNozzle      = () => 1 + 0.3 * cbLv("nozzle");
-const cbInterest    = () => 0.10 * cbLv("interest");
-
-// ---------- derived stats ----------
-const ATTACK_RANGE = 300;
-const BULLET_SPD_MUL = 0.6;   // 弾速の全体倍率: 弾の形が見分けられるよう一律で遅くする (射程は寿命側で補正し不変)
-const BULLET_SIZE_MUL = 1.3;  // 弾の描画サイズの全体倍率: 何を撃っているか見分けやすく、少しだけ大きくする (当たり判定・範囲は不変)
-// 攻撃力: 仲間・スキルの威力の土台。装備の格 (実効DPS倍率) の平方根で伸びる (連射や弾数に左右されない)
-const weaponAtkMul = k => Math.sqrt(WEAPONS[k].power) * weaponLvMul(k);
-const playerDamage = () => weaponAtkMul(state.weapon);
-// 1発の威力: 装備ごとに「実効DPS ÷ 連射 ÷ 実効倍率」で決まる
-const shotDamage   = (k = state.weapon) => WEAPONS[k].dmg * weaponLvMul(k);
-const weaponYield  = () => WEAPONS[state.weapon].yield;   // 採掘ボーナス (コイン倍率)
-const playerSpeed  = () => 270 * (sk("d_boost") ? 1.15 : 1) * (1 + (typeof artVal === "function" ? artVal("spd") : 0));
-const magnetRange  = () => 90 * (1 + (typeof artVal === "function" ? artVal("magnet") : 0)) * (sk("c_philosopher") ? 3 : 1);   // 無限財宝 (奥義): コイン吸引範囲 ×3
-const weaponDPS = w => 5 * w.power;   // 基礎ダメージ1あたりの実効DPS
-const playerDPS    = () => weaponDPS(WEAPONS[state.weapon]) * weaponLvMul(state.weapon);
-// ---------- 攻撃ボットの装備 ----------
-const botWeaponAt = i => {
-  const k = state.botLoadout[i];
-  if (!k || !WEAPONS[k] || !state.weaponsOwned[k] || k === state.weapon) return null;
-  for (let j = 0; j < i; j++) if (state.botLoadout[j] === k) return null;
-  return k;
-};
-const botWeaponDPS  = k => weaponDPS(WEAPONS[k]) * weaponLvMul(k) * 0.6 * botMul();
-const botDefaultDPS = () => playerDamage() * 0.6 * botMul() * 3;
-const botSlotDPS    = i => { const k = botWeaponAt(i); return k ? botWeaponDPS(k) : botDefaultDPS(); };
-const botsTotalDPS  = () => { let s = 0; const n = act("bots"); for (let i = 0; i < n; i++) s += botSlotDPS(i); return s; };
-const setBotWeapon  = (i, k) => {
-  if (k) for (let j = 0; j < state.botLoadout.length; j++) if (j !== i && state.botLoadout[j] === k) state.botLoadout[j] = null;
-  state.botLoadout[i] = k || null;
-};
-const clearBotWeapon = k => { for (let j = 0; j < state.botLoadout.length; j++) if (state.botLoadout[j] === k) state.botLoadout[j] = null; };
-const totalDPS     = () => Math.round(playerDPS() + botsTotalDPS());

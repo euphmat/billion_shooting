@@ -255,8 +255,8 @@ function openChest(ch){
     save();
   } else {   // 全60種コンプリート済み: 代わりに大金
     const v = 800 + ch.si * 400;
-    for (let k = 0; k < 6; k++) coinsArr.push({ x: ch.x, y: ch.y, vx: (Math.random() - .5) * 160, vy: (Math.random() - .5) * 160, value: Math.round(v / 6), chest: false, age: 0 });
-    toast("宝箱: アーティファクトはコンプリート済み。コインを大量に得た");
+    for (let k = 0; k < 6; k++) spawnCoin({ x: ch.x, y: ch.y, vx: (Math.random() - .5) * 160, vy: (Math.random() - .5) * 160, value: Math.round(v / 6), chest: false, age: 0 });
+    toast("宝箱: アーティファクトはコンプリート済み。コインを大量に得た", "good");
   }
 }
 function updateArtifacts(dt){
@@ -279,7 +279,7 @@ function updateArtifacts(dt){
       const idx = findNearestBlock(tx, ty, 420);
       if (idx >= 0){
         const bx = g2w(idx % D), by = g2w((idx / D) | 0);
-        rings.push({ x: bx, y: by, r: 175, t: performance.now(), color: "255,170,80", dur: 480 });
+        addRing({ x: bx, y: by, r: 175, t: performance.now(), color: "255,170,80", dur: 480 });
         damageRadius(bx, by, 160, shotDamage() * 10);
         bumpArtProc("e_meteor");
       }
@@ -304,27 +304,26 @@ function updateArtifacts(dt){
 // 惑星の心臓: 鼓動の衝撃波 (二重のリング + 範囲ダメージ。モンスターにも当たる)
 function heartPulse(){
   bumpArtProc("lg_heart");
-  rings.push({ x: player.x, y: player.y, r: 300, t: performance.now(), color: "255,90,122", dur: 650 });
-  rings.push({ x: player.x, y: player.y, r: 185, t: performance.now(), color: "255,160,180", dur: 480 });
+  addRing({ x: player.x, y: player.y, r: 300, t: performance.now(), color: "255,90,122", dur: 650 });
+  addRing({ x: player.x, y: player.y, r: 185, t: performance.now(), color: "255,160,180", dur: 480 });
   rawDamage(() => damageRadius(player.x, player.y, 280, playerDamage() * 6));
 }
 // 超新星の核: 50個破壊ごとの大爆発 (虹色の三重リング + 星バースト)
 function supernovaAt(x, y){
   bumpArtProc("lg_nova");
-  rings.push({ x, y, r: BS * 7,   t: performance.now(), color: "255,90,90",   dur: 700 });
-  rings.push({ x, y, r: BS * 5.5, t: performance.now(), color: "120,255,140", dur: 600 });
-  rings.push({ x, y, r: BS * 4,   t: performance.now(), color: "130,160,255", dur: 500 });
+  addRing({ x, y, r: BS * 7,   t: performance.now(), color: "255,90,90",   dur: 700 });
+  addRing({ x, y, r: BS * 5.5, t: performance.now(), color: "120,255,140", dur: 600 });
+  addRing({ x, y, r: BS * 4,   t: performance.now(), color: "130,160,255", dur: 500 });
   burstAt(x, y, { accent: "#ffa502", c2: "#ffffff", burst: "star" }, null);
   damageRadius(x, y, BS * 6, playerDamage() * 16);
   sndBoom();
-  toast("超新星爆発！");
 }
 // 不死鳥の灰: 復活時の大爆発 (炎の翼のような花弁バースト x3 + 範囲ダメージ)
 function phoenixBlast(){
   bumpArtProc("lg_phoenix");
   for (let k = 0; k < 3; k++) burstAt(player.x, player.y, { accent: "#ff7b3f", c2: "#ffd60a", burst: "petal" }, null);
-  rings.push({ x: player.x, y: player.y, r: 340, t: performance.now(), color: "255,123,63", dur: 620 });
-  rings.push({ x: player.x, y: player.y, r: 210, t: performance.now(), color: "255,214,10", dur: 460 });
+  addRing({ x: player.x, y: player.y, r: 340, t: performance.now(), color: "255,123,63", dur: 620 });
+  addRing({ x: player.x, y: player.y, r: 210, t: performance.now(), color: "255,214,10", dur: 460 });
   rawDamage(() => damageRadius(player.x, player.y, 320, playerDamage() * 12));
   sndBoom();
 }
@@ -333,12 +332,12 @@ function scepterStarfall(){
   let n = 0;
   for (const m of mobs){
     if (m.dead) continue;
-    beams.push({ x1: m.x + 300, y1: m.y - 900, x2: m.x, y2: m.y, t: performance.now(), w: 4, color: "#ffe9a8", life: 220 });
-    rings.push({ x: m.x, y: m.y, r: 90, t: performance.now(), color: "255,233,168", dur: 400 });
+    addBeam({ x1: m.x + 300, y1: m.y - 900, x2: m.x, y2: m.y, t: performance.now(), w: 4, color: "#ffe9a8", life: 220 });
+    addRing({ x: m.x, y: m.y, r: 90, t: performance.now(), color: "255,233,168", dur: 400 });
     damageMob(m, playerDamage() * 20, null);
     if (++n >= 24) break;
   }
-  if (n){ bumpArtProc("lg_scepter"); toast(`星屑の王笏: 星が ${n} 体を貫いた！`); }
+  if (n) bumpArtProc("lg_scepter");
 }
 // 混沌のサイコロ: 結果を浮かぶ文字で知らせる (ダメージ数値のプールに相乗り)
 function diceLabel(text, color){
@@ -359,9 +358,9 @@ function freezeAllAround(x, y){
       if (j >= 0 && frosts.size < 1500){ frosts.set(j, 4); frostGen.set(j, 0); }
     }
   for (const m of mobs) if (!m.dead){ const dx = m.x - x, dy = m.y - y; if (dx * dx + dy * dy <= R2) m.slowT = Math.max(m.slowT || 0, 3.5); }
-  rings.push({ x, y, r: 560, t: performance.now(), color: "125,240,255", dur: 600 });
+  addRing({ x, y, r: 560, t: performance.now(), color: "125,240,255", dur: 600 });
 }
-// 混沌のサイコロ: 4つの結果から1つ (skills.js の命中時フックから呼ばれる)
+// 混沌のサイコロ: 4つの結果から1つ (game/skill-hooks.js の命中時フックから呼ばれる)
 function chaosDice(idx, gx, gy, dmg){
   bumpArtProc("lg_dice");
   const x = g2w(gx), y = g2w(gy), roll = (Math.random() * 4) | 0;
@@ -375,7 +374,7 @@ function chaosDice(idx, gx, gy, dmg){
   } else if (roll === 1){   // コインバースト
     diceColor = "#ffd60a";
     const v = Math.max(10, Math.round(blockCoinValue(gx, gy) * 3));
-    for (let k = 0; k < 8; k++){ const a = Math.random() * Math.PI * 2, sp = 140 + Math.random() * 240; coinsArr.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, value: Math.ceil(v / 2), chest: false, age: 0 }); }
+    for (let k = 0; k < 8; k++){ const a = Math.random() * Math.PI * 2, sp = 140 + Math.random() * 240; spawnCoin({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, value: Math.ceil(v / 2), chest: false, age: 0 }); }
     diceLabel("🎲 コインバースト！", "#ffd60a");
   } else if (roll === 2){   // 全体凍結
     diceColor = "#7df0ff";
@@ -388,7 +387,7 @@ function chaosDice(idx, gx, gy, dmg){
   }
 }
 
-// ---------- ミシック: 常時演出の描画 (game.js の draw から自機描画の直後に呼ばれる) ----------
+// ---------- ミシック: 常時演出の描画 (render/draw.js の draw から自機描画の直後に呼ばれる) ----------
 // パーティクルは新規配列を作らず、その場のプリミティブ描画だけ。shadowBlur は使わない
 const DICE_PIPS = { 1:[[0,0]], 2:[[-.45,-.45],[.45,.45]], 3:[[-.45,-.45],[0,0],[.45,.45]], 4:[[-.45,-.45],[.45,-.45],[-.45,.45],[.45,.45]], 5:[[-.45,-.45],[.45,-.45],[0,0],[-.45,.45],[.45,.45]], 6:[[-.45,-.5],[.45,-.5],[-.45,0],[.45,0],[-.45,.5],[.45,.5]] };
 function drawArtifactsFx(now, toScreen){
