@@ -22,7 +22,7 @@ cv.addEventListener("wheel", e => {
 }, { passive:false });
 let hoverInfo = null;   // カーソル下のブロック {gx, gy, name, color, cur, max} (無いときは null)。カーソル位置は game/skill-fx.js の mouseSX/mouseSY/mouseIn を共有
 window.addEventListener("dragstart", e => e.preventDefault());   // 要素のゴーストドラッグを止める
-window.addEventListener("keydown", e => { keys[e.key.toLowerCase()] = true; if (["w","a","s","d"].includes(e.key.toLowerCase())) audio(); boostSpaceEvent(e, true); });
+window.addEventListener("keydown", e => { if (isTypingTarget(e)) return; keys[e.key.toLowerCase()] = true; if (["w","a","s","d"].includes(e.key.toLowerCase())) audio(); boostSpaceEvent(e, true); });
 window.addEventListener("keyup",   e => { keys[e.key.toLowerCase()] = false; boostSpaceEvent(e, false); });
 window.addEventListener("blur", () => { boostKey = false; });   // フォーカスを失ったらブーストは解除 (押しっぱなし扱いの防止)
 

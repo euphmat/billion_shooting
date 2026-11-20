@@ -3,16 +3,32 @@
    ui/hud.js - サイドパネルの HUD とホバーツールチップ
    ========================================================= */
 
-/* ---------- HUD (side panel only) ---------- */
-function setText(el, t){ if (el._t !== t){ el._t = t; el.textContent = t; } }
+/* ---------- HUD (サイドバーのヘッダー) ---------- */
+function setText(el, t){ if (el && el._t !== t){ el._t = t; el.textContent = t; } }
+// コイン獲得ペース: 累計コインを1秒ごとに記録し、直近15秒の伸びから「毎秒いくら稼いでいるか」を出す
+const coinSamples = [];
+let coinSampleAt = 0;
+function coinRate(){
+  const now = performance.now();
+  if (now - coinSampleAt >= 1000){
+    coinSampleAt = now;
+    coinSamples.push([now, state.totalCoins]);
+    while (coinSamples.length > 2 && now - coinSamples[0][0] > 15000) coinSamples.shift();
+  }
+  if (coinSamples.length < 3) return 0;
+  const a = coinSamples[0], b = coinSamples[coinSamples.length - 1];
+  return b[0] > a[0] ? Math.max(0, (b[1] - a[1]) / ((b[0] - a[0]) / 1000)) : 0;
+}
 function updateHUD(){
   refreshAffordability();
   const pct = state.destroyed / TARGET_TOTAL * 100, w = Math.max(pct, 0.05).toFixed(4) + "%", bar = $("sideProgress");
-  setText($("sidePct"), pct.toFixed(5) + "%");
+  setText($("sidePct"), pct.toFixed(pct < 10 ? 4 : 2) + "%");
   if (bar._w !== w){ bar._w = w; bar.style.width = w; }
   setText($("sideDestroyed"), "破壊 " + fmt(state.destroyed));
   setText($("sideRemain"), "残り " + fmt(mainAlive));   // 主惑星の残数 (alive は全天体の合算なので、惑星の残りはこちらが正しい)
   setText($("sideCoins"), fmt(state.coins));
+  const r = coinRate();
+  setText($("sideRate"), r >= 1 ? "+" + fmt(r) + "/秒" : "");
 }
 
 /* ---------- ホバーツールチップ: 武器 / 強化 / モジュール の説明カード ---------- */
@@ -76,6 +92,5 @@ function attachTip(root){
   root.addEventListener("click", hideTip);
 }
 attachTip($("panels"));
-attachTip($("equipBar"));
 attachTip($("botEqOverlay"));
 $("panels").addEventListener("scroll", hideTip);

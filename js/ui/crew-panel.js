@@ -3,75 +3,86 @@
    ui/crew-panel.js - 攻撃ボット / 回収ボットのパネルと、ボット装備モーダル
    ========================================================= */
 
-/* ---------- 攻撃ボット: 製造 + 編成 (クリック or ドラッグで装備を渡す) ---------- */
+/* ---------- 攻撃ボット / 回収ボット タブ ----------
+   上から「艦隊カード (状況 + 稼働スイッチ)」→「作戦モード (セグメント)」→「買えるもの (アクション行)」。
+   アクション行の中身 (crewRowOpts) は おすすめタブとも共有する */
 let botSlotSel = -1;   // 選択中のスロット (-1 = なし)
-// セクション見出し (工房の tier-head と同じ見た目)
-function secHeadHTML(no, name, note, count, actions){
-  return `<div class="tier-head open static"><span class="th-no">${no}</span><span class="th-name">${name}</span><span class="th-note">${note || ""}</span>${actions || ""}${count !== undefined && count !== null ? `<span class="th-count">${count}</span>` : ""}</div>`;
-}
 // ボットの作戦モード定義 (サマリ表示とセグメント部品で共有)
 const BOT_MODES = [["follow", "追従モード", "自機についてきて、周りを掘る"], ["solo", "独立モード", "自機から離れて、自分の周りを掘り続ける"], ["explore", "探索モード", "ランダムな小惑星へ向かい、掘り尽くすまで採掘する"]];
 const CB_MODES  = [["follow", "追従モード", "自機についてきて、近くのコインを拾う"], ["solo", "独立モード", "自機から離れて、ひたすらコインを拾い回る"], ["botfollow", "ボット追従モード", "攻撃ボット1台につき回収ボット1台がついて回る"]];
 const modeNameOf = (modes, v) => (modes.find(m => m[0] === v) || modes[0])[1];
-// ボットの作戦モード選択 (攻撃ボット / 回収ボット共通部品)
 function botModeSegHTML(kind){
   const isBot = kind === "bot";
   const cur = isBot ? (state.botMode || "follow") : (state.cbMode || "follow");
-  const modes = isBot ? BOT_MODES : CB_MODES;
-  return `<div class="mode-label">作戦モード — ${isBot ? "攻撃ボット全機の行動パターン" : "回収ボット全機の行動パターン"}</div>
-    <div class="mode-grid" style="margin-bottom:12px">${modes.map(([v, name, desc]) => `<button class="mode-btn${cur === v ? " on" : ""}" data-${isBot ? "bmode" : "cbmode"}="${v}"><span class="mb-name">${name}</span><span class="mb-desc">${desc}</span></button>`).join("")}</div>`;
+  const modes = isBot ? BOT_MODES : CB_MODES, curM = modes.find(m => m[0] === cur) || modes[0];
+  return `<div class="field"><div class="field-label">作戦モード <span>全機の動き方</span></div>
+    <div class="seg">${modes.map(([v, name, desc]) => `<button class="seg-btn${cur === v ? " on" : ""}" data-${isBot ? "bmode" : "cbmode"}="${v}" title="${desc}">${name.replace(/モード$/, "")}</button>`).join("")}</div>
+    <div class="field-hint">${curM[2]}</div></div>`;
 }
-function botPanelHTML(){
-  const n = state.bots, full = n >= BOT_MAX, dBuy = buyDef("bot"), dUp = buyDef("bupgrade");
-  const total = botCount();
-  let equippedN = 0; for (let i = 0; i < total; i++) if (botWeaponAt(i)) equippedN++;
-  const spareN = WEAPON_KEYS.filter(k => state.weaponsOwned[k] && k !== state.weapon).length;
-  let html = `<div class="panel-intro"><b>余った装備を持たせる</b>と、その撃ち方で戦う相棒。</div>
-    ${total > 0 ? `<button class="eq-open-btn" data-boteq-open>${iconBadge("bot", "#ffffff")}<span class="eqb-main"><span class="eqb-title">装備を編成する</span><span class="eqb-sub">ボットに武器を持たせる ・ 装備済み ${equippedN}/${total}機 ・ 棚に ${spareN}点</span></span><span class="eqb-arrow">›</span></button>` : ""}
-    <div class="fleet-bar" style="--accent:#ffffff">
-      ${iconBadge("bot", "#ffffff")}
-      <div class="fb-main"><div class="fb-name">攻撃ボット <span class="fb-count">${n}<span class="count-max"> / ${BOT_MAX}</span></span></div>
-      <div class="fb-sub">稼働 <b>${botCount()}</b> 機 ・ 合計DPS <b>${fmtD(botsTotalDPS())}</b> ・ モード <b>${modeNameOf(BOT_MODES, state.botMode || "follow")}</b></div></div>
-      <div class="fb-side"><span class="fb-lv">強化 Lv.${state.botLv}</span><span class="fb-mul">x${botMul().toFixed(2)}</span></div>
-    </div>
-    ${crewToggleHTML("bots")}
-    ${botModeSegHTML("bot")}
-    ${secHeadHTML("SHOP", "製造・強化", "ボットを増やし、強くする", `${n}/${BOT_MAX}`)}
-    <div class="wgrid">
-      <div class="btile${canBuy(dBuy) ? " afford" : ""}" style="--accent:#ffffff" data-tip="buy:bot">
-        <span class="wt-top">${iconBadge("bot", "#ffffff")}<span class="wt-no">MANUFACTURE</span>${full ? `<span class="wt-st dim">最大数</span>` : `<span class="wt-st go">${n + 1}機目</span>`}</span>
-        <span class="wt-name">${full ? "製造は上限です" : "攻撃ボットを製造"}</span>
-        ${full ? `<span class="wt-sub">上限 ${BOT_MAX} 機に到達。スキルで増える分は別枠。</span>` : `<span class="wt-sub gain-line">製造すると 合計DPS +${fmtD(botSlotDPS(n))} (新しい1機のぶん)</span>${recipeChips(dBuy.mats, true)}<span class="wt-act"><button class="wr-btn buy" data-buy="bot" ${canBuy(dBuy) ? "" : "disabled"}>製造 ${costHTML(dBuy.coins)}</button></span>${bulkRowHTML("bot")}${buyReasonHTML("bot")}`}
-      </div>
-      <div class="btile${canBuy(dUp) ? " afford" : ""}" style="--accent:#ffffff" data-tip="buy:bupgrade">
-        <span class="wt-top">${iconBadge("up", "#ffffff")}<span class="wt-no">UPGRADE</span><span class="wt-st own">Lv.${state.botLv}</span></span>
-        <span class="wt-name">攻撃ボット強化</span>
-        <span class="wt-sub">Lv.${state.botLv} → ${state.botLv + 1} ・ 全ボットの威力 +12%</span>
-        <span class="wt-sub">倍率 <b>x${(1 + 0.12 * state.botLv).toFixed(2)} → x${(1 + 0.12 * (state.botLv + 1)).toFixed(2)}</b>${n > 0 ? ` ・ 合計DPS <b>${fmtD(botsTotalDPS())} → ${fmtD(botsTotalDPS() * (1 + 0.12 * (state.botLv + 1)) / (1 + 0.12 * state.botLv))}</b>` : ""}</span>
-        ${recipeChips(dUp.mats, true)}
-        <span class="wt-act"><button class="wr-btn buy" data-buy="bupgrade" ${canBuy(dUp) ? "" : "disabled"}>強化 ${costHTML(dUp.coins)}</button></span>${bulkRowHTML("bupgrade")}${buyReasonHTML("bupgrade")}
-      </div>
-    </div>`
-    + satTechHTML();
-  return html;
+// 稼働 ON/OFF (艦隊カードの右上に置く小さなスイッチ)
+function crewSwitchHTML(key){
+  if (!(state[key] > 0)) return "";
+  const on = !state.off[key];
+  return `<label class="fleet-switch${on ? "" : " off"}" title="${on ? "稼働中 (押すと停止)" : "停止中 (押すと稼働)"}"><span>${on ? "稼働中" : "停止中"}</span><span class="switch sm"><input type="checkbox" data-crew="${key}" ${on ? "checked" : ""}><span class="slider"></span></span></label>`;
 }
-function satTechTileHTML(title, icon, lv, max, effNow, effNext, d, kind){
-  const maxed = lv >= max;
-  return `<div class="btile${!maxed && canBuy(d) ? " afford" : ""}" style="--accent:#fff2b0" data-tip="buy:${kind}">
-    <span class="wt-top">${iconBadge(icon, "#fff2b0")}<span class="wt-no">SAT TECH</span>${maxed ? `<span class="wt-st eq">MAX</span>` : `<span class="wt-st own">Lv.${lv}</span>`}</span>
-    <span class="wt-name">${title}</span>
-    <span class="pbar mini"><i style="width:${lv / max * 100}%"></i></span>
-    <span class="wt-sub">${effNow}${maxed ? "" : ` <span class="arrow">→</span> ${effNext}`}</span>
-    ${maxed ? `<span class="wt-sub">最大レベルに到達</span>` : `${recipeChips(d.mats, true)}<span class="wt-act"><button class="wr-btn buy" data-buy="${kind}" ${canBuy(d) ? "" : "disabled"}>開発 ${costHTML(d.coins)}</button></span>${bulkRowHTML(kind)}${buyReasonHTML(kind)}`}
+function fleetCardHTML(o){
+  return `<div class="fleet${o.off ? " is-off" : ""}" style="--accent:${o.accent}">
+    <div class="fl-top">${iconBadge(o.icon, o.accent)}
+      <div class="fl-main"><div class="fl-name">${o.name}</div><div class="fl-count"><b>${o.n}</b><span> / ${o.max} 機</span>${o.extra ? `<em>${o.extra}</em>` : ""}</div></div>
+      ${o.sw}</div>
+    <div class="fl-stats">${o.stats.map(([l, v, hl]) => `<div class="fl-stat${hl ? " hl" : ""}"><em>${l}</em><b>${v}</b></div>`).join("")}</div>
   </div>`;
 }
-function satTechHTML(){
+// 購入アクション行の中身 (攻撃ボット / 回収ボット / 衛星テク / モジュール)
+function crewRowOpts(buy){
+  if (buy === "bot"){
+    const n = state.bots, full = n >= BOT_MAX;
+    return { buy, icon:"bot", accent:"#ffffff", title: full ? "攻撃ボット (上限)" : `攻撃ボット ${n + 1}機目を製造`, lv: `${n}/${BOT_MAX}`,
+      eff: full ? `上限 ${BOT_MAX} 機に到達。スキルで増える分は別枠` : `合計DPS <span class="up">+${fmtD(botSlotDPS(n))}</span>`, label:"製造", bulk:true, maxed:full, maxedText:"上限" };
+  }
+  if (buy === "bupgrade"){
+    const lv = state.botLv, now = 1 + 0.12 * lv, nx = 1 + 0.12 * (lv + 1);
+    return { buy, icon:"up", accent:"#ffffff", title:"攻撃ボット強化", lv:`Lv.${lv}`,
+      eff: `全ボットの威力 <span class="up">+12%</span> (x${now.toFixed(2)} → x${nx.toFixed(2)})${state.bots > 0 ? ` ・ 合計DPS ${fmtD(botsTotalDPS())} → <span class="up">${fmtD(botsTotalDPS() * nx / now)}</span>` : ""}`, label:"強化", bulk:true };
+  }
+  if (buy === "botcore"){
+    const lv = state.botCore || 0, maxed = lv >= BOT_CORE_MAX;
+    return { buy, icon:"star", accent:"#fff2b0", title:"衛星兵装コア", lv:`Lv.${lv}/${BOT_CORE_MAX}`,
+      eff: maxed ? `攻撃ボットの威力 +${lv * 25}%` : `攻撃ボットの威力 +${lv * 25}% → <span class="up">+${(lv + 1) * 25}%</span>`, label:"開発", bulk:true, maxed };
+  }
+  if (buy === "botarmor"){
+    const lv = state.botArmor || 0, maxed = lv >= BOT_ARMOR_MAX;
+    return { buy, icon:"layers", accent:"#fff2b0", title:"衛星装甲プレート", lv:`Lv.${lv}/${BOT_ARMOR_MAX}`,
+      eff: maxed ? `自機の被ダメージ -${lv * 4}%` : `自機の被ダメージ -${lv * 4}% → <span class="up">-${(lv + 1) * 4}%</span>`, label:"開発", bulk:true, maxed };
+  }
+  if (buy === "coinbot"){
+    const n = state.coinBots, full = n >= COINBOT_MAX;
+    return { buy, icon:"coinbot", accent:"#ffd60a", title: full ? "回収ボット (上限)" : `回収ボット ${n + 1}機目を製造`, lv:`${n}/${COINBOT_MAX}`,
+      eff: full ? `上限 ${COINBOT_MAX} 機に到達。スキルやモジュールで増える分は別枠` : `稼働 ${coinBotCount()} → <span class="up">${coinBotCount() + 1}</span> 機`, label:"製造", bulk:true, maxed:full, maxedText:"上限" };
+  }
+  if (buy.startsWith("cbmod:")){
+    const k = buy.slice(6), m = CB_MODULES[k], lv = cbLv(k), maxed = lv >= m.max;
+    return { buy, icon:m.icon, accent:m.accent, title:m.name, lv:`Lv.${lv}/${m.max}`,
+      eff: maxed ? m.eff(lv) : `${lv ? m.eff(lv) + " → " : ""}<span class="up">${m.eff(lv + 1)}</span>`, label: lv ? "強化" : "組込", bulk:true, maxed };
+  }
+  return null;
+}
+const crewRowHTML = buy => actRowHTML(crewRowOpts(buy));
+function botPanelHTML(){
+  const n = state.bots, total = botCount();
+  let equippedN = 0; for (let i = 0; i < total; i++) if (botWeaponAt(i)) equippedN++;
+  const spareN = WEAPON_KEYS.filter(k => state.weaponsOwned[k] && k !== state.weapon).length;
   const core = state.botCore || 0, armor = state.botArmor || 0;
-  return secHeadHTML("SAT", "衛星テクノロジー", "衛星惑星の素材で、ボットと自機を強化", `${core + armor}/${BOT_CORE_MAX + BOT_ARMOR_MAX}`)
-    + `<div class="wgrid">
-      ${satTechTileHTML("衛星兵装コア", "star", core, BOT_CORE_MAX, `攻撃ボットの威力 +${core * 25}%`, `+${(core + 1) * 25}%`, buyDef("botcore"), "botcore")}
-      ${satTechTileHTML("衛星装甲プレート", "layers", armor, BOT_ARMOR_MAX, `自機の被ダメージ -${armor * 4}%`, `-${(armor + 1) * 4}%`, buyDef("botarmor"), "botarmor")}
-    </div>`;
+  return fleetCardHTML({ icon:"bot", accent:"#ffffff", name:"攻撃ボット", n, max:BOT_MAX, extra: total > n ? `+${total - n} スキル` : "",
+      sw: crewSwitchHTML("bots"), off: n > 0 && state.off.bots,
+      stats:[["合計DPS", fmtD(botsTotalDPS()), true], ["倍率", "x" + fmtX(botMul())], ["強化", "Lv." + state.botLv], ["稼働", botCount() + "機"]] })
+    + (total > 0 ? `<button class="nav-row" data-boteq-open>${iconBadge("bot", "#57e39a")}<span class="nr-main"><span class="nr-title">武器を持たせる (編成)</span><span class="nr-sub">装備済み ${equippedN}/${total}機 ・ 余った武器 ${spareN}点</span></span>${equippedN < total && spareN > 0 ? `<span class="st-pill go">空き ${total - equippedN}</span>` : ""}<span class="nr-arrow">›</span></button>`
+      : `<p class="hint-box">まずは1機製造しよう。余った武器を持たせると、その撃ち方で一緒に掘ってくれる。</p>`)
+    + (n > 0 ? botModeSegHTML("bot") : "")
+    + secTitleHTML("製造・強化", "ボットを増やし、強くする")
+    + `<div class="alist">${crewRowHTML("bot")}${crewRowHTML("bupgrade")}</div>`
+    + secTitleHTML("衛星テクノロジー", "衛星惑星の素材で開発", `${core + armor}/${BOT_CORE_MAX + BOT_ARMOR_MAX}`)
+    + `<div class="alist">${crewRowHTML("botcore")}${crewRowHTML("botarmor")}</div>`;
 }
 function botTileHTML(i, maxDps){
   const k = botWeaponAt(i), w = k ? WEAPONS[k] : null, extra = i >= state.bots, dps = botSlotDPS(i);
@@ -153,45 +164,19 @@ $("botEqClose").addEventListener("click", closeBotEq);
 $("botEqOverlay").addEventListener("click", e => { if (e.target === $("botEqOverlay") || e.target === $("botEqBody")) closeBotEq(); });
 window.addEventListener("keydown", e => { if (e.key === "Escape" && botEqOpen) closeBotEq(); });
 /* ---------- 回収ボット: 製造 + モジュール ---------- */
-function cbModTileHTML(k){
-  const m = CB_MODULES[k], lv = cbLv(k), maxed = lv >= m.max, d = buyDef("cbmod:" + k);
-  return `<div class="btile${lv > 0 ? " on" : ""}${!maxed && canBuy(d) ? " afford" : ""}" style="--accent:${m.accent}" data-tip="buy:cbmod:${k}">
-    <span class="wt-top">${iconBadge(m.icon, m.accent)}<span class="wt-no">MODULE</span>${maxed ? `<span class="wt-st eq">MAX</span>` : `<span class="wt-st own">Lv.${lv}</span>`}</span>
-    <span class="wt-name">${m.name}</span>
-    <span class="pbar mini"><i style="width:${lv / m.max * 100}%"></i></span>
-    <span class="wt-sub">${m.eff(lv)}${maxed ? "" : ` <span class="arrow">→</span> ${m.eff(lv + 1)}`}</span>
-    ${maxed ? `<span class="wt-sub">最大レベルに到達</span>` : `${recipeChips(d.mats, true)}<span class="wt-act"><button class="wr-btn buy" data-buy="cbmod:${k}" ${canBuy(d) ? "" : "disabled"}>${lv ? "強化" : "組み込む"} ${costHTML(d.coins)}</button></span>${bulkRowHTML("cbmod:" + k)}${buyReasonHTML("cbmod:" + k)}`}
-  </div>`;
-}
 function coinBotPanelHTML(){
-  const n = state.coinBots, full = n >= COINBOT_MAX, dBuy = buyDef("coinbot");
+  const n = state.coinBots, total = coinBotCount();
   const fieldCoins = typeof coinsArr !== "undefined" ? coinsArr.length : 0;
-  let html = `<div class="panel-intro">コインを拾う相棒。<b>モジュール</b>で伸びる。</div>
-    <div class="fleet-bar" style="--accent:#ffd60a">
-      ${iconBadge("coinbot", "#ffd60a")}
-      <div class="fb-main"><div class="fb-name">コイン回収ボット <span class="fb-count">${n}<span class="count-max"> / ${COINBOT_MAX}</span></span></div>
-      <div class="fb-sub">稼働 <b>${coinBotCount()}</b> 機 ・ 回収額 <b>x${(botCoinMul() * (sk("c_haul") ? 1.10 : 1)).toFixed(2)}</b> ・ モード <b>${modeNameOf(CB_MODES, state.cbMode || "follow")}</b></div></div>
-      <div class="fb-side"><span class="fb-lv">場のコイン</span><span class="fb-mul">${fieldCoins}</span></div>
-    </div>
-    <div class="sbadges"><span class="sbadge">${iconSVG("speed")}速度 <b>${Math.round(coinBotSpeed())}</b></span><span class="sbadge">${iconSVG("magnet")}吸引 <b>${Math.round(coinBotVacuum())}</b></span><span class="sbadge">${iconSVG("bag")}接触 <b>${Math.round(coinBotTouchR())}</b></span></div>
-    ${crewToggleHTML("coinBots")}
-    ${botModeSegHTML("coinbot")}
-    ${secHeadHTML("SHOP", "製造", "回収ボットを増やす", `${n}/${COINBOT_MAX}`)}
-    <div class="wgrid">
-      <div class="btile${canBuy(dBuy) ? " afford" : ""}" style="--accent:#ffd60a" data-tip="buy:coinbot">
-        <span class="wt-top">${iconBadge("coinbot", "#ffd60a")}<span class="wt-no">MANUFACTURE</span>${full ? `<span class="wt-st dim">最大数</span>` : `<span class="wt-st go">${n + 1}機目</span>`}</span>
-        <span class="wt-name">${full ? "製造は上限です" : "回収ボットを製造"}</span>
-        ${full ? `<span class="wt-sub">上限 ${COINBOT_MAX} 機に到達。スキルやモジュールで増える分は別枠。</span>` : `<span class="wt-sub gain-line">製造すると 稼働 ${coinBotCount()} → ${coinBotCount() + 1} 機</span>${recipeChips(dBuy.mats, true)}<span class="wt-act"><button class="wr-btn buy" data-buy="coinbot" ${canBuy(dBuy) ? "" : "disabled"}>製造 ${costHTML(dBuy.coins)}</button></span>${bulkRowHTML("coinbot")}${buyReasonHTML("coinbot")}`}
-      </div>
-      <div class="btile" style="--accent:#ffd60a">
-        <span class="wt-top">${iconBadge("coin", "#ffd60a")}<span class="wt-no">STATUS</span></span>
-        <span class="wt-name">回収の状況</span>
-        <span class="wt-sub">場のコイン <b>${fieldCoins}</b> 枚 ・ 稼働 <b>${coinBotCount()}</b> 機</span>
-        <span class="wt-sub">1機の吸引範囲 <b>${Math.round(coinBotVacuum())}</b> ・ 接触 <b>${Math.round(coinBotTouchR())}</b></span>
-        <span class="wt-sub">モジュールで吸引・速度・回収額が伸びる</span>
-      </div>
-    </div>
-    ${secHeadHTML("MODULE", "モジュール", "回収ボットが1機以上いると組み込める", `${CB_MOD_KEYS.filter(k => cbLv(k) > 0).length}/${CB_MOD_KEYS.length}`)}
-    <div class="wgrid">${CB_MOD_KEYS.map(cbModTileHTML).join("")}</div>`;
-  return html;
+  const modOn = CB_MOD_KEYS.filter(k => cbLv(k) > 0).length;
+  // モジュールは「今買える → 未導入 → 導入済み → MAX」の順に並べ、次に押すものが上に来るようにする
+  const rank = k => { const m = CB_MODULES[k], lv = cbLv(k); if (lv >= m.max) return 3; return canBuy(buyDef("cbmod:" + k)) ? 0 : lv ? 2 : 1; };
+  const mods = CB_MOD_KEYS.slice().sort((a, b) => rank(a) - rank(b));
+  return fleetCardHTML({ icon:"coinbot", accent:"#ffd60a", name:"コイン回収ボット", n, max:COINBOT_MAX, extra: total > n ? `+${total - n} 追加` : "",
+      sw: crewSwitchHTML("coinBots"), off: n > 0 && state.off.coinBots,
+      stats:[["回収額", "x" + (botCoinMul() * (sk("c_haul") ? 1.10 : 1)).toFixed(2), true], ["速度", Math.round(coinBotSpeed())], ["吸引", Math.round(coinBotVacuum())], ["場のコイン", fieldCoins]] })
+    + (n > 0 ? botModeSegHTML("coinbot") : `<p class="hint-box">落ちたコインを自動で拾う相棒。1機目を製造するとモジュールも組み込めるようになる。</p>`)
+    + secTitleHTML("製造", "回収ボットを増やす")
+    + `<div class="alist">${crewRowHTML("coinbot")}</div>`
+    + secTitleHTML("モジュール", n > 0 ? "買えるものから順に並ぶ" : "回収ボットが1機以上必要", `${modOn}/${CB_MOD_KEYS.length}`)
+    + `<div class="alist">${mods.map(k => crewRowHTML("cbmod:" + k)).join("")}</div>`;
 }

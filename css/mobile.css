@@ -80,7 +80,7 @@ body.pwa-ios-mode .pwa-ios { display:block; }
 
   html, body { overscroll-behavior:none; }
   /* ダブルタップ拡大を無効にする (連打しても 2回目の反応が消えない方式) */
-  #app, button, .wrow, .wtile, .btile, .mat-tile, .lo-slot, .shelf-chip, .fchip, label { touch-action:manipulation; }
+  #app, button, .wl-row, .btile, .mat-tile, .fchip, select, label { touch-action:manipulation; }
   #app { display:block; border:none; }
 
   /* ---- ゲーム画面を全面に ---- */
@@ -224,20 +224,26 @@ body.pwa-ios-mode .pwa-ios { display:block; }
   }
   #sheetHandle span { display:block; width:46px; height:4px; border-radius:2px; background:#666; }
   #sheetHandle:active span { background:#fff; }
-  #sideHead { padding:4px 11px 7px; }
-  #tabs button { padding:13px 0; font-size:11.5px; }
+  #sideHead { padding:2px 12px 8px; background:none; }
+  .sh-coins b { font-size:23px; }
+  #tabs button { padding:9px 0 8px; font-size:11px; }
+  #tabs button svg { width:22px; height:22px; }
   #panels { overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
   #panels::-webkit-scrollbar { width:0; }
-  .panel { padding:11px 11px 26px; }
+  #side .panel { padding:11px 11px 28px; }
 
   /* 指で押しやすいサイズに ---- */
-  .wr-btn { padding:9px 12px; font-size:12.5px; }
-  .buy-btn { padding:12px 12px; }
-  .fchip, .lo-mini { padding:7px 12px; font-size:11.5px; }
+  .act-btn { padding:10px 12px; font-size:12.5px; }
+  .wl-act .act-btn { padding:9px 10px; font-size:12px; }
+  .wl-row { padding:9px 9px; }
+  .mini-act { padding:7px 10px; font-size:11.5px; }
+  .seg-btn { padding:9px 4px; font-size:12.5px; }
+  .tog { padding:10px 12px; }
+  .fchip { padding:7px 12px; font-size:11.5px; }
   .mat-grid { grid-template-columns:repeat(4, 1fr); }
-  .wgrid, .shelf, .two-col { grid-template-columns:1fr 1fr; }
-  .mode-grid { grid-template-columns:1fr; }
-  #wsearch { padding:11px 12px; font-size:16px; }   /* iOS が勝手にズームしないよう 16px 以上 */
+  /* iOS が勝手にズームしないよう 16px 以上 */
+  .search input { font-size:16px; padding:9px 6px; }
+  .sel { font-size:16px; padding:8px 26px 8px 10px; }
 
   /* ---- スキルツリー / アーティファクト ---- */
   .tree-head { gap:9px; padding:calc(7px + env(safe-area-inset-top)) 10px 7px; flex-wrap:wrap; }
@@ -263,7 +269,6 @@ body.pwa-ios-mode .pwa-ios { display:block; }
   .eq-shelf { grid-template-columns:1fr 1fr; }
   .eq-tile { min-height:84px; }
   .eq-toolbar .fchip { padding:8px 13px; font-size:11.5px; }
-  .eq-open-btn { padding:12px 11px; min-height:56px; }
   .bulk-row .wr-btn.bulk { padding:9px 6px; font-size:11.5px; }
   #artGet { min-width:0; left:10px; right:10px; transform:none; max-width:none; padding:13px 16px 11px; }
   #artGet.show { transform:none; }
@@ -301,9 +306,9 @@ body.pwa-ios-mode .pwa-ios { display:block; }
 /* ---------- 細い端末 (〜380px) ---------- */
 @media (max-width: 380px){
   .mat-grid { grid-template-columns:repeat(3, 1fr); }
-  .wgrid, .shelf, .two-col { grid-template-columns:1fr; }
   .eq-shelf { grid-template-columns:1fr; }
-  .stat-grid { grid-template-columns:repeat(2, 1fr); }
+  .sh-stat b, .fl-stat b, .kpi b { font-size:12px; }
+  .ar-foot, .arow .buy-reason, .arow .matsub-line { padding-left:0; }
   #treeBtn, #artBtn { padding:7px 7px; font-size:10px; }
   #stickZone { width:118px; height:118px; }
 }

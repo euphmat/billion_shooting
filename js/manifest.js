@@ -10,9 +10,9 @@
    ファイルを足すときは APP_SCRIPTS の「読み込み順」に注意: 全て通常の <script> と同じく
    グローバルを共有するので、読み込み時に実行されるコードは先に読まれたファイルにしか依存できない。
    ========================================================= */
-const APP_VERSION = 90;
+const APP_VERSION = 91;
 
-const APP_STYLES = ["css/style.css", "css/mobile.css"];
+const APP_STYLES = ["css/style.css", "css/side.css", "css/mobile.css"];
 
 // store.js だけは index.html が同期で先に読む (セーブを読み終えてから残りを読み込むため)
 const APP_BOOT_SCRIPT = "js/core/store.js";
@@ -35,6 +35,7 @@ const APP_SCRIPTS = [
   "js/ui/workshop.js",
   "js/ui/crew-panel.js",
   "js/ui/materials-panel.js",
+  "js/ui/home-panel.js",
   "js/ui/panels.js",
   "js/ui/settings.js",
   "js/ui/hud.js",

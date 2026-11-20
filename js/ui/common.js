@@ -286,9 +286,9 @@ function upCostHTML(d){
   if (!plan || plan.subTotal <= 0) return costHTML(d ? d.coins : 0);
   const main = plan.subs.reduce((a, b) => b.n > a.n ? b : a);
   const m = MAT[main.k];
-  let s = `<span class="cost"><i class="mat-dot" style="--mc:${m.color}" title="${m.name}"></i>${fmt(main.n)}`;
+  let s = `<span class="cost${plan.subs.length > 1 || plan.coinsPay > 0 ? " has-more" : ""}"><span class="cp-mat"><i class="mat-dot" style="--mc:${m.color}" title="${m.name}"></i>${fmt(main.n)}</span>`;
   if (plan.subs.length > 1) s += `<span class="cost-more">他${plan.subs.length - 1}種</span>`;
-  if (plan.coinsPay > 0) s += `<i class="coin-dot"></i>${fmt(plan.coinsPay)}`;
+  if (plan.coinsPay > 0) s += `<span class="cp-coin"><i class="coin-dot"></i>${fmt(plan.coinsPay)}</span>`;
   return s + "</span>";
 }
 const upCostSpan = (dataBuy, d) => `<span data-upcost="${dataBuy}">${upCostHTML(d)}</span>`;
@@ -354,4 +354,37 @@ function buyDef(dataBuy){
   }
   if (d.coins && sk("e_design")) d.coins = Math.floor(d.coins * 0.9);
   return d;
+}
+
+/* ---------- サイドバー共通部品 (v91 リニューアル) ---------- */
+// 文字入力中かどうか (検索欄に打った文字で自機が動いたり、T でツリーが開いたりしないように)
+const isTypingTarget = e => { const t = e && e.target, tag = t && t.tagName; return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || !!(t && t.isContentEditable); };
+const escAttr = s => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+const searchSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>`;
+// 検索欄 (クリアボタン付き)。id ごとに input / compositionend を panels.js が拾う
+const searchBoxHTML = (id, value, placeholder) =>
+  `<label class="search${value ? " has-q" : ""}">${searchSVG}<input id="${id}" type="text" inputmode="search" enterkeyhint="search" placeholder="${placeholder}" value="${escAttr(value)}" autocomplete="off" spellcheck="false"><button type="button" class="search-x" data-clear="${id}" aria-label="検索をクリア">${iconSVG("close")}</button></label>`;
+// セクション見出し (タイトル + 補足 + 右端の件数)
+const secTitleHTML = (title, note, right) =>
+  `<div class="sec-title"><b>${title}</b>${note ? `<span class="sec-note">${note}</span>` : ""}${right !== undefined && right !== null && right !== "" ? `<span class="sec-right">${right}</span>` : ""}</div>`;
+// まとめ買い (×10 / 最大まで) の小ボタン
+function bulkRowHTML(dataBuy){
+  const dis = canBuy(buyDef(dataBuy)) ? "" : "disabled";
+  return `<span class="bulk-row"><button class="mini-act" data-bulk="${dataBuy}" data-bulkn="10" ${dis} title="買える分だけ最大10回まとめて購入">×10</button><button class="mini-act" data-bulk="${dataBuy}" data-bulkn="max" ${dis} title="払える限り・上限までまとめて購入">MAX</button></span>`;
+}
+/* アクション行: 「何が・どう良くなって・いくらで買えるか」を1行で見せ、右端に主ボタンを1つだけ置く。
+   おすすめ / 武器 / 攻撃ボット / 回収ボット の全タブで同じ文法を使う。
+   o = { buy, icon, accent, title, lv, eff, label, go, bulk, maxed, maxedText, tip, mats } */
+function actRowHTML(o){
+  const d = o.maxed ? null : buyDef(o.buy), ok = !!d && canBuy(d);
+  const cost = o.buy.startsWith("wupgrade:") ? upCostSpan(o.buy, d) : costHTML(d ? d.coins : 0);
+  const tip = o.tip === undefined ? `buy:${o.buy}` : o.tip;
+  const mats = o.mats !== undefined ? o.mats : d && d.mats;
+  return `<div class="arow${ok ? " afford" : ""}${o.maxed ? " maxed" : ""}" style="--accent:${o.accent}"${tip ? ` data-tip="${tip}"` : ""}>
+    <div class="ar-top">${iconBadge(o.icon, o.accent)}
+      <div class="ar-main"><div class="ar-title"><span class="ar-name">${o.title}</span>${o.lv ? `<span class="lv-pill">${o.lv}</span>` : ""}</div>${o.eff ? `<div class="ar-eff">${o.eff}</div>` : ""}</div>
+      ${o.maxed ? `<span class="max-pill">${o.maxedText || "MAX"}</span>` : `<button class="act-btn${o.go ? " go" : ""}" data-buy="${o.buy}" ${ok ? "" : "disabled"}><span class="ab-label">${o.label}</span>${cost}</button>`}
+    </div>
+    ${o.maxed ? "" : `${(mats && Object.keys(mats).length) || o.bulk ? `<div class="ar-foot">${mats ? recipeChips(mats, true) : "<span></span>"}${o.bulk ? bulkRowHTML(o.buy) : ""}</div>` : ""}${o.buy.startsWith("wupgrade:") ? matSubHTML(o.buy) : ""}${buyReasonHTML(o.buy)}`}
+  </div>`;
 }

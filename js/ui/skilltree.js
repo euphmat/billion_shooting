@@ -327,7 +327,7 @@ $("treeView").addEventListener("wheel", e => {
 // ---------- キー: T = ツリー ----------
 window.addEventListener("keydown", e => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (e.code === "KeyT"){ toggleTree(); return; }
+  if (e.code === "KeyT" && !isTypingTarget(e)){ toggleTree(); return; }
   if (treeOpen){
     if (e.key === "Escape"){ if (selId) clearTreeSelection(); else toggleTree(false); }   // 選択中はまずポップオーバーを閉じる
     else if (e.key === "Enter" && selId) tryLearn(selId);

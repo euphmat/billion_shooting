@@ -182,53 +182,49 @@
   <div id="sheetBack"></div>
   <div id="side">
     <button id="sheetHandle" aria-label="工房を閉じる"><span></span></button>
-    <div id="sideHead">
-      <div class="sideHead-top">
-        <h2>WORKSHOP</h2>
-        <div class="sideHead-btns">
-        <button id="updateBtn" title="アップデート履歴" aria-label="アップデート履歴">
-          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V6"/><path d="M5.5 12.5 12 6l6.5 6.5"/><path d="M4 3.5h16"/></svg>
-          <i id="updBadge"></i>
-        </button>
-        <button id="gearBtn" class="icon-btn" title="設定" aria-label="設定">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3.2"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
-        </button>
+    <!-- ヘッダー: 所持コイン (+獲得ペース) / 主要ステータス / 惑星破壊率。縦幅を最小にして中身の領域を広く取る -->
+    <header id="sideHead">
+      <div class="sh-top">
+        <div class="sh-coins" title="所持コイン">
+          <i class="coin-dot coin-dot-lg"></i><b id="sideCoins">0</b><span id="sideRate" class="sh-rate"></span>
+        </div>
+        <div class="sh-btns">
+          <button id="updateBtn" title="アップデート履歴" aria-label="アップデート履歴">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V6"/><path d="M5.5 12.5 12 6l6.5 6.5"/><path d="M4 3.5h16"/></svg>
+            <i id="updBadge"></i>
+          </button>
+          <button id="gearBtn" class="icon-btn" title="設定" aria-label="設定">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3.2"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
         </div>
       </div>
-
-      <div class="progress-block">
-        <div class="progress-label"><span>惑星破壊率</span><span id="sidePct">0.000%</span></div>
-        <div class="progress-track"><div class="progress-fill" id="sideProgress"></div></div>
-        <div class="progress-sub"><span id="sideDestroyed">破壊 0</span><span id="sideRemain">残り 100,000,000</span></div>
+      <div class="sh-stats">
+        <span class="sh-stat" title="自機 + ボットの総DPS"><em>総DPS</em><b id="statDps">0</b></span>
+        <span class="sh-stat" title="自機の1発の攻撃力"><em>攻撃</em><b id="statDmg">0</b></span>
+        <span class="sh-stat" title="稼働中の攻撃ボット + 回収ボット"><em>仲間</em><b id="statCrew">0</b></span>
+        <span class="sh-stat" title="これまでに稼いだコインの合計"><em>累計</em><b id="statTotalCoins">0</b></span>
       </div>
-
-      <div class="coin-block">
-        <span class="coin-label"><i class="coin-dot coin-dot-lg"></i>コイン</span>
-        <b id="sideCoins">0</b>
+      <div class="sh-progress">
+        <div class="sh-ptrack"><div id="sideProgress"></div></div>
+        <div class="sh-plabel"><span class="sh-pname">惑星破壊 <b id="sidePct">0%</b></span><span id="sideDestroyed"></span><span id="sideRemain"></span></div>
       </div>
+    </header>
 
-      <div class="stat-grid">
-        <div class="stat-cell"><span>攻撃</span><b id="statDmg">1.0</b></div>
-        <div class="stat-cell"><span>総DPS</span><b id="statDps">5</b></div>
-        <div class="stat-cell"><span>仲間</span><b id="statCrew">0</b></div>
-        <div class="stat-cell"><span>累計コイン</span><b id="statTotalCoins">0</b></div>
-      </div>
-    </div>
-
-    <div id="equipBar"></div>
-
-    <div id="tabs">
-      <button data-tab="craft" class="active">工房<i class="afford-dot"></i></button>
-      <button data-tab="bot">攻撃ボット<i class="afford-dot"></i></button>
-      <button data-tab="coinbot">回収ボット<i class="afford-dot"></i></button>
-      <button data-tab="items">素材<i class="afford-dot"></i></button>
-    </div>
+    <!-- タブ: アイコン + ラベル + 「今できること」の件数バッジ -->
+    <nav id="tabs" role="tablist" aria-label="工房のメニュー">
+      <button data-tab="home" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l2.7 5.8 6.3.7-4.7 4.3 1.3 6.2L12 16.9 6.4 20l1.3-6.2L3 9.5l6.3-.7z"/></svg><span>おすすめ</span><i class="tab-badge"></i></button>
+      <button data-tab="craft" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-2.5 2.5-6-6z"/><path d="M12.5 8.5 3.5 17.5a1.4 1.4 0 0 0 2 2l9-9"/></svg><span>武器</span><i class="tab-badge"></i></button>
+      <button data-tab="bot" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="5" y="9" width="14" height="9" rx="1.5"/><path d="M12 9V5"/><circle cx="12" cy="3.8" r="1.3"/><circle cx="9.3" cy="13.5" r="1" fill="currentColor" stroke="none"/><circle cx="14.7" cy="13.5" r="1" fill="currentColor" stroke="none"/><path d="M2.8 12.5v3M21.2 12.5v3"/></svg><span>攻撃ボット</span><i class="tab-badge"></i></button>
+      <button data-tab="coinbot" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4" y="8" width="12" height="8.5" rx="1.5"/><path d="M10 8V4.8"/><circle cx="10" cy="3.6" r="1.2"/><circle cx="7.6" cy="12.2" r=".9" fill="currentColor" stroke="none"/><circle cx="12" cy="12.2" r=".9" fill="currentColor" stroke="none"/><circle cx="17.8" cy="17.2" r="4"/><path d="M16 17.2h3.6"/></svg><span>回収ボット</span><i class="tab-badge"></i></button>
+      <button data-tab="items" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6.5 4h11L21.5 9.5 12 20.5 2.5 9.5z"/><path d="M2.5 9.5h19M9 4 7.5 9.5 12 20.5l4.5-11L15 4"/></svg><span>素材</span><i class="tab-badge"></i></button>
+    </nav>
 
     <div id="panels">
-      <div class="panel active" id="panel-craft"></div>
+      <div class="panel" id="panel-home"></div>
+      <div class="panel" id="panel-craft"></div>
       <div class="panel" id="panel-bot"></div>
       <div class="panel" id="panel-coinbot"></div>
       <div class="panel" id="panel-items"></div>

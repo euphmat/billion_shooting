@@ -4,7 +4,7 @@
    ========================================================= */
 
 /* ---------- 素材: 図鑑 / 所持数 ---------- */
-let matFilter = "all", matSel = null, matOwnedOnly = false;
+let matCat = "all", matLayer = "all", matQuery = "", matSel = null, matOwnedOnly = false;
 function matUses(k){   // この素材を使うレシピ
   const out = [];
   for (const wk of WEAPON_KEYS) if (WEAPONS[wk].recipe[k]) out.push({ name:WEAPONS[wk].name, color:WEAPONS[wk].accent, kind:"装備" });
@@ -18,11 +18,14 @@ function matUses(k){   // この素材を使うレシピ
 function openMaterial(key){
   if (!MAT[key]) return;
   state.seen[key] = true;
-  matSel = key; matFilter = "all"; matOwnedOnly = false;
-  activeTab = "items";
-  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x.dataset.tab === "items"));
-  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-items"));
-  renderPanels(true);
+  matSel = key;
+  // 開いた素材が一覧から消えないよう、合わない絞り込みだけ外す
+  const m = MAT[key];
+  if (matCat !== "all" && matCat !== m.cat) matCat = "all";
+  if (matLayer !== "all" && +matLayer !== m.layer) matLayer = "all";
+  if (matOwnedOnly && invOf(key) <= 0) matOwnedOnly = false;
+  if (matQuery && !matSearchText(m).includes(matQuery.trim().toLowerCase())) matQuery = "";
+  setTab("items");
   $("panels").scrollTop = 0;
 }
 // この素材を「今すぐ」使える購入先 (武器の製作/強化、ボット製造/強化、モジュール、衛星テク)
@@ -50,13 +53,13 @@ function matUseActions(k){
 function matDetailHTML(m){
   const seen = !!state.seen[m.key], uses = matUses(m.key);
   const cat = MAT_CATS[m.cat];
-  return `<div class="card mat-detail" style="--accent:${m.color}">
+  return `<div class="mat-detail" style="--accent:${m.color}">
     <div class="card-top"><div class="mat-swatch big cat-${m.cat}" style="--mc:${m.color}"></div>
       <div class="card-main"><div class="card-head"><h3>${seen ? m.name : "？？？"}</h3><span class="badge dim">${RARITY_NAMES[matRarity(m)]}</span></div>
       <div class="tagline" style="color:${cat.color}">${cat.name} ・ ${LAYERS[m.layer].name}${m.explosive ? " ・ 爆発性" : ""}</div></div>
       <button class="icon-btn sm" data-matclose aria-label="閉じる">${iconSVG("close")}</button></div>
-    <p>${seen ? (m.note || `${LAYERS[m.layer].name}で見つかる${cat.name}。`) : `まだ見つけていない。${LAYERS[m.layer].name}を掘ると出てくるはず。`}</p>
-    <div class="effect-line">所持 <span class="next" data-invcount="${m.key}">${fmt(invOf(m.key))}</span> ・ 硬さ x${m.hard} ・ コイン x${m.coin}${m.xp > 1 ? ` ・ 経験値 x${m.xp}` : ""}</div>
+    <p class="md-note">${seen ? (m.note || `${LAYERS[m.layer].name}で見つかる${cat.name}。`) : `まだ見つけていない。${LAYERS[m.layer].name}を掘ると出てくるはず。`}</p>
+    <div class="md-stats"><span>所持 <b data-invcount="${m.key}">${fmt(invOf(m.key))}</b></span><span>硬さ <b>x${m.hard}</b></span><span>コイン <b>x${m.coin}</b></span>${m.xp > 1 ? `<span>経験値 <b>x${m.xp}</b></span>` : ""}</div>
     ${(() => {
       const rows = matUseActions(m.key), have = invOf(m.key);
       const covered = new Set(rows.map(r => r.name));
@@ -64,36 +67,50 @@ function matDetailHTML(m){
       let out = "";
       if (rows.length) out += `<div class="recipe-head">使い道 — そのまま使える</div>` + rows.map(u => {
         const d = buyDef(u.buy), ok = canBuy(d);
-        return `<div class="use-row" style="--accent:${u.color}">${iconBadge(u.icon, u.color)}<div class="ur-main"><div class="ur-name">${u.name}</div><div class="ur-sub">${u.kind} ・ ${m.name} x${u.need}</div></div><span class="ur-need${have >= u.need ? "" : " lack"}">所持 ${fmt(have)}</span>${u.equip && state.weapon !== u.equip ? `<button class="wr-btn" data-buy="equip:${u.equip}">装備</button>` : ""}<button class="buy-btn sm" data-buy="${u.buy}" ${ok ? "" : "disabled"}><span>${u.label}</span>${u.buy.startsWith("wupgrade:") ? upCostSpan(u.buy, d) : costHTML(d ? d.coins : 0)}</button></div>`;
+        return `<div class="use-row" style="--accent:${u.color}">${iconBadge(u.icon, u.color)}<div class="ur-main"><div class="ur-name">${u.name}</div><div class="ur-sub">${u.kind} ・ ${m.name} x${u.need}</div></div><span class="ur-need${have >= u.need ? "" : " lack"}">所持 ${fmt(have)}</span>${u.equip && state.weapon !== u.equip ? `<button class="act-btn ghost" data-buy="equip:${u.equip}">装備</button>` : ""}<button class="act-btn" data-buy="${u.buy}" ${ok ? "" : "disabled"}><span class="ab-label">${u.label}</span>${u.buy.startsWith("wupgrade:") ? upCostSpan(u.buy, d) : costHTML(d ? d.coins : 0)}</button></div>`;
       }).join("");
       if (others.length) out += `<div class="recipe-head">その他の使い道</div><div class="uses">${others.map(u => `<span class="use-chip" style="--mc:${u.color}"><i></i>${u.name}<em>${u.kind}</em></span>`).join("")}</div>`;
       return out || `<div class="sub">使い道: なし (売ることはできないが、集める楽しみはある)</div>`;
     })()}
   </div>`;
 }
-function itemsPanelHTML(){
-  const found = MATS.filter(m => state.seen[m.key]).length;
-  let html = `<div class="panel-intro">ブロックを壊すと手に入る素材、全<b>${MATS.length}種</b>。<b>ゲーム画面のブロックを${TAP}</b>すると、その素材の詳細と使い道がここに開くよ。</div>
-    <div class="weapon-summary" style="--accent:#c792ff">
-      <div><span class="ws-label">発見</span><b>${found}</b><span class="ws-dim"> / ${MATS.length}</span></div>
-      <div><span class="ws-label">所持合計</span><b>${fmt(Object.values(state.inv).reduce((s, v) => s + v, 0))}</b></div>
-      <div><span class="ws-label">採掘倍率</span><b>x${matDropMul().toFixed(2)}</b></div>
-      <div><span class="ws-label">地層</span><b>${LAYERS[Math.max(0, layerIndexOf(blockDepth(w2g(player.x), w2g(player.y))))].name}</b></div>
-    </div>
-    <div class="filters">
-      <button class="fchip${matFilter === "all" ? " on" : ""}" data-mfilter="all">全て</button>
-      ${MAT_CAT_KEYS.map(c => `<button class="fchip${matFilter === c ? " on" : ""}" data-mfilter="${c}" style="--mc:${MAT_CATS[c].color}"><i></i>${MAT_CATS[c].name}</button>`).join("")}
-      ${LAYERS.map((L, i) => `<button class="fchip${matFilter === "L" + i ? " on" : ""}" data-mfilter="L${i}">${L.name}</button>`).join("")}
-      <button class="fchip${matOwnedOnly ? " on" : ""}" data-mowned>所持のみ</button>
-    </div>`;
-  if (matSel && MAT[matSel]) html += matDetailHTML(MAT[matSel]);
-  const list = MATS.filter(m => (matFilter === "all" || matFilter === m.cat || matFilter === "L" + m.layer) && (!matOwnedOnly || invOf(m.key) > 0));
-  html += `<div class="mat-grid">` + list.map(m => {
+const matSearchText = m => (state.seen[m.key] ? m.name + " " + (m.note || "") : "") + " " + MAT_CATS[m.cat].name + " " + LAYERS[m.layer].name;
+function matListKeys(){
+  const q = matQuery.trim().toLowerCase();
+  return MATS.filter(m => (matCat === "all" || matCat === m.cat) && (matLayer === "all" || +matLayer === m.layer)
+    && (!matOwnedOnly || invOf(m.key) > 0) && (!q || matSearchText(m).toLowerCase().includes(q)));
+}
+function matGridHTML(){
+  const list = matListKeys();
+  if (!list.length) return `<p class="empty">条件に合う素材はない。絞り込みを外してみよう。</p>`;
+  return `<div class="mat-grid">` + list.map(m => {
     const seen = !!state.seen[m.key], n = invOf(m.key);
-    return `<button class="mat-tile${seen ? "" : " unknown"}${matSel === m.key ? " sel" : ""}" data-mat-tile="${m.key}" title="${seen ? m.name : "？？？"} ・ ${LAYERS[m.layer].name}">
+    return `<button class="mat-tile${seen ? "" : " unknown"}${matSel === m.key ? " sel" : ""}${seen && n <= 0 ? " zero" : ""}" data-mat-tile="${m.key}" title="${seen ? m.name : "？？？"} ・ ${LAYERS[m.layer].name}">
       <span class="mat-swatch cat-${m.cat}" style="--mc:${seen ? m.color : "#333"}"></span>
       <span class="mt-name">${seen ? m.name : "？？？"}</span>
       <span class="mt-count" data-invcount="${m.key}">${seen ? fmt(n) : ""}</span></button>`;
   }).join("") + `</div>`;
+}
+function refreshMatGrid(){ const el = $("mgridWrap"); if (el) el.innerHTML = matGridHTML(); }
+function itemsPanelHTML(){
+  const found = MATS.filter(m => state.seen[m.key]).length;
+  const here = LAYERS[Math.max(0, layerIndexOf(blockDepth(w2g(player.x), w2g(player.y))))].name;
+  const filtered = matCat !== "all" || matLayer !== "all" || matOwnedOnly || matQuery.trim();
+  let html = `<div class="kpis">
+      <div class="kpi"><em>発見</em><b>${found}<small>/${MATS.length}</small></b></div>
+      <div class="kpi"><em>所持合計</em><b>${fmt(Object.values(state.inv).reduce((s, v) => s + v, 0))}</b></div>
+      <div class="kpi"><em>採掘倍率</em><b>x${fmtX(matDropMul())}</b></div>
+      <div class="kpi"><em>いまの地層</em><b>${here}</b></div>
+    </div>`;
+  if (matSel && MAT[matSel]) html += matDetailHTML(MAT[matSel]);
+  html += `<div class="toolbar">${searchBoxHTML("msearch", matQuery, "素材名で検索")}</div>
+    <div class="toolbar">
+      <select id="mcat" class="sel grow" aria-label="種類で絞り込み"><option value="all">種類: すべて</option>${MAT_CAT_KEYS.map(c => `<option value="${c}"${matCat === c ? " selected" : ""}>${MAT_CATS[c].name}</option>`).join("")}</select>
+      <select id="mlayer" class="sel grow" aria-label="地層で絞り込み"><option value="all">地層: すべて</option>${LAYERS.map((L, i) => `<option value="${i}"${matLayer === String(i) ? " selected" : ""}>${L.name}</option>`).join("")}</select>
+      <button class="tog${matOwnedOnly ? " on" : ""}" data-mowned aria-pressed="${matOwnedOnly}">所持のみ</button>
+      ${filtered ? `<button class="tog ghost" data-mreset title="絞り込みを全て外す">${iconSVG("close")}</button>` : ""}
+    </div>
+    <div id="mgridWrap">${matGridHTML()}</div>
+    <p class="foot-hint">ゲーム画面のブロックを${TAP}すると、その素材の詳細と使い道がここに開く。</p>`;
   return html;
 }

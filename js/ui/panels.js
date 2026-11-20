@@ -1,137 +1,141 @@
 "use strict";
 /* =========================================================
-   ui/panels.js - 右パネルの描画・購入処理・一括強化・ボット編成のイベント
+   ui/panels.js - 右サイドバーの描画・タブ・購入処理・一括強化・ボット編成のイベント
    ========================================================= */
 
-/* ---------- 共通部品 ---------- */
-function crewToggleHTML(key){
-  if (!(state[key] > 0)) return "";
-  const on = !state.off[key];
-  return `<div class="crew-toggle${on ? "" : " is-off"}"><span>${on ? "稼働中" : "停止中"}</span>
-    <label class="switch"><input type="checkbox" data-crew="${key}" ${on ? "checked" : ""}><span class="slider"></span></label></div>`;
+/* ---------- タブ ---------- */
+const PANEL_HTML = { home:homePanelHTML, craft:craftPanelHTML, bot:botPanelHTML, coinbot:coinBotPanelHTML, items:itemsPanelHTML };
+const panelDirty = { home:true, craft:true, bot:true, coinbot:true, items:true };
+// 最後に開いていたタブとスクロール位置は端末ごとに覚えておく (無くても動く)
+const TAB_KEY = "bs.sideTab";
+let activeTab = (() => { try { return localStorage.getItem(TAB_KEY) || "home"; } catch(e){ return "home"; } })();
+if (!PANEL_HTML[activeTab]) activeTab = "home";
+const tabScroll = {};
+function syncTabUI(){
+  document.querySelectorAll("#tabs button").forEach(x => { const on = x.dataset.tab === activeTab; x.classList.toggle("active", on); x.setAttribute("aria-selected", on); });
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + activeTab));
 }
-
-/* ---------- 装備バー: 現在の装備を WORKSHOP 上部に小さく表示 (その場で強化できる) ---------- */
-let lastEquipHTML = "";
-function equipBarHTML(){
-  const k = state.weapon, w = WEAPONS[k], lv = weaponLvOf(k), d = buyDef("wupgrade:" + k);
-  return `<div class="equip-bar" style="--accent:${w.accent}" data-tip="weapon:${k}">
-    <span class="icon-badge sm" style="color:${w.accent};border-color:${w.accent};background:${w.accent}14">${iconSVG(w.icon)}</span>
-    <div class="eb-main"><div class="eb-name">${w.name}${lv > 0 ? ` <span class="eb-lv">Lv.${lv}</span>` : ""}</div>
-    <div class="eb-sub">DPS <b>${fmtD(weaponDPS(w) * weaponPowerMul(k))}</b> ・ ${w.tag}</div></div>
-    <button class="buy-btn sm" data-buy="wupgrade:${k}" ${d && canBuy(d) ? "" : "disabled"}><span>強化</span>${upCostSpan("wupgrade:" + k, d)}</button>
-  </div>
-  <div class="equip-mats">${d ? recipeChips(d.mats, true) + matSubHTML("wupgrade:" + k) : ""}</div>`;
+function setTab(t){
+  if (!PANEL_HTML[t]) return;
+  if (t !== activeTab) tabScroll[activeTab] = $("panels").scrollTop;
+  activeTab = t;
+  try { localStorage.setItem(TAB_KEY, t); } catch(e){}
+  syncTabUI();
+  hideTip();
+  renderPanels(true);
+  $("panels").scrollTop = tabScroll[t] || 0;
 }
-$("equipBar").addEventListener("click", e => {
-  const btn = e.target.closest("[data-buy]"); if (!btn || btn.disabled) return;
-  doBuy(btn.dataset.buy);
-});
+syncTabUI();
+document.querySelectorAll("#tabs button").forEach(b => b.addEventListener("click", () => {
+  if (b.dataset.tab === activeTab){ $("panels").scrollTo({ top:0, behavior:"smooth" }); return; }   // 同じタブをもう一度押すと先頭へ
+  setTab(b.dataset.tab);
+}));
 
-/* ---------- panels ---------- */
-let activeTab = "craft";
-const PANEL_HTML = { craft:craftPanelHTML, bot:botPanelHTML, coinbot:coinBotPanelHTML, items:itemsPanelHTML };
-const panelDirty = { craft:true, bot:true, coinbot:true, items:true };
+/* ---------- 描画 ---------- */
 let lastPanelSig = "";
-let panelPointerDown = false, pendingPanelRender = false;
+let panelPointerDown = false, pendingPanelRender = false, imeComposing = false;
 function renderPanels(force){
-  if (!force && panelPointerDown){ pendingPanelRender = true; return; }
+  if (!force && (panelPointerDown || imeComposing)){ pendingPanelRender = true; return; }
   // コイン残高・素材の所持数は署名に入れない (変わるたび全再構築するとボタンがチカチカして押せなくなる)。
   // 残高依存の表示は refreshAffordability() が DOM を作り替えずに更新する。
-  const sig = [state.weapon, JSON.stringify(state.weaponsOwned), JSON.stringify(state.weaponLv), state.bots, state.coinBots, state.botLv,
+  // 「買える物の集合」が変わった時だけ描き直す (craftableSig / homeSig)
+  const sig = [state.weapon, JSON.stringify(state.weaponsOwned), JSON.stringify(state.weaponLv), state.bots, state.coinBots, state.botLv, state.botCore, state.botArmor,
     JSON.stringify(state.botLoadout), JSON.stringify(state.cbMod), JSON.stringify(state.off), state.lv, Object.keys(state.skills).length, Object.keys(state.seen).length,
-    botSlotSel, matFilter, matSel, matOwnedOnly, JSON.stringify(tierOpen), wQuery, wFilter, wSort, wGroup, wSel, state.botMode, state.cbMode, craftableSig()].join("|");
+    botSlotSel, matCat, matLayer, matSel, matOwnedOnly, JSON.stringify(tierOpen), wFilter, wSort, wSel, state.botMode, state.cbMode, craftableSig(), homeSig()].join("|");
   if (sig !== lastPanelSig){ lastPanelSig = sig; for (const k in panelDirty) panelDirty[k] = true; }
-  else if (!force && !panelDirty[activeTab]) return;
+  else if (!force && !panelDirty[activeTab]) { updateHeaderStats(); return; }
   if (force) for (const k in panelDirty) panelDirty[k] = true;
   const el = $("panel-" + activeTab);
+  // 描き直しても、検索欄などのフォーカスとカーソル位置は保つ
+  const ae = document.activeElement, focusId = ae && ae.id && el.contains(ae) ? ae.id : null;
+  let selS = null, selE = null; if (focusId){ try { selS = ae.selectionStart; selE = ae.selectionEnd; } catch(err){} }
   const scrollTop = $("panels").scrollTop;
   el.innerHTML = PANEL_HTML[activeTab]();
   $("panels").scrollTop = scrollTop;
+  if (focusId){ const n = $(focusId); if (n){ n.focus({ preventScroll:true }); if (selS !== null) try { n.setSelectionRange(selS, selE); } catch(err){} } }
   panelDirty[activeTab] = false;
-  updateAffordDots();
+  updateTabBadges();
   affordCoins = state.coins; affordInv = invVersion;
-  // --- header stats ---
-  $("statDmg").textContent = fmtD(playerDamage() * globalDmgMul());
-  $("statDps").textContent = fmt(totalDPS() * globalDmgMul());
-  $("statCrew").textContent = botCount() + coinBotCount();
-  $("statTotalCoins").textContent = fmt(state.totalCoins);
-  const ebHtml = equipBarHTML();
-  if (ebHtml !== lastEquipHTML){ lastEquipHTML = ebHtml; $("equipBar").innerHTML = ebHtml; }
+  updateHeaderStats();
 }
+function updateHeaderStats(){
+  setText($("statDmg"), fmtD(playerDamage() * globalDmgMul()));
+  setText($("statDps"), fmt(totalDPS() * globalDmgMul()));
+  setText($("statCrew"), String(botCount() + coinBotCount()));
+  setText($("statTotalCoins"), fmt(state.totalCoins));
+}
+
+/* ---------- タブの件数バッジ: 「今買えるもの」の数 ---------- */
+function updateTabBadges(){
+  const r = homeReady();
+  const isBot = b => b === "bot" || b === "bupgrade" || b === "botcore" || b === "botarmor";
+  const n = {
+    home: r.craft.length + r.crew.length + (r.equip ? 1 : 0),
+    craft: r.craft.length,
+    bot: r.crew.filter(isBot).length,
+    coinbot: r.crew.filter(b => !isBot(b)).length,
+    items: 0,
+  };
+  document.querySelectorAll("#tabs button").forEach(t => {
+    const c = n[t.dataset.tab] || 0, b = t.querySelector(".tab-badge");
+    if (b){ const s = c ? (c > 99 ? "99+" : String(c)) : ""; if (b._t !== s){ b._t = s; b.textContent = s; } }
+    t.classList.toggle("has-afford", c > 0);
+  });
+  const ms = $("mShop");   // スマホの「工房」ボタンにも同じ印を出す
+  if (ms) ms.classList.toggle("has-afford", n.home > 0);
+}
+const updateAffordDots = updateTabBadges;   // 旧名 (他ファイル互換)
 
 /* ---------- affordability: 残高・素材だけが変わった時は DOM を作り替えない ---------- */
 let invVersion = 0;   // 素材の所持数が変わるたびに増える (materials.js の invAdd / invTake から)
-function updateAffordDots(){
-  const afford = {
-    craft: WEAPON_KEYS.some(k => canCraft(k)),
-    bot:   canBuy(buyDef("bot")) || canBuy(buyDef("bupgrade")),
-    coinbot: canBuy(buyDef("coinbot")) || CB_MOD_KEYS.some(k => canBuy(buyDef("cbmod:" + k))),
-    items: false,
-  };
-  document.querySelectorAll("#tabs button").forEach(t => t.classList.toggle("has-afford", !!afford[t.dataset.tab]));
-  const ms = $("mShop");   // スマホの「工房」ボタンにも同じ印を出す
-  if (ms) ms.classList.toggle("has-afford", afford.craft || afford.bot || afford.coinbot);
-}
 let affordCoins = NaN, affordInv = -1;
 function refreshAffordability(){
   if (state.coins === affordCoins && invVersion === affordInv) return;
   affordCoins = state.coins; affordInv = invVersion;
-  for (const root of [$("panel-" + activeTab), $("equipBar")]){
-    root.querySelectorAll("[data-buy]").forEach(btn => {
-      const d = buyDef(btn.dataset.buy);
-      if (d) btn.disabled = !canBuy(d);
-      // 買えるタイルは光らせて「次に買うべきもの」を示す (ボット系タイルのみ)
-      const tile = btn.closest(".btile");
-      if (tile) tile.classList.toggle("afford", canBuy(d));
-    });
-    root.querySelectorAll("[data-bulk]").forEach(btn => {
-      const d = buyDef(btn.dataset.bulk);
-      btn.disabled = !canBuy(d);
-    });
-    root.querySelectorAll("[data-buyreason]").forEach(el => {
-      const t = buyReason(el.dataset.buyreason);
-      if (el._t !== t){ el._t = t; el.textContent = t; }
-    });
-    root.querySelectorAll("[data-matsub]").forEach(el => {
-      const t = matSubText(matSubPlanFor(buyDef(el.dataset.matsub)));
-      if (el._t !== t){ el._t = t; el.textContent = t; }
-    });
-    root.querySelectorAll("[data-upcost]").forEach(el => {
-      const h = upCostHTML(buyDef(el.dataset.upcost));
-      if (el._h !== h){ el._h = h; el.innerHTML = h; }
-    });
-    root.querySelectorAll("[data-bulkup]").forEach(btn => {
-      const pv = bulkUpPreview(false);
-      btn.disabled = !pv.total;
-      const n = btn.querySelector("[data-bulkup-n]");
-      if (n){ const t = pv.total ? "×" + fmt(pv.total) : ""; if (n._t !== t){ n._t = t; n.textContent = t; } }
-    });
-    root.querySelectorAll("[data-bulkup-sub]").forEach(el => {
-      const t = bulkUpSubText(bulkUpPreview(false));
-      if (el._t !== t){ el._t = t; el.textContent = t; }
-    });
-    root.querySelectorAll(".mat-chip[data-mat]").forEach(ch => {
-      const have = invOf(ch.dataset.mat), need = +ch.dataset.need;
-      ch.classList.toggle("ok", have >= need); ch.classList.toggle("lack", have < need);
-    });
-    root.querySelectorAll("[data-invcount]").forEach(el => { const t = fmt(invOf(el.dataset.invcount)); if (el._t !== t){ el._t = t; el.textContent = t; } });
-  }
-  updateAffordDots();
+  const root = $("panel-" + activeTab);
+  root.querySelectorAll("[data-buy]").forEach(btn => {
+    const d = buyDef(btn.dataset.buy);
+    const ok = !!d && canBuy(d);
+    if (d && btn.dataset.buy.indexOf("equip:") !== 0) btn.disabled = !ok;
+    const row = btn.closest(".arow");   // 今買える行は光らせて「次に押すもの」を示す
+    if (row && row.querySelector(".act-btn") === btn) row.classList.toggle("afford", ok);
+  });
+  root.querySelectorAll("[data-bulk]").forEach(btn => { btn.disabled = !canBuy(buyDef(btn.dataset.bulk)); });
+  root.querySelectorAll("[data-buyreason]").forEach(el => {
+    const t = buyReason(el.dataset.buyreason);
+    if (el._t !== t){ el._t = t; el.textContent = t; }
+  });
+  root.querySelectorAll("[data-matsub]").forEach(el => {
+    const t = matSubText(matSubPlanFor(buyDef(el.dataset.matsub)));
+    if (el._t !== t){ el._t = t; el.textContent = t; }
+  });
+  root.querySelectorAll("[data-upcost]").forEach(el => {
+    const h = upCostHTML(buyDef(el.dataset.upcost));
+    if (el._h !== h){ el._h = h; el.innerHTML = h; }
+  });
+  root.querySelectorAll("[data-bulkup]").forEach(btn => {
+    const pv = bulkUpPreview(false);
+    btn.disabled = !pv.total;
+    const n = btn.querySelector("[data-bulkup-n]");
+    if (n){ const t = pv.total ? "×" + fmt(pv.total) : ""; if (n._t !== t){ n._t = t; n.textContent = t; } }
+  });
+  root.querySelectorAll("[data-bulkup-sub]").forEach(el => {
+    const t = bulkUpSubText(bulkUpPreview(false));
+    if (el._t !== t){ el._t = t; el.textContent = t; }
+  });
+  root.querySelectorAll(".mat-chip[data-mat]").forEach(ch => {
+    const have = invOf(ch.dataset.mat), need = +ch.dataset.need;
+    ch.classList.toggle("ok", have >= need); ch.classList.toggle("lack", have < need);
+  });
+  root.querySelectorAll("[data-invcount]").forEach(el => { const t = fmt(invOf(el.dataset.invcount)); if (el._t !== t){ el._t = t; el.textContent = t; } });
+  updateTabBadges();
 }
 $("panels").addEventListener("pointerdown", () => { panelPointerDown = true; });
 window.addEventListener("pointerup", () => {
   panelPointerDown = false;
-  if (pendingPanelRender){ pendingPanelRender = false; renderPanels(true); }
+  if (pendingPanelRender && !imeComposing){ pendingPanelRender = false; renderPanels(true); }
 });
-
-/* ---------- tabs ---------- */
-document.querySelectorAll("#tabs button").forEach(b => b.addEventListener("click", () => {
-  activeTab = b.dataset.tab;
-  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x === b));
-  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + activeTab));
-  renderPanels(true);
-}));
+window.addEventListener("pointercancel", () => { panelPointerDown = false; });
 
 /* ---------- 購入 / 製作 / 強化 ---------- */
 // 直近の購入で素材代用払いした内訳 (購入フィードバック表示用)
@@ -222,7 +226,9 @@ function bulkUpPreview(force){
 }
 const bulkUpSubText = pv => pv.total ? `強い武器から順に ${fmt(pv.total)} 回ぶん強化できる` : "今は強化できる武器がない (コイン・素材を確認)";
 function bulkUpBarHTML(pv){
-  return `<div class="bulkup-bar"><button class="bulkup-btn" data-bulkup ${pv.total ? "" : "disabled"} title="所持武器を現在のDPSが強い順に並べ、買えるだけまとめて強化する (製作素材払いも自動で適用)"><span class="bulkup-label">${iconSVG("up")}一括強化 (強い順)</span><span class="bulkup-n" data-bulkup-n>${pv.total ? "×" + fmt(pv.total) : ""}</span></button><div class="bulkup-sub" data-bulkup-sub>${bulkUpSubText(pv)}</div></div>`;
+  if (!WEAPON_KEYS.some(k => state.weaponsOwned[k])) return "";
+  return `<button class="bulkup-btn" data-bulkup ${pv.total ? "" : "disabled"} title="所持武器を現在のDPSが強い順に並べ、買えるだけまとめて強化する (製作素材払いも自動で適用)">
+    <span class="bu-icon">${iconSVG("up")}</span><span class="bu-main"><span class="bu-label">まとめて強化</span><span class="bu-sub" data-bulkup-sub>${bulkUpSubText(pv)}</span></span><span class="bu-n" data-bulkup-n>${pv.total ? "×" + fmt(pv.total) : ""}</span></button>`;
 }
 function doBulkUpgrade(){
   const res = bulkUpPass();
@@ -237,11 +243,6 @@ $("panels").addEventListener("click", e => {
   doBulkUpgrade();
 });
 
-// 繰り返し買えるタイルに付ける「×10 / 最大まで」のボタン行
-function bulkRowHTML(dataBuy){
-  const dis = canBuy(buyDef(dataBuy)) ? "" : "disabled";
-  return `<span class="wt-act bulk-row"><button class="wr-btn bulk" data-bulk="${dataBuy}" data-bulkn="10" ${dis} title="買える分だけ最大10回まとめて購入">×10 まとめて</button><button class="wr-btn bulk" data-bulk="${dataBuy}" data-bulkn="max" ${dis} title="払える限り・上限までまとめて購入">最大まで</button></span>`;
-}
 $("panels").addEventListener("click", e => {
   const btn = e.target.closest("[data-buy]"); if (!btn || btn.disabled) return;
   doBuy(btn.dataset.buy);
@@ -252,6 +253,10 @@ $("panels").addEventListener("click", e => {
 });
 $("panels").addEventListener("click", e => {
   if (e.target.closest("[data-boteq-open]")) openBotEq();
+});
+$("panels").addEventListener("click", e => {
+  const b = e.target.closest("[data-buyall]"); if (!b || b.disabled) return;
+  doBuyAllOnce();
 });
 
 /* ---------- 工房: ステージ見出しの開閉 ---------- */
@@ -268,19 +273,50 @@ $("panels").addEventListener("click", e => {
   if (cm){ state.cbMode = cm.dataset.cbmode; save(); renderPanels(true); return; }
 });
 
-/* ---------- 工房: 武器ブラウザの操作 ---------- */
+/* ---------- 武器タブ: 絞り込み / 行の開閉 ---------- */
 $("panels").addEventListener("click", e => {
   const f = e.target.closest("[data-wfilter]"); if (f){ wFilter = f.dataset.wfilter; renderPanels(true); return; }
-  const so = e.target.closest("[data-wsort]"); if (so){ wSort = so.dataset.wsort; renderPanels(true); return; }
-  if (e.target.closest("[data-wgroup]")){ wGroup = !wGroup; renderPanels(true); return; }
-  const sel = e.target.closest("[data-wsel]"); if (sel){ wSel = sel.dataset.wsel; renderPanels(true); return; }
+  // 行の中のボタン (製作・強化・装備) を押した時は開閉しない
+  if (e.target.closest("button, input, select, label")) return;
+  const sel = e.target.closest("[data-wsel]"); if (sel){ wSel = wSel === sel.dataset.wsel ? null : sel.dataset.wsel; renderPanels(true); }
 });
-$("panels").addEventListener("input", e => {
-  if (e.target.id !== "wsearch") return;
-  wQuery = e.target.value;
-  renderPanels(true);
-  const inp = $("wsearch");
-  if (inp){ inp.focus(); const v = inp.value; try { inp.setSelectionRange(v.length, v.length); } catch(err){} }
+$("panels").addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const sel = e.target.closest && e.target.closest(".wl-row[data-wsel]");
+  if (sel && e.target === sel){ e.preventDefault(); wSel = wSel === sel.dataset.wsel ? null : sel.dataset.wsel; renderPanels(true); const n = $("panel-craft").querySelector(`[data-wsel="${sel.dataset.wsel}"]`); if (n) n.focus(); }
+});
+/* ---------- 別タブへ飛ぶリンク (おすすめ → 武器タブの「製作可」など) ---------- */
+$("panels").addEventListener("click", e => {
+  const g = e.target.closest("[data-goto]"); if (!g) return;
+  if (g.dataset.gofilter) wFilter = g.dataset.gofilter;
+  if (g.dataset.gosel){ wSel = g.dataset.gosel; wFilter = "all"; wQuery = ""; wSort = "no"; tierOpen[WEAPONS[wSel].tier] = true; }
+  setTab(g.dataset.goto);
+  if (g.dataset.gosel){ const n = $("panel-craft").querySelector(`[data-wsel="${g.dataset.gosel}"]`); if (n) n.scrollIntoView({ block:"center" }); }
+});
+/* ---------- 検索欄 (日本語入力の変換中は描き直さない) / 並び替え / 絞り込み ---------- */
+function onSearchInput(t){
+  if (t.id === "wsearch"){ wQuery = t.value; refreshWeaponList(); }
+  else if (t.id === "msearch"){ matQuery = t.value; refreshMatGrid(); }
+  else return;
+  const box = t.closest(".search"); if (box) box.classList.toggle("has-q", !!t.value);
+}
+$("panels").addEventListener("compositionstart", () => { imeComposing = true; });
+$("panels").addEventListener("compositionend", e => { imeComposing = false; onSearchInput(e.target); });
+$("panels").addEventListener("input", e => { if (e.isComposing || imeComposing) return; onSearchInput(e.target); });
+$("panels").addEventListener("click", e => {
+  const c = e.target.closest("[data-clear]"); if (!c) return;
+  e.preventDefault();
+  const inp = $(c.dataset.clear); if (!inp) return;
+  inp.value = ""; onSearchInput(inp); inp.focus();
+});
+$("panels").addEventListener("keydown", e => {
+  if (e.key === "Escape" && (e.target.id === "wsearch" || e.target.id === "msearch")){ e.target.value = ""; onSearchInput(e.target); e.target.blur(); }
+});
+$("panels").addEventListener("change", e => {
+  const t = e.target;
+  if (t.id === "wsort"){ wSort = t.value; renderPanels(true); }
+  else if (t.id === "mcat"){ matCat = t.value; renderPanels(true); }
+  else if (t.id === "mlayer"){ matLayer = t.value; renderPanels(true); }
 });
 
 /* ---------- 攻撃ボットの編成: クリック / ドラッグ&ドロップ (装備モーダル内。処理はパネルと共有) ---------- */
@@ -356,8 +392,7 @@ for (const root of [$("panels"), $("botEqOverlay")]){
 
 /* ---------- 素材タブ ---------- */
 $("panels").addEventListener("click", e => {
-  const f = e.target.closest("[data-mfilter]");
-  if (f){ matFilter = f.dataset.mfilter; renderPanels(true); return; }
+  if (e.target.closest("[data-mreset]")){ matCat = "all"; matLayer = "all"; matOwnedOnly = false; matQuery = ""; renderPanels(true); return; }
   if (e.target.closest("[data-mowned]")){ matOwnedOnly = !matOwnedOnly; renderPanels(true); return; }
   const t = e.target.closest("[data-mat-tile]");
   if (t){ matSel = matSel === t.dataset.matTile ? null : t.dataset.matTile; renderPanels(true); $("panels").scrollTop = 0; return; }
