@@ -199,17 +199,17 @@ function machineOnBreak(idx, gx, gy){
 function syncMachines(){
   const w = fWant();
   const fit = (arr, n, mk) => { while (arr.length < n) arr.push(mk(arr.length, n)); if (arr.length > n) arr.length = n; };
-  fit(MCH.hunters, w.hunters, (i, n) => fNewUnit(i, n, { fireT: Math.random() * 0.4, retT: 0, tm: 0, ti: -1, frenzy: 0, shots: 0 }));
+  fit(MCH.hunters, w.hunters, (i, n) => fNewUnit(i, n, { fireT: Math.random() * 0.4, retT: Math.random() * 1.2, tm: 0, ti: -1, frenzy: 0, shots: 0 }));
   fit(MCH.drillers, w.drillers, (i, n) => fNewUnit(i, n, { tx: player.x, ty: player.y, retT: 0, tickT: 0, magT: 4 + i * 2.5, spin: 0 }));
-  fit(MCH.spiders, w.spiders, (i, n) => fNewUnit(i, n, { ti: -1, retT: 0, ripT: 0.5, bite: 0, walk: Math.random() * 6 }));
-  fit(MCH.teslas, w.teslas, (i, n) => fNewUnit(i, n, { zapT: 0.5 + i * 0.4, ti: -1, retT: 0 }));
+  fit(MCH.spiders, w.spiders, (i, n) => fNewUnit(i, n, { ti: -1, retT: Math.random() * 1.2, ripT: 0.5, bite: 0, walk: Math.random() * 6 }));
+  fit(MCH.teslas, w.teslas, (i, n) => fNewUnit(i, n, { zapT: 0.5 + i * 0.4, ti: -1, retT: Math.random() * 1.2 }));
   fit(MCH.bombers, w.bombers, (i, n) => fNewUnit(i, n, { oa: i * Math.PI, bombT: 1.5 + i * 1.5 }));
   fit(MCH.cannons, w.cannons, (i, n) => fNewUnit(i, n, { mode: "fly", sx: player.x, sy: player.y, fireT: 2 + i, relocT: 0, aim: 0, recoil: 0 }));
   if (w.titan && !MCH.titan){ MCH.titan = fNewUnit(0, 1, { tx: player.x, ty: player.y, retT: 0, stompT: 2, salvoT: 5, step: 0, stomp: 0 }); MCH.titan.hr = 520; }
   if (!w.titan) MCH.titan = null;
   if (!sk("f_replicate")) MCH.kids.length = 0;
   if (w.nanites){
-    if (!fNanoInit){ fNanoInit = true; for (let i = 0; i < 6; i++) MCH.nanites.push(fNewUnit(i, 6, { eatT: Math.random() * 0.7, eaten: 0, ti: -1, retT: 0, spin: Math.random() * 6 })); }
+    if (!fNanoInit){ fNanoInit = true; for (let i = 0; i < 6; i++) MCH.nanites.push(fNewUnit(i, 6, { eatT: Math.random() * 0.7, eaten: 0, ti: -1, retT: Math.random() * 1.5, spin: Math.random() * 6 })); }
   } else { MCH.nanites.length = 0; fNanoInit = false; }
   fActive = !!(w.hunters || w.drillers || w.spiders || w.teslas || w.bombers || w.cannons || w.titan || w.nanites);
   if (!fActive){ fDrops.length = 0; fLinks = []; fMarks.clear(); fCharged.clear(); fOmega = 0; }
@@ -286,6 +286,7 @@ function updateHunter(h, dt, U, pow, rate){
       let idx = findNearestBlock(h.x, h.y, F_HUNT_R);
       if (idx < 0){ const hp = fHome(h); idx = findNearestBlock(hp.x, hp.y, 900); if (idx < 0) idx = findNearestBlock(h.x, h.y, 1600); }
       h.ti = idx;
+      if (idx < 0) h.retT = 1.5 + Math.random() * 0.5;   // 周りが掘り尽くされている: 遠くの探索は重いので間隔を空ける
     }
   }
   const tmob = h.tm ? mobById(h.tm) : null;
@@ -395,12 +396,13 @@ function updateSpider(s, dt, rate){
   else { const dx = s.x - player.x, dy = s.y - player.y; if (dx * dx + dy * dy > F_LEASH * F_LEASH) s.life = 0; }
   if (s.bite > 0) s.bite -= dt;
   s.retT -= dt;
-  if (s.ti < 0 || isDestroyed(s.ti) || s.retT <= 0){
-    s.retT = 2;
+  if (s.ti >= 0 && isDestroyed(s.ti)){ s.ti = -1; s.retT = Math.min(s.retT, 0.1); }
+  if (s.retT <= 0){   // 探索はタイマーで間引く (見つからない時に毎フレーム遠くを探すと重い)
     let idx = findNearestBlock(s.x, s.y, 240);
     if (idx < 0 && !s.kid){ const hp = fHome(s); idx = findNearestBlock(hp.x, hp.y, 900); }
     if (idx < 0) idx = findNearestBlock(s.x, s.y, 1600);
     s.ti = idx;
+    s.retT = idx >= 0 ? 2 : 1.5 + Math.random() * 0.5;
   }
   let near = false;
   if (s.ti >= 0){
@@ -417,7 +419,7 @@ function updateSpider(s, dt, rate){
   if (sk("f_spider3")){ for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) targets.push(j); } }
   else targets.push(s.ti);
   rawDamage(() => { for (const j of targets) if (!isDestroyed(j)) damageBlock(j, blockMaxHP(j % D, (j / D) | 0) * 100, 0); });   // HP無視で引き剥がす
-  s.bite = 0.22; s.ti = -1;
+  s.bite = 0.22; s.ti = -1; s.retT = 0;   // 次の獲物をすぐ探す
   bumpProc("frip", p.x, p.y);
   addBeam({ x1: s.x, y1: s.y, x2: p.x, y2: p.y, w: 3, color: "#e0d8ff", life: 120 });
   if (onScreen(p.x, p.y, 40) && debrisParts.length < 160) for (let k = 0; k < 3; k++){
@@ -462,7 +464,7 @@ function updateTesla(t, dt, U, pow, rate){
   const mb = nearestMob(t.x, t.y, 320);
   if (mb){ addBeam({ x1: px, y1: py, x2: mb.x, y2: mb.y, w: 2.4, color: "#9ff0ff", zig: true, life: 160 }); damageMob(mb, fOmega > 0 ? dmg * 10 : dmg * gMul, null); px = mb.x; py = mb.y; }
   let cur = findNearestBlock(px, py, 320);
-  if (cur < 0 && !mb){ t.zapT = 0.25; return; }
+  if (cur < 0 && !mb){ t.zapT = 0.5; return; }
   const jumps = sk("f_tesla2") ? 10 : 5, seen = new Set();
   for (let k = 0; k < jumps && cur >= 0; k++){
     const p = blockPos(cur);
@@ -518,7 +520,7 @@ function updateCannon(c, dt, U, pow, rate){
   c.fireT -= dt * rate;
   if (c.fireT > 0) return;
   const tp = fDensest(c.x, c.y, 1200, 4);
-  if (!tp){ c.fireT = 0.8; return; }
+  if (!tp){ c.fireT = 1.5; return; }
   c.fireT = 4;
   c.aim = Math.atan2(tp.y - c.y, tp.x - c.x); c.recoil = 0.25;
   const n = sk("f_artillery2") ? 3 : 1;
@@ -573,7 +575,8 @@ function updateNanite(n, dt, rate){
   if (pd2 > 3600 * 3600){ const a = Math.random() * Math.PI * 2; n.x = player.x + Math.cos(a) * 300; n.y = player.y + Math.sin(a) * 300; }
   const gx = w2g(n.x), gy = w2g(n.y), inRock = liveAt(gx, gy) >= 0;
   n.retT -= dt;
-  if (!inRock && (n.retT <= 0 || n.ti < 0 || isDestroyed(n.ti))){ n.retT = 1; n.ti = findNearestBlock(n.x, n.y, 1500); }
+  if (n.ti >= 0 && isDestroyed(n.ti)){ n.ti = -1; n.retT = Math.min(n.retT, 0.2); }
+  if (!inRock && n.retT <= 0){ n.ti = findNearestBlock(n.x, n.y, 1500); n.retT = n.ti >= 0 ? 1 : 2 + Math.random(); }   // 見つからない時は間隔を空ける
   let want = n.ang + (Math.random() - 0.5) * 6 * dt;   // 岩の中では気ままに食い進む
   if (pd2 > 2400 * 2400) want = Math.atan2(player.y - n.y, player.x - n.x);
   else if (!inRock && n.ti >= 0){ const p = blockPos(n.ti); want = Math.atan2(p.y - n.y, p.x - n.x); }
