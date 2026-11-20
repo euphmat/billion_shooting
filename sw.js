@@ -65,7 +65,10 @@ self.addEventListener("fetch", e => {
   // HTML と同じくネットワーク優先にして、更新をすぐ拾う
   if (url.pathname.endsWith("/js/manifest.js")){
     e.respondWith(fetch(req).then(res => {
-      if (res && res.status === 200) caches.open(CACHE).then(c => c.put("./js/manifest.js", res.clone()));
+      if (res && res.status === 200){
+        const copy = res.clone();   // 複製は返す前に取る (返した後は本文が消費されて clone できなくなる)
+        caches.open(CACHE).then(c => c.put("./js/manifest.js", copy));
+      }
       return res;
     }).catch(async () => (await (await caches.open(CACHE)).match("./js/manifest.js")) || Response.error()));
     return;
