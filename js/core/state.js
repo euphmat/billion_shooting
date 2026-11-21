@@ -21,6 +21,10 @@ const state = {
   fxLow: false,      // 演出を控えめにする (リング・破片・ダメージ数値・スピードラインを絞る)
   atkMuted: false,   // 攻撃・破壊音だけオフ (発射/破壊/爆発チャンネル。他の効果音と全体ミュートとは独立)
   xp: 0, lv: 1, skills: {},
+  skillOff: {},      // 習得済みだが無効 (OFF) にしているスキル {id: 1}。効果は止まるが、習得・SP はそのまま
+  powerSave: null,   // 省電力モード (30fps・描画解像度を抑える)。null = 未設定 (タッチ端末では ON から始める: ui/settings.js)
+  treeHelpOff: null, // スキルツリーの説明パネルを閉じたか (null = 未設定: 習得済みスキルがあれば最初から閉じておく)
+  treeStatsOn: false,// スキルツリー上部の「発動状況」バーを出すか
   artifacts: {},   // 所持アーティファクト {id: 1}
   botCore: 0, botArmor: 0,   // 衛星テクノロジー (攻撃ボット兵装コア / 自機の衛星装甲)
   hp: 100,   // 自機HP (最大値はレベルで伸びる: playerMaxHP)
@@ -32,7 +36,8 @@ const state = {
   deepRec: 0,    // 主惑星で到達した最深記録 (深さ%。序盤スキル「地層踏破」用)
 };
 const SAVE_FIELDS = ["coins", "totalCoins", "destroyed", "weapon", "weaponsOwned", "weaponLv", "bots", "coinBots", "botLv",
-  "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "atkMuted", "fxLow", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode", "visitedBodies", "lastSeenUpdate", "endingSeen", "playTime", "deepRec"];
+  "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "atkMuted", "fxLow", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode", "visitedBodies", "lastSeenUpdate", "endingSeen", "playTime", "deepRec",
+  "skillOff", "powerSave", "treeHelpOff", "treeStatsOn"];
 let migrated = false;
 try {
   // 本番の置き場所は IndexedDB (store.js が起動時に読み終えている)。
@@ -59,7 +64,7 @@ state.destroyed = TARGET_TOTAL - alive;
 const isObj = v => v && typeof v === "object" && !Array.isArray(v);
 // 自機の最大HP: レベルで伸びる (アーティファクト等はここに倍率が掛かる)
 const playerMaxHP = () => Math.round((100 + (state.lv - 1) * 30) * (1 + (typeof artVal === "function" ? artVal("hp") : 0)) * (typeof sk === "function" && sk("d0_armor") ? 1.25 : 1));   // 増加装甲 (序盤スキル): +25%
-for (const k of ["weaponLv", "cbMod", "inv", "seen", "skills", "off", "weaponsOwned", "artifacts"]) if (!isObj(state[k])) state[k] = {};
+for (const k of ["weaponLv", "cbMod", "inv", "seen", "skills", "skillOff", "off", "weaponsOwned", "artifacts"]) if (!isObj(state[k])) state[k] = {};
 state.botLv |= 0; state.bots |= 0; state.coinBots |= 0; state.crafted |= 0;
 state.lv = Math.max(1, state.lv | 0); state.xp = Math.max(0, +state.xp || 0);
 state.coins = Math.max(0, +state.coins || 0); state.totalCoins = Math.max(0, +state.totalCoins || 0);
@@ -69,6 +74,9 @@ state.visitedBodies = state.visitedBodies.filter(i => Number.isInteger(i) && i >
 state.lastSeenUpdate = Math.max(0, state.lastSeenUpdate | 0);
 state.endingSeen = !!state.endingSeen;
 state.fxLow = !!state.fxLow;
+if (typeof state.powerSave !== "boolean") state.powerSave = null;
+if (typeof state.treeHelpOff !== "boolean") state.treeHelpOff = null;
+state.treeStatsOn = !!state.treeStatsOn;
 state.playTime = Math.max(0, +state.playTime || 0);
 state.deepRec = Math.max(0, Math.min(100, state.deepRec | 0));
 for (const k of Object.keys(state.inv)) if (!MAT[k]) delete state.inv[k];

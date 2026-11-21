@@ -476,15 +476,27 @@ const SKILLS = [], SKILL = {};
   });
 })();
 for (const k of Object.keys(state.skills)) if (!SKILL[k]) delete state.skills[k];   // 古いセーブの知らないIDは捨てる
+for (const k of Object.keys(state.skillOff)) if (state.skills[k] !== 1) delete state.skillOff[k];   // 習得していないスキルの OFF 印は捨てる
 
 // ---------- 習得 / レベル ----------
-const sk = id => state.skills[id] === 1;
+/* スキルの ON / OFF: 習得済みのスキルは個別・系統ごと・一括で無効にできる (state.skillOff = {id: 1})。
+   - 効果はどれも sk("id") で見ているので、sk が「習得していて、かつ OFF でない」を返せば全ての効果が止まる
+   - ツリーの解放 (親を習得していれば子を取れる) と SP の計算は「習得しているか」(skLearned) で見る。OFF にしても先へ進める
+   - 系統マスタリーも有効なスキルだけを数える (OFF にした系統は主役ステータスの伸びも止まる)
+   - sk は毎フレーム何千回も呼ばれるので、OFF が1つも無い間は state.skillOff を引かない */
+let skOffN = 0;
+const skillOffSync = () => { skOffN = 0; for (const k in state.skillOff) if (state.skills[k] === 1) skOffN++; };
+skillOffSync();
+const sk = id => state.skills[id] === 1 && (skOffN === 0 || state.skillOff[id] !== 1);
+const skLearned = id => state.skills[id] === 1;
+const skDisabled = id => state.skills[id] === 1 && state.skillOff[id] === 1;
+let skillsRev = 0;   // 習得・振り直し・ON/OFF のたびに増やす (工房の表示キャッシュなど「スキルが変わったか」の目印)
 const xpNeed  = lv => Math.floor(25 + 25 * Math.pow(lv, 2.1));   // レベルアップはゆっくり
 const spTotal = () => (state.lv - 1) + Math.floor(state.lv / 5);
 const spSpent = () => { let n = 0; for (const k in state.skills) n += SKILL[k].cost; return n; };
 const spLeft  = () => spTotal() - spSpent();
-const skillUnlocked = n => (!n.parent || sk(n.parent.id)) && state.lv >= (n.reqLv || 0);
-const canLearn = n => !sk(n.id) && skillUnlocked(n) && spLeft() >= n.cost;
+const skillUnlocked = n => (!n.parent || skLearned(n.parent.id)) && state.lv >= (n.reqLv || 0);
+const canLearn = n => !skLearned(n.id) && skillUnlocked(n) && spLeft() >= n.cost;
 const levelDmgMul = () => 1 + 0.015 * (state.lv - 1);
 
 /* ---------- 系統マスタリー: 同じ系統のスキルを習得するほど、その系統そのものが強くなる ----------
@@ -506,7 +518,7 @@ let mastCache = null;   // { obj: state.skills, r: {a:rank,...}, n: {a:count,...
 function masteryData(){
   if (mastCache && mastCache.obj === state.skills && mastCache.len === mastLen) return mastCache;
   const n = { a: 0, b: 0, c: 0, d: 0, e: 0, f: 0 }, r = {};
-  for (const id in state.skills) if (SKILL[id]) n[SKILL[id].br.key]++;
+  for (const id in state.skills) if (SKILL[id] && sk(id)) n[SKILL[id].br.key]++;   // OFF のスキルは数えない
   for (const k in n){ let rk = 0; for (const t of MASTERY_AT) if (n[k] >= t) rk++; r[k] = rk; }
   mastCache = { obj: state.skills, len: mastLen, n, r };
   return mastCache;

@@ -419,17 +419,75 @@ let satT = 3, ramT = 0, waveDist = 0, burnTick = 0, autoT = 0, droneT = 2;
 let idleT = 0, apT = 0, apTarget = null;
 const wingPos = () => ({ x: player.x - Math.sin(player.angle) * 46, y: player.y + Math.cos(player.angle) * 46 });
 const shadowPos = k => hist[Math.max(0, hist.length - 1 - 34 * (k + 1))] || player;
-// オートパイロット: 操作が無いとき、最寄りのブロックへ向かう入力を返す
+/* オートパイロット: 操作が無いとき、残っているブロックへ向かう入力を返す
+   - 近場 (1500) は findNearestBlock でそのまま探す
+   - 近場に何も無い (掘り尽くした場所) ときは、自機のチャンク (16x16 マス) から外へ 1周ずつ、
+     生き残りのあるチャンク (data/planet.js の chunkLive) を探す。1フレームの時間予算の中で少しずつ進め、
+     見つかった周の中で一番近いチャンクの、一番近いブロックを目標にする (以前は惑星の中心へ向かうだけだった) */
+const AP_FAR_BUDGET_MS = 1.5;
+let apFar = null;        // 遠くの探索の途中経過 { ccx, ccy, cr, k, best, bestD2 }
+let apFarIdx = -1;       // 遠くの探索で決めた目標ブロック (壊れたら探し直す)
+let apFarIdle = 0;       // 世界中を探して何も無かったら、しばらく探さない
+const ringLen = cr => cr === 0 ? 1 : 8 * cr;
+function ringCell(cr, k){   // チェビシェフ距離 cr の周の k 番目 (上の辺 → 下の辺 → 左右の辺)
+  if (cr === 0) return [0, 0];
+  const w = 2 * cr + 1;
+  if (k < w) return [k - cr, -cr];
+  if (k < 2 * w) return [k - w - cr, cr];
+  const j = k - 2 * w, side = j & 1, dy = (j >> 1) - cr + 1;
+  return [side ? cr : -cr, dy];
+}
+function apFarStep(){
+  const S = apFar, t0 = performance.now(), maxR = LC_N;
+  let n = 0;
+  while (S.cr <= maxR){
+    const len = ringLen(S.cr);
+    while (S.k < len){
+      const [dx, dy] = ringCell(S.cr, S.k++);
+      const cx = S.ccx + dx, cy = S.ccy + dy;
+      if (cx >= 0 && cy >= 0 && cx < LC_N && cy < LC_N && chunkLive(cx, cy) > 0){
+        const wx = g2w((cx << LC_SHIFT) + LC_S / 2), wy = g2w((cy << LC_SHIFT) + LC_S / 2);
+        const d2 = (wx - player.x) ** 2 + (wy - player.y) ** 2;
+        if (d2 < S.bestD2){ S.bestD2 = d2; S.best = cy * LC_N + cx; }
+      }
+      if ((++n & 63) === 0 && performance.now() - t0 > AP_FAR_BUDGET_MS) return false;   // 続きは次のフレーム
+    }
+    if (S.best >= 0) return true;   // この周で見つかった: 一番近いチャンクで決める
+    S.cr++; S.k = 0;
+  }
+  return true;   // 世界中に何も残っていない
+}
+// チャンクの中で、自機に一番近い生きているブロック
+function apPickInChunk(c){
+  const cx = c % LC_N, cy = (c / LC_N) | 0, gx0 = cx << LC_SHIFT, gy0 = cy << LC_SHIFT;
+  let best = -1, bd = Infinity;
+  for (let gy = gy0; gy < Math.min(D, gy0 + LC_S); gy++) for (let gx = gx0; gx < Math.min(D, gx0 + LC_S); gx++){
+    const i = gy * D + gx;
+    if (isDestroyed(i) || !blockExists(gx, gy)) continue;
+    const d2 = (g2w(gx) - player.x) ** 2 + (g2w(gy) - player.y) ** 2;
+    if (d2 < bd){ bd = d2; best = i; }
+  }
+  return best;
+}
 function autopilot(dt){
   if (!sk("d_auto")) return [0, 0];
   idleT += dt;
   if (idleT < (sk("d_auto2") ? 1 : 3)) return [0, 0];
-  apT -= dt;
+  apT -= dt; apFarIdle -= dt;
   if (apT <= 0 || !apTarget){
     apT = 0.5;
     const idx = findNearestBlock(player.x, player.y, 1500);
-    apTarget = idx >= 0 ? blockPos(idx) : { x: PLANET_CX, y: PLANET_CY };
+    if (idx >= 0){ apTarget = blockPos(idx); apFar = null; apFarIdx = -1; }
+    else if (apFarIdx >= 0 && !isDestroyed(apFarIdx)) apTarget = blockPos(apFarIdx);   // 遠くの目標へ飛行中
+    else if (!apFar && apFarIdle <= 0){ apFarIdx = -1; apTarget = null; apFar = { ccx: w2g(player.x) >> LC_SHIFT, ccy: w2g(player.y) >> LC_SHIFT, cr: 0, k: 0, best: -1, bestD2: Infinity }; }
   }
+  if (apFar && apFarStep()){   // 遠くの探索が終わった
+    apFarIdx = apFar.best >= 0 ? apPickInChunk(apFar.best) : -1;
+    if (apFar.best < 0) apFarIdle = 10;   // 何も無かった: 10秒は探し直さない
+    apFar = null;
+    apTarget = apFarIdx >= 0 ? blockPos(apFarIdx) : null;
+  }
+  if (!apTarget) return [0, 0];
   const dx = apTarget.x - player.x, dy = apTarget.y - player.y, d = Math.hypot(dx, dy);
   return d > atkRange() * 0.5 ? [dx / d, dy / d] : [0, 0];
 }

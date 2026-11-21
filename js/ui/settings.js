@@ -5,12 +5,14 @@
 
 /* ---------- settings popup ---------- */
 const settingsOverlay = $("settingsOverlay");
-$("gearBtn").addEventListener("click", () => { $("soundToggle").checked = !state.muted; $("atkSndToggle").checked = !state.atkMuted; $("fxLowToggle").checked = !!state.fxLow; settingsOverlay.classList.add("open"); });
+if (state.powerSave === null) state.powerSave = TOUCH_UI;   // 省電力モードの初期値: スマホ・タブレットは ON (発熱対策)
+$("gearBtn").addEventListener("click", () => { $("soundToggle").checked = !state.muted; $("atkSndToggle").checked = !state.atkMuted; $("fxLowToggle").checked = !!state.fxLow; $("powerSaveToggle").checked = !!state.powerSave; settingsOverlay.classList.add("open"); });
 $("settingsClose").addEventListener("click", () => settingsOverlay.classList.remove("open"));
 settingsOverlay.addEventListener("click", e => { if (e.target === settingsOverlay) settingsOverlay.classList.remove("open"); });
 window.addEventListener("keydown", e => { if (e.key === "Escape") settingsOverlay.classList.remove("open"); });
 $("soundToggle").addEventListener("change", e => { state.muted = !e.target.checked; save(); syncAudioActive(); if (!state.muted) sndBuy(); });
 $("fxLowToggle").addEventListener("change", e => { state.fxLow = !!e.target.checked; save(); });
+$("powerSaveToggle").addEventListener("change", e => { state.powerSave = !!e.target.checked; save(); if (typeof applyPowerSave === "function") applyPowerSave(); });
 $("atkSndToggle").addEventListener("change", e => { state.atkMuted = !e.target.checked; save(); if (!state.atkMuted) sndBuy(); });
 $("resetBtn").addEventListener("click", () => {
   if (confirm("セーブを削除して最初からにしますか？")) wipeSave().then(() => location.reload());
@@ -20,6 +22,7 @@ $("resetBtn").addEventListener("click", () => {
 let updOpen = false;
 // 新しい順。行を足すときは先頭に追加し、js/manifest.js の APP_VERSION を上げる
 const UPDATE_HISTORY = [
+  { v:101, text:"スマホの発熱対策: 終盤 (周りを掘り尽くした場所) で「最寄りのブロック探し」が毎回 数万マスを空振りで調べていたのを、16x16 マスごとの残数で空の区画を丸ごと飛ばすようにし、1フレームの処理を大幅に軽く。ブロック1個を壊す処理も素材・最大HP・天体判定の使い回しで約 2.5倍速く (連鎖・超火力武器が同じ時間でより多く壊せる)。設定に「省電力モード」(30fps・描画解像度を抑える。スマホは最初から ON) を追加。スキルツリーやマップを開いている間は裏の画面をほぼ描かない / スキルツリー: 習得済みスキルを個別・系統ごと・一括で ON/OFF できるように (ヘッダーの「ON/OFF」。ノードのタップで切り替えるモードも)。説明パネルは × で閉じられ「?」で開き直せる。上の発動状況バーは「発動状況」ボタンで出し入れ (既定は非表示) / 不具合修正: 艦隊スキル「オートパイロット」が、近くにブロックが無いと惑星の中心へ向かうだけだったのを、残っているブロックのある一番近い場所へ自動で向かうように" },
   { v:100, text:"不具合修正: 攻撃ボットの「おまかせ編成」で4機しか装備が更新されない問題を修正。自機が最難関の武器を持つとデフォルト砲が強くなりすぎ、通常の武器を持たせると弱くなってしまっていた。装備ボットは最低でもデフォルト砲と同じ威力で撃つようになり、おまかせは空いている全ボットに強い順で装備を配る" },
   { v:99, text:"不具合修正: 攻撃ボットの「おまかせ編成」を押すと装備が外れてしまう問題を修正。おまかせは装備中の武器を外さず、余り武器が今一番弱いボットより強い時だけ差し替えるようになった" },
   { v:98, text:"武器強化の素材要求数に上限を設定: 1種あたり最大 9999 まで (高レベルでも要求数が際限なく増え続けないように)" },

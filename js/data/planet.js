@@ -71,7 +71,31 @@ let dirtyOverflow = false;
 function touchBlock(idx){
   if (dirtyBlocks.length < 4000) dirtyBlocks.push(idx); else dirtyOverflow = true;
 }
+/* --- 探索用: 16x16 セルの「生きているブロック数」(重さ対策の要その2) ---
+   終盤は自機の周りがほぼ掘り尽くされていて、「最寄りのブロック探し」(game/combat.js) が毎回
+   半径いっぱい (数万セル) を空振りで走査し、それが 1フレームに何十回も走ってスマホが発熱していた。
+   チャンクごとの生存数を持ち、空のチャンクは丸ごと飛ばす。数は初めて覗いた時に1回だけ数え (-1 = 未計算)、
+   以後は markDestroyed で減らす (ブロックは復活しないので増えることはない) */
+const LC_SHIFT = 4, LC_S = 1 << LC_SHIFT, LC_N = Math.ceil(D / LC_S);
+const liveCnt = new Int16Array(LC_N * LC_N).fill(-1);
+function chunkLive(cx, cy){
+  const c = cy * LC_N + cx;
+  let n = liveCnt[c];
+  if (n >= 0) return n;
+  n = 0;
+  const x0 = cx << LC_SHIFT, y0 = cy << LC_SHIFT, x1 = Math.min(D, x0 + LC_S), y1 = Math.min(D, y0 + LC_S);
+  for (let gy = y0; gy < y1; gy++){
+    const row = gy * D;
+    for (let gx = x0; gx < x1; gx++) if (!isDestroyed(row + gx) && blockExists(gx, gy)) n++;
+  }
+  liveCnt[c] = n;
+  return n;
+}
 function markDestroyed(idx){
+  if (!isDestroyed(idx)){
+    const c = (((idx / D) | 0) >> LC_SHIFT) * LC_N + ((idx % D) >> LC_SHIFT);
+    if (liveCnt[c] > 0) liveCnt[c]--;
+  }
   destroyedBits[idx >> 3] |= (1 << (idx & 7));
   damagedMap.delete(idx);
   chunkDirty[idx >>> CHUNK_SHIFT] = 1; worldDirty = true;   // 1命令ずつ。ここはブロック破壊のたびに通る
@@ -347,10 +371,37 @@ function rectDepth(S, gx, gy){
   const dx = Math.min(gx - S.x0, S.x1 - gx), dy = Math.min(gy - S.y0, S.y1 - gy);
   return Math.max(0, Math.min(1, Math.min(dx, dy) / S.r));
 }
+/* 天体の当たりを付ける 64x64 セルのタイル: 0 = どの天体の候補でもない / s+1 = 候補は SATS[s] だけ / 255 = 複数。
+   bodyAt はブロックの存在判定のたびに呼ばれ、以前はメイン惑星内の全セルで内部ダンジョン30個の矩形を毎回調べていた */
+const BT_SHIFT = 6, BT_N = Math.ceil(D / (1 << BT_SHIFT));
+const bodyTile = new Uint8Array(BT_N * BT_N);
+(function buildBodyTiles(){
+  const mark = (s, x0, y0, x1, y1) => {
+    const tx0 = Math.max(0, x0 >> BT_SHIFT), ty0 = Math.max(0, y0 >> BT_SHIFT);
+    const tx1 = Math.min(BT_N - 1, x1 >> BT_SHIFT), ty1 = Math.min(BT_N - 1, y1 >> BT_SHIFT);
+    for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++){
+      const t = ty * BT_N + tx, v = bodyTile[t];
+      bodyTile[t] = v === 0 || v === s + 1 ? s + 1 : 255;
+    }
+  };
+  SATS.forEach((S, s) => {
+    if (s >= CAVE_START && s < CAVE_END) mark(s, S.x0, S.y0, S.x1, S.y1);   // メイン惑星内: 矩形で判定する分
+    const r = Math.ceil(Math.sqrt(S.r2)) + 1;
+    mark(s, S.cx - r, S.cy - r, S.cx + r, S.cy + r);                         // メイン惑星外: 円で判定する分
+  });
+})();
 // 座標が属する天体: 0=メイン惑星 / 1..64=衛星・小惑星・内部ダンジョン・最難関 (SATS の index+1) / -1=宇宙空間
 function bodyAt(gx, gy){
-  const dx = gx - GC, dy = gy - GC;
-  if (dx * dx + dy * dy <= R2){
+  const dx = gx - GC, dy = gy - GC, inMain = dx * dx + dy * dy <= R2;
+  const t = gx >= 0 && gy >= 0 && gx < D && gy < D ? bodyTile[(gy >> BT_SHIFT) * BT_N + (gx >> BT_SHIFT)] : 255;
+  if (t === 0) return inMain ? 0 : -1;
+  if (t !== 255){   // 候補が1つだけ: 下の全走査と同じ判定をその天体にだけ行う
+    const s = t - 1, S = SATS[s];
+    if (inMain) return s >= CAVE_START && s < CAVE_END && gx >= S.x0 && gx <= S.x1 && gy >= S.y0 && gy <= S.y1 ? t : 0;
+    const sx = gx - S.cx, sy = gy - S.cy;
+    return sx * sx + sy * sy <= S.r2 ? t : -1;
+  }
+  if (inMain){
     for (let s = CAVE_START; s < CAVE_END; s++){ const S = SATS[s]; if (gx >= S.x0 && gx <= S.x1 && gy >= S.y0 && gy <= S.y1) return s + 1; }
     return 0;
   }
@@ -374,8 +425,22 @@ function materialAtSat(S, gx, gy, lod){
    - 地層は深さで決まるが、境界は粗いノイズで少し波打たせる
    - 層の中では 8x8 のセル単位で素材を選ぶ (鉱脈のかたまり)。さらに 12% のブロックは個別に選び直す (散らばった粒)
    - 地表はバイオーム (海 / 深海 / 大地 / 森 / 砂漠 / 極地) */
+/* 素材と最大HPは座標だけで決まる (決定的) ので、直近に引いたセルを覚えておく (直接写像キャッシュ・各65536件)。
+   ブロック1個の撃破で、連鎖スキルが周囲の素材・最大HPを何十回も引くので、ここが効く */
+const CELL_CACHE_BITS = 16, CELL_CACHE_SHIFT = 32 - CELL_CACHE_BITS;
+const cellSlot = idx => Math.imul(idx, 0x9E3779B1) >>> CELL_CACHE_SHIFT;
+const matCacheK = new Int32Array(1 << CELL_CACHE_BITS).fill(-1), matCacheV = new Uint16Array(1 << CELL_CACHE_BITS);
+const hpCacheK = new Int32Array(1 << CELL_CACHE_BITS).fill(-1), hpCacheV = new Float64Array(1 << CELL_CACHE_BITS);
 // lod = 遠景用: 粗いセル (64x64) で、その層の「よく出る素材」だけから選ぶ (ズームアウトしても地球らしい大きな色面になる)
 function materialAt(gx, gy, lod){
+  if (lod || gx < 0 || gy < 0 || gx >= D || gy >= D) return materialAtCalc(gx, gy, lod);
+  const idx = gy * D + gx, h = cellSlot(idx);
+  if (matCacheK[h] === idx) return matCacheV[h];
+  const v = materialAtCalc(gx, gy, false);
+  matCacheK[h] = idx; matCacheV[h] = v;
+  return v;
+}
+function materialAtCalc(gx, gy, lod){
   const b = bodyAt(gx, gy);
   if (b > 0) return materialAtSat(SATS[b - 1], gx, gy, lod);
   const dx = gx - GC, dy = gy - GC;
@@ -427,6 +492,14 @@ const matAtIdx = idx => MATS[materialAt(idx % D, (idx / D) | 0)];
 const HP_EXP = 12.5;
 const layerBaseHP = depth => 5 * Math.pow(10, HP_EXP * Math.max(0, depth));
 function blockMaxHP(gx, gy){
+  if (gx < 0 || gy < 0 || gx >= D || gy >= D) return blockMaxHPCalc(gx, gy);
+  const idx = gy * D + gx, h = cellSlot(idx);
+  if (hpCacheK[h] === idx) return hpCacheV[h];
+  const v = blockMaxHPCalc(gx, gy);
+  hpCacheK[h] = idx; hpCacheV[h] = v;
+  return v;
+}
+function blockMaxHPCalc(gx, gy){
   const depth = blockDepth(gx, gy), m = MATS[materialAt(gx, gy)];
   const b = bodyAt(gx, gy);
   const base = b > 0 ? (SATS[b - 1].hpBase || 5) * Math.pow(10, SATS[b - 1].exp * Math.max(0, depth)) : layerBaseHP(depth);   // 衛星は星ごとのHP指数 (最難関は地表から hpBase)

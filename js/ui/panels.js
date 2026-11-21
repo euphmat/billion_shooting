@@ -40,7 +40,7 @@ function renderPanels(force){
   // 残高依存の表示は refreshAffordability() が DOM を作り替えずに更新する。
   // 「買える物の集合」が変わった時だけ描き直す (craftableSig / homeSig)
   const sig = [state.weapon, JSON.stringify(state.weaponsOwned), JSON.stringify(state.weaponLv), state.bots, state.coinBots, state.botLv, state.botCore, state.botArmor,
-    JSON.stringify(state.botLoadout), JSON.stringify(state.cbMod), JSON.stringify(state.off), state.lv, Object.keys(state.skills).length, Object.keys(state.seen).length,
+    JSON.stringify(state.botLoadout), JSON.stringify(state.cbMod), JSON.stringify(state.off), state.lv, Object.keys(state.skills).length, skillsRev, Object.keys(state.seen).length,
     botSlotSel, matCat, matLayer, matSel, matOwnedOnly, JSON.stringify(tierOpen), wFilter, wSort, wSel, state.botMode, state.cbMode, craftableSig(), homeSig()].join("|");
   if (sig !== lastPanelSig){ lastPanelSig = sig; for (const k in panelDirty) panelDirty[k] = true; }
   else if (!force && !panelDirty[activeTab]) { updateHeaderStats(); return; }
@@ -211,7 +211,7 @@ let bulkUpCache = { res: null, coins: NaN, inv: -1, lvKey: "", skN: -1, at: 0 };
 function bulkUpPreview(force){
   if (!force && bulkUpCache.res){
     if (bulkUpCache.coins === state.coins && bulkUpCache.inv === invVersion &&
-        bulkUpCache.lvKey === JSON.stringify(state.weaponLv) && bulkUpCache.skN === Object.keys(state.skills).length) return bulkUpCache.res;
+        bulkUpCache.lvKey === JSON.stringify(state.weaponLv) && bulkUpCache.skN === skillsRev) return bulkUpCache.res;
     if (Date.now() - bulkUpCache.at < 200) return bulkUpCache.res;   // 残高が頻繁に変わる場面では再計算を間引く
   }
   const snap = { coins: state.coins, inv: Object.assign({}, state.inv), lv: Object.assign({}, state.weaponLv), plan: lastMatSubPlan };
@@ -222,7 +222,7 @@ function bulkUpPreview(force){
   for (const k in state.weaponLv) if (!(k in snap.lv)) delete state.weaponLv[k];
   Object.assign(state.weaponLv, snap.lv);
   lastMatSubPlan = snap.plan;
-  bulkUpCache = { res, coins: state.coins, inv: invVersion, lvKey: JSON.stringify(state.weaponLv), skN: Object.keys(state.skills).length, at: Date.now() };
+  bulkUpCache = { res, coins: state.coins, inv: invVersion, lvKey: JSON.stringify(state.weaponLv), skN: skillsRev, at: Date.now() };
   return res;
 }
 const bulkUpSubText = pv => pv.total ? `強い武器から順に ${fmt(pv.total)} 回ぶん強化できる` : "今は強化できる武器がない (コイン・素材を確認)";

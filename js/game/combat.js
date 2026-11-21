@@ -31,15 +31,25 @@ function outOfPlanet(x, y, r){
   }
   return true;
 }
-// 近い順に探す: 中心のセルから外側へ 1周ずつ (チェビシェフ距離のリング) 調べ、
-// 見つかった最短距離より外側のリングに入ったら打ち切る。近くにブロックがあれば数十セルで終わる
+/* 近い順に探す (2段構え):
+   1) 近場 (半径 NEAR_CELL_RINGS セル) は中心のセルから外側へ 1周ずつ (チェビシェフ距離のリング) 調べる。
+      密集地ではほぼここで見つかって終わる
+   2) その先は 16x16 のチャンク単位で外へ広げる (data/planet.js の chunkLive)。空のチャンクと、
+      今の最短距離より遠いチャンクは丸ごと飛ばす。掘り尽くした場所での空振りが 数万セル → 数百チャンク になる */
+const NEAR_CELL_RINGS = 3;
+// チャンク (cx, cy) のセル中心の範囲までの距離² (点がチャンク内なら 0)
+function chunkDist2(x, y, cx, cy){
+  const wx0 = g2w(cx << LC_SHIFT), wy0 = g2w(cy << LC_SHIFT), wx1 = wx0 + (LC_S - 1) * BS, wy1 = wy0 + (LC_S - 1) * BS;
+  const ex = x < wx0 ? wx0 - x : x > wx1 ? x - wx1 : 0, ey = y < wy0 ? wy0 - y : y > wy1 ? y - wy1 : 0;
+  return ex * ex + ey * ey;
+}
 function findNearestBlock(x, y, maxRange){
   if (outOfPlanet(x, y, maxRange)) return -1;
-  const cgx = w2g(x), cgy = w2g(y), rb = Math.ceil(maxRange / BS);
+  const cgx = w2g(x), cgy = w2g(y), rb = Math.ceil(maxRange / BS), r0 = Math.min(rb, NEAR_CELL_RINGS);
   let best = -1, bestD2 = maxRange * maxRange;
-  for (let r = 0; r <= rb; r++){
+  for (let r = 0; r <= r0; r++){
     const near = (r - 0.5) * BS;                     // リング r のセル中心までの最短距離の下限
-    if (r > 0 && near * near >= bestD2) break;
+    if (r > 0 && near * near >= bestD2) return best;
     const y0 = cgy - r, y1 = cgy + r;
     for (let gy = Math.max(0, y0); gy <= Math.min(D - 1, y1); gy++){
       const stepX = (gy === y0 || gy === y1 || r === 0) ? 1 : 2 * r;   // 上下の辺は全セル、それ以外は左右の2セル
@@ -49,6 +59,33 @@ function findNearestBlock(x, y, maxRange){
         if (!blockExists(gx, gy) || isDestroyed(i)) continue;
         const dx = g2w(gx) - x, dy = g2w(gy) - y, d2 = dx*dx + dy*dy;
         if (d2 < bestD2){ bestD2 = d2; best = i; }
+      }
+    }
+  }
+  if (r0 >= rb) return best;
+  { const near = (r0 + 0.5) * BS; if (near * near >= bestD2) return best; }
+  const ccx = cgx >> LC_SHIFT, ccy = cgy >> LC_SHIFT, crb = (rb >> LC_SHIFT) + 1;
+  for (let cr = 0; cr <= crb; cr++){
+    if (cr > 0){ const near = ((cr - 1) * LC_S + 0.5) * BS; if (near * near >= bestD2) break; }
+    for (let cy = ccy - cr; cy <= ccy + cr; cy++){
+      if (cy < 0 || cy >= LC_N) continue;
+      const stepX = (cy === ccy - cr || cy === ccy + cr || cr === 0) ? 1 : 2 * cr;
+      for (let cx = ccx - cr; cx <= ccx + cr; cx += stepX){
+        if (cx < 0 || cx >= LC_N || chunkDist2(x, y, cx, cy) >= bestD2 || chunkLive(cx, cy) === 0) continue;
+        const gx0 = cx << LC_SHIFT, gy0 = cy << LC_SHIFT, gx1 = Math.min(D, gx0 + LC_S), gy1 = Math.min(D, gy0 + LC_S);
+        for (let gy = gy0; gy < gy1; gy++){
+          const dy = g2w(gy) - y, dy2 = dy * dy;
+          if (dy2 >= bestD2) continue;
+          const inNear = gy >= cgy - r0 && gy <= cgy + r0;   // 近場は 1) で調べ済み
+          for (let gx = gx0; gx < gx1; gx++){
+            if (inNear && gx >= cgx - r0 && gx <= cgx + r0) continue;
+            const i = gy * D + gx;
+            if (isDestroyed(i)) continue;
+            const dx = g2w(gx) - x, d2 = dx * dx + dy2;
+            if (d2 >= bestD2 || !blockExists(gx, gy)) continue;
+            bestD2 = d2; best = i;
+          }
+        }
       }
     }
   }
@@ -253,12 +290,19 @@ function fireDelay(w, holder, fired){
 // 「最も遠い候補」より外側のリングに入ったら打ち切る
 function findNearestBlocks(x, y, maxRange, k, exclude){
   if (k <= 0 || outOfPlanet(x, y, maxRange)) return [];
-  const cgx = w2g(x), cgy = w2g(y), rb = Math.ceil(maxRange / BS);
+  const cgx = w2g(x), cgy = w2g(y), rb = Math.ceil(maxRange / BS), r0 = Math.min(rb, NEAR_CELL_RINGS);
   const cand = [];
   let limit = maxRange * maxRange;
-  for (let r = 0; r <= rb; r++){
+  const tighten = () => {   // k個そろったら k番目の距離より遠いものは要らない (候補も k個に切り詰める)
+    if (cand.length < k) return;
+    cand.sort((a, b) => a[0] - b[0]); cand.length = k;
+    limit = Math.min(limit, cand[k - 1][0] + 1e-6);
+  };
+  // 1) 近場はセル単位のリング (findNearestBlock と同じ)
+  let done = false;
+  for (let r = 0; r <= r0; r++){
     const near = (r - 0.5) * BS;
-    if (r > 0 && near * near >= limit) break;
+    if (r > 0 && near * near >= limit){ done = true; break; }
     const y0 = cgy - r, y1 = cgy + r;
     for (let gy = Math.max(0, y0); gy <= Math.min(D - 1, y1); gy++){
       const stepX = (gy === y0 || gy === y1 || r === 0) ? 1 : 2 * r;
@@ -271,9 +315,37 @@ function findNearestBlocks(x, y, maxRange, k, exclude){
         if (d2 < limit) cand.push([d2, i]);
       }
     }
-    if (cand.length >= k){   // k番目の距離は、今の候補の最大値以下
-      let mx = 0; for (const c of cand) if (c[0] > mx) mx = c[0];
-      limit = Math.min(limit, mx + 1e-6);
+    tighten();
+  }
+  if (!done && r0 < rb){ const near = (r0 + 0.5) * BS; if (near * near >= limit) done = true; }
+  // 2) その先はチャンク単位 (空のチャンク・k番目より遠いチャンクは飛ばす)
+  if (!done && r0 < rb){
+    const ccx = cgx >> LC_SHIFT, ccy = cgy >> LC_SHIFT, crb = (rb >> LC_SHIFT) + 1;
+    for (let cr = 0; cr <= crb; cr++){
+      if (cr > 0){ const near = ((cr - 1) * LC_S + 0.5) * BS; if (near * near >= limit) break; }
+      for (let cy = ccy - cr; cy <= ccy + cr; cy++){
+        if (cy < 0 || cy >= LC_N) continue;
+        const stepX = (cy === ccy - cr || cy === ccy + cr || cr === 0) ? 1 : 2 * cr;
+        for (let cx = ccx - cr; cx <= ccx + cr; cx += stepX){
+          if (cx < 0 || cx >= LC_N || chunkDist2(x, y, cx, cy) >= limit || chunkLive(cx, cy) === 0) continue;
+          const gx0 = cx << LC_SHIFT, gy0 = cy << LC_SHIFT, gx1 = Math.min(D, gx0 + LC_S), gy1 = Math.min(D, gy0 + LC_S);
+          for (let gy = gy0; gy < gy1; gy++){
+            const dy = g2w(gy) - y, dy2 = dy * dy;
+            if (dy2 >= limit) continue;
+            const inNear = gy >= cgy - r0 && gy <= cgy + r0;
+            for (let gx = gx0; gx < gx1; gx++){
+              if (inNear && gx >= cgx - r0 && gx <= cgx + r0) continue;
+              const i = gy * D + gx;
+              if (isDestroyed(i)) continue;
+              const dx = g2w(gx) - x, d2 = dx * dx + dy2;
+              if (d2 >= limit || !blockExists(gx, gy) || (exclude && exclude.has(i))) continue;
+              cand.push([d2, i]);
+            }
+          }
+          if (cand.length >= k * 4) tighten();
+        }
+      }
+      tighten();
     }
   }
   cand.sort((a, b) => a[0] - b[0]);

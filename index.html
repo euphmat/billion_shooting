@@ -48,10 +48,16 @@
         <span id="treeCount"></span>
         <span class="tree-hint b-long">ドラッグで移動 ・ ホイールで拡大縮小 ・ T / Esc で閉じる</span>
         <span class="tree-hint b-short">ドラッグで移動 ・ ピンチで拡大縮小</span>
-        <button id="respecBtn">振り直し</button>
-        <button id="treeClose" class="icon-btn" aria-label="閉じる">×</button>
+        <span class="tree-tools">
+          <button id="treeSwBtn" class="tree-tool" title="習得済みスキルの ON / OFF">ON/OFF</button>
+          <button id="treeStatsBtn" class="tree-tool" title="発動状況バーの表示">発動状況</button>
+          <button id="treeHelpBtn" class="tree-tool" aria-label="説明を表示">?</button>
+          <button id="respecBtn">振り直し</button>
+          <button id="treeClose" class="icon-btn" aria-label="閉じる">×</button>
+        </span>
       </div>
-      <div id="treeStats"></div>
+      <div id="treeStats" hidden></div>
+      <div id="treeSwitch" hidden></div>
       <div id="treeView"><div id="treeWorld"></div></div>
       <div id="treeDetail"></div>
     </div>
@@ -263,6 +269,17 @@
         </div>
         <label class="switch">
           <input type="checkbox" id="fxLowToggle">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">省電力モード</div>
+          <div class="settings-desc">描画を 30fps・控えめな解像度に抑えて、スマホの発熱と電池の減りを抑えます (スマホでは最初から ON)。重いときやスマホが熱くなるときに</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="powerSaveToggle">
           <span class="slider"></span>
         </label>
       </div>

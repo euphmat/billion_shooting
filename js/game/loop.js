@@ -5,9 +5,15 @@
 
 // ---------- main loop ----------
 let last = performance.now(), uiT = 0, saveT = 0, worldT = 3;
+/* 発熱対策: 省電力モード (設定) では 30fps に間引く。ツリー・マップなどを開いてゲームが止まっている間は、
+   裏の画面は変わらないので 4fps まで落とす (以前は止まっている間も毎フレーム全画面を描き直していた) */
+const PS_FRAME_MS = 1000 / 30, PAUSED_FRAME_MS = 250;
 function frame(now){
   requestAnimationFrame(frame);
-  trackFrameRate(now - last);
+  const overlay = started && !cleared && (treeOpen || artOpen || mapOpen || updOpen || botEqOpen);
+  const gap = overlay ? PAUSED_FRAME_MS : state.powerSave ? PS_FRAME_MS : 0;
+  if (gap && now - last < gap - 4) return;   // 間引くフレーム (vsync の揺れぶん 4ms の余裕を見る)
+  trackFrameRate(now - last, state.powerSave ? PS_FRAME_MS : 1000 / 60);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   nowMs = now;
   resetFxBudget();   // 演出をこのフレームに積める数 (game/entities.js)

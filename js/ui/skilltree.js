@@ -55,18 +55,19 @@ function refreshTree(){
   if (!treeBuilt) return;
   const sp = spLeft(), avail = elemAvail();
   document.querySelectorAll("#treeWorld .tn").forEach(el => {
-    const n = SKILL[el.dataset.id], on = sk(n.id), open = skillUnlocked(n);
-    const ls = on ? skillLiveState(n.id, avail) : null;
-    el.classList.toggle("on", on);
-    el.classList.toggle("can", !on && open && sp >= n.cost);
-    el.classList.toggle("wait", !on && open && sp < n.cost);
+    const n = SKILL[el.dataset.id], has = skLearned(n.id), off = has && skDisabled(n.id), open = skillUnlocked(n);
+    const ls = has && !off ? skillLiveState(n.id, avail) : null;
+    el.classList.toggle("on", has);
+    el.classList.toggle("off", off);              // 習得済みだが OFF (効果は止まっている)
+    el.classList.toggle("can", !has && open && sp >= n.cost);
+    el.classList.toggle("wait", !has && open && sp < n.cost);
     el.classList.toggle("sel", n.id === selId);
     el.classList.toggle("live", ls === "live");   // 緑ドット: いま発動中
     el.classList.toggle("idle", ls === "idle");   // 灰ドット: 習得済みだが条件待ち
   });
   document.querySelectorAll("#treeWorld [data-ln]").forEach(el => {
     const n = SKILL[el.dataset.ln];
-    el.setAttribute("class", sk(n.id) ? "on" : skillUnlocked(n) ? "open" : "");
+    el.setAttribute("class", skLearned(n.id) ? (skDisabled(n.id) ? "on off" : "on") : skillUnlocked(n) ? "open" : "");
   });
   for (const br of BRANCHES){   // 系統ラベルの下にマスタリーのランクと進み具合
     const el = $("tlm-" + br.key); if (!el) continue;
@@ -75,10 +76,64 @@ function refreshTree(){
   }
   $("treeCoreLv").textContent = state.lv;
   $("treeSp").innerHTML = `スキルポイント <b>${sp}</b>`;
-  $("treeCount").textContent = `習得 ${Object.keys(state.skills).length} / ${SKILLS.length}`;
+  $("treeCount").textContent = `習得 ${Object.keys(state.skills).length} / ${SKILLS.length}` + (skOffN ? ` ・ OFF ${skOffN}` : "");
+  $("treeSwBtn").classList.toggle("on", swOpen);
+  $("treeSwBtn").classList.toggle("warn", skOffN > 0);
+  $("treeStatsBtn").classList.toggle("on", !!state.treeStatsOn);
+  $("treeHelpBtn").classList.toggle("on", treeHelpVisible());
   renderTreeStats();
+  renderSwitch();
   renderDetail();
 }
+
+// ---------- スキルの ON / OFF (習得済みスキルを個別・系統ごと・一括で無効化) ----------
+let swOpen = false, tapToggle = false;   // tapToggle = ノードのタップで直接 ON/OFF する (ON/OFF パネルを開いている間だけ)
+function setSkillsOff(ids, off){
+  let changed = 0;
+  for (const id of ids){
+    if (!skLearned(id)) continue;
+    if (off && state.skillOff[id] !== 1){ state.skillOff[id] = 1; changed++; }
+    else if (!off && state.skillOff[id] === 1){ delete state.skillOff[id]; changed++; }
+  }
+  if (!changed) return 0;
+  skillOffSync();
+  sndBuy();
+  onSkillsChanged(true);   // マスタリーの増減は通知しない (付け外しのたびに「到達!」が出ないように)
+  return changed;
+}
+const learnedIds = br => Object.keys(state.skills).filter(id => SKILL[id] && (!br || SKILL[id].br.key === br));
+function renderSwitch(){
+  const el = $("treeSwitch");
+  el.hidden = !swOpen;
+  if (!swOpen) return;
+  const all = learnedIds(), offAll = all.filter(skDisabled).length;
+  el.innerHTML = `<div class="tsw-head"><b>スキルの ON / OFF</b><span>習得 ${all.length} ・ ON <em class="on">${all.length - offAll}</em> ・ OFF <em class="off">${offAll}</em></span><button class="td-close" data-sw="close" aria-label="閉じる">×</button></div>
+    <div class="tsw-all">
+      <button data-sw="on" ${offAll ? "" : "disabled"}>全て ON</button>
+      <button data-sw="off" ${all.length - offAll ? "" : "disabled"}>全て OFF</button>
+      <label class="tsw-tap"><input type="checkbox" id="tswTap" ${tapToggle ? "checked" : ""}> ノードのタップで個別に ON/OFF</label>
+    </div>
+    <div class="tsw-grid">${BRANCHES.map(b => {
+      const ids = learnedIds(b.key), off = ids.filter(skDisabled).length, on = ids.length - off;
+      return `<div class="tsw-br${!ids.length ? " none" : off === ids.length ? " alloff" : off ? " some" : ""}" style="--c:${b.color}">
+        <b>${b.name}</b><small>ON ${on} / ${ids.length}</small>
+        <button data-sw="on" data-br="${b.key}" ${off ? "" : "disabled"}>ON</button><button data-sw="off" data-br="${b.key}" ${on ? "" : "disabled"}>OFF</button></div>`;
+    }).join("")}</div>
+    <div class="tsw-note">OFF にしたスキルは効果が止まる (習得とスキルポイントはそのまま、先のスキルも取れる)。系統マスタリーは ON のスキルだけを数える。${tapToggle ? "<b>いまはノードをタップすると ON/OFF が切り替わる。</b>" : ""}</div>`;
+}
+$("treeSwitch").addEventListener("click", e => {
+  const b = e.target.closest("[data-sw]");
+  if (!b || b.disabled) return;
+  const act = b.dataset.sw;
+  if (act === "close"){ swOpen = false; tapToggle = false; refreshTree(); return; }
+  setSkillsOff(learnedIds(b.dataset.br), act === "off");
+});
+$("treeSwitch").addEventListener("change", e => { if (e.target.id === "tswTap"){ tapToggle = e.target.checked; renderSwitch(); } });
+$("treeSwBtn").addEventListener("click", () => { swOpen = !swOpen; if (!swOpen) tapToggle = false; refreshTree(); });
+$("treeStatsBtn").addEventListener("click", () => { state.treeStatsOn = !state.treeStatsOn; save(); treeStatsSig = ""; refreshTree(); });
+// 説明パネル: 未設定のうちは「まだ1つも習得していない」間だけ出す。× で閉じる / ? で開き直す
+const treeHelpVisible = () => state.treeHelpOff === null ? !Object.keys(state.skills).length : !state.treeHelpOff;
+$("treeHelpBtn").addEventListener("click", () => { state.treeHelpOff = treeHelpVisible(); save(); selId = hoverId = null; refreshTree(); });
 
 // ---------- 発動の見える化: 現在値プローブ / 発動状況パネル / ノードの発動中判定 ----------
 const elemAvail = () => { const t = elemTotals(); return { burn: t.burn > 0, frost: t.frost > 0, acid: t.acid > 0, rad: t.rad > 0, shock: t.shock > 0 }; };
@@ -98,12 +153,13 @@ function probeStats(){
   };
 }
 function probeWith(id, on){
-  const had = state.skills[id];
-  if (on) state.skills[id] = 1; else delete state.skills[id];
-  masteryInvalidate();   // マスタリーのランクも付け外し後で測る
+  const had = state.skills[id], off = state.skillOff[id];
+  if (on){ state.skills[id] = 1; delete state.skillOff[id]; } else delete state.skills[id];
+  skillOffSync(); masteryInvalidate();   // マスタリーのランクも付け外し後で測る
   const p = probeStats();
   if (had) state.skills[id] = 1; else delete state.skills[id];
-  masteryInvalidate();
+  if (off) state.skillOff[id] = 1; else delete state.skillOff[id];
+  skillOffSync(); masteryInvalidate();
   return p;
 }
 const _fxX = v => "×" + v.toFixed(2), _fxPct = v => Math.round(v * 100) + "%", _fxInt = v => "" + Math.round(v);
@@ -135,15 +191,15 @@ const PROBE_DEFS = [
 ];
 // 詳細ポップオーバー用: そのスキルで変わる数値を「現在 → 取得後」/「発動中 (このスキルで +n)」で出す
 function skillEffectLines(n){
-  const on = sk(n.id), cur = probeStats(), alt = probeWith(n.id, !on), rows = [];
+  const on = sk(n.id), verb = skLearned(n.id) ? "ON にすると" : "習得すると", cur = probeStats(), alt = probeWith(n.id, !on), rows = [];
   for (const d of PROBE_DEFS){
     const a = cur[d.key], b = alt[d.key];
     if (Math.abs(a - b) < d.eps) continue;
     if (on) rows.push(`<div class="td-fx on"><span class="td-fx-label">${d.label}</span> <b>${d.fmt(a)}</b><span class="td-fx-sub">発動中 ・ このスキルで ${d.diff(a - b)}</span></div>`);
-    else rows.push(`<div class="td-fx"><span class="td-fx-label">${d.label}</span> <b>${d.fmt(a)}</b> → <b class="up">${d.fmt(b)}</b><span class="td-fx-sub">習得すると ${d.diff(b - a)}</span></div>`);
+    else rows.push(`<div class="td-fx"><span class="td-fx-label">${d.label}</span> <b>${d.fmt(a)}</b> → <b class="up">${d.fmt(b)}</b><span class="td-fx-sub">${verb} ${d.diff(b - a)}</span></div>`);
   }
   if (!rows.length) return "";
-  return `<div class="td-fx-head">${on ? "数値で見る効果 (現在値)" : "習得するとこう変わる"}</div>` + rows.join("");
+  return `<div class="td-fx-head">${on ? "数値で見る効果 (現在値)" : verb + "こう変わる"}</div>` + rows.join("");
 }
 // スキル → 発動カウンタの対応 (詳細に「今セッションの発動: n回」を出す)
 const SKILL_PROC = {
@@ -181,7 +237,7 @@ const SKILL_PROC = {
   f0_mines: [["f0mine", "地雷"]], f0_kamikaze: [["f0kami", "突撃"]], f0_pack: [["f0pack", "撤収爆破"]],
 };
 function skillProcLines(n){
-  if (!sk(n.id)) return "";
+  if (!skLearned(n.id)) return "";
   const list = SKILL_PROC[n.id];
   if (!list) return "";
   return `<div class="td-proc">今セッションの発動: ${list.map(([k, label]) => `${label} <b>${skillProc[k]}回</b>`).join(" ・ ")}</div>`;
@@ -210,6 +266,8 @@ let treeStatsSig = "";
 function renderTreeStats(){
   const el = $("treeStats");
   if (!el) return;
+  el.hidden = !state.treeStatsOn;   // 既定では出さない (ヘッダーの「発動状況」ボタンで開閉)
+  if (!state.treeStatsOn) return;
   const t = elemTotals(), P = skillProc;
   const sig = [t.burn, t.frost, t.acid, t.rad, t.shock, elemMul(), P.burn, P.frost, P.acid, P.rad, P.shock, P.blast, P.chain, P.treasure, P.dimension, P.planetkiller, P.chainreact, P.tycoon, P.fleetburst, P.automine, P.stareater, P.annihilation, P.elemnova, P.goldify, P.planetbeam, P.devour, P.diswave, P.frip, P.fdisch, P.fbomb, P.fshell, P.fnuke, P.fstomp, P.fomega, P.fsplit, P.f0drone, P.f0mine, P.f0kami, P.f0pack, fCount, fOmega > 0].join("|");
   if (sig === treeStatsSig) return;
@@ -223,13 +281,16 @@ function renderTreeStats(){
 }
 function renderDetail(){
   const n = SKILL[hoverId || selId];
+  $("treeDetail").hidden = !n && !treeHelpVisible();   // 何も選んでいない時の説明パネルは × で閉じられる (? で開き直す)
   if (!n){
-    $("treeDetail").innerHTML = `<div class="td-empty"><b>スキルツリー</b>
+    if ($("treeDetail").hidden){ positionDetail(); return; }
+    $("treeDetail").innerHTML = `<div class="td-empty"><div class="td-top"><b>スキルツリー</b><button class="td-close" id="tdHelpClose" aria-label="説明を閉じる">×</button></div>
       <p>ブロックを壊すと経験値が入り、レベルアップでスキルポイントが手に入る (5レベルごとにボーナス +1)。レベル1ごとに全ダメージ +1.5%。</p>
       <p>説明の「攻撃の◯%」は、工房パネル上部の<b>「攻撃」</b>の値が基準。「最大HPの◯%」は、そのブロックの最大HPが基準。</p>
       <p>中心から外へ、線でつながった順に習得できる。スキルは全てパッシブ (常時発動)。外周の大きなスキルは各系統の切り札。</p>
       <p>${TOUCH_UI ? "ノードをタップで選択、下に出る「習得」ボタンで習得。" : "ノードをクリックすると、近くに詳細と「習得」ボタンが出る。ダブルクリックか Enter でも習得できる。"}</p>
-      <p>習得済みノードの<b>緑の点は「いま発動中」</b>、灰色の点は「条件待ち」の印。画面上の「発動状況」バーで、現在の付与率と今セッションの発動回数がいつでも確認できる。詳細では効果が現在値でどう変わるかも数値で出る。</p>
+      <p>習得済みノードの<b>緑の点は「いま発動中」</b>、灰色の点は「条件待ち」の印。上の「発動状況」ボタンで、現在の付与率と今セッションの発動回数を出せる。詳細では効果が現在値でどう変わるかも数値で出る。</p>
+      <p>習得済みのスキルは<b>「ON/OFF」</b>ボタンから、個別・系統ごと・まとめて無効にできる (習得とスキルポイントはそのまま)。この説明は × で閉じ、「?」でまた開ける。</p>
       ${BRANCHES.map(b => `<div class="td-br" style="color:${b.color}"><b>${b.name}</b><span>${b.sub}</span></div>`).join("")}
       <div class="td-mast-head">系統マスタリー</div>
       <p>同じ系統のスキルを <b>${MASTERY_AT.join(" / ")}</b> 個習得するたびにランクアップ。系統の主役ステータスが大きく伸び、自機のまわりを系統色の光球が回り始める。</p>
@@ -237,9 +298,10 @@ function renderDetail(){
     positionDetail();
     return;
   }
-  const on = sk(n.id), open = skillUnlocked(n), sp = spLeft();
+  const has = skLearned(n.id), on = sk(n.id), open = skillUnlocked(n), sp = spLeft();
   const ls = on ? skillLiveState(n.id, elemAvail()) : null;
-  const status = on ? (ls === "idle" ? `<div class="td-state">習得済み ・ 条件待ち (条件を満たすと発動)</div>` : `<div class="td-state on">習得済み ・ 発動中</div>`)
+  const status = has && !on ? `<div class="td-state off">習得済み ・ OFF (効果は止まっている)</div>`
+    : on ? (ls === "idle" ? `<div class="td-state">習得済み ・ 条件待ち (条件を満たすと発動)</div>` : `<div class="td-state on">習得済み ・ 発動中</div>`)
     : !open ? (n.parent && !sk(n.parent.id) ? `<div class="td-state">未解放 — 先に「${n.parent.name}」が必要</div>` : `<div class="td-state">未解放 — Lv ${n.reqLv} 以上で解放 (現在 Lv ${state.lv})</div>`)
     : sp < n.cost ? `<div class="td-state">スキルポイントが足りない (あと ${n.cost - sp})</div>` : "";
   $("treeDetail").innerHTML = `<div class="td-top" style="--c:${n.br.color}">
@@ -253,7 +315,8 @@ function renderDetail(){
     ${masteryLineHTML(n)}
     ${skillEffectLines(n)}
     ${skillProcLines(n)}
-    ${!on && n.id === selId ? `<button class="buy-btn" id="learnBtn" ${canLearn(n) ? "" : "disabled"}><span>習得する</span><span>${TOUCH_UI ? "" : "Enter"}</span></button>` : ""}`;
+    ${!has && n.id === selId ? `<button class="buy-btn" id="learnBtn" ${canLearn(n) ? "" : "disabled"}><span>習得する</span><span>${TOUCH_UI ? "" : "Enter"}</span></button>` : ""}
+    ${has && n.id === selId ? `<button class="td-toggle${on ? "" : " off"}" id="tdToggle">${on ? "このスキルを OFF にする" : "このスキルを ON にする"}</button>` : ""}`;
   positionDetail();
 }
 // ---------- 詳細ポップオーバー: 選択/ホバー中のノードの近くに出す ----------
@@ -282,8 +345,9 @@ function positionDetail(){
 function masteryLineHTML(n){
   const b = n.br.key, rk = masteryRank(b), c = masteryCount(b), nx = masteryNextAt(b);
   if (sk(n.id)) return `<div class="td-mastline" style="--c:${n.br.color}">${n.br.name}マスタリー <b>${MASTERY_RANK[rk]}</b> (${c}${nx ? " / " + nx : ""}) ・ ${masteryEffectText(b, rk)}</div>`;
-  if (nx && c + 1 >= nx) return `<div class="td-mastline up" style="--c:${n.br.color}">習得で <b>${n.br.name}マスタリー ${MASTERY_RANK[rk + 1]}</b> にランクアップ! → ${masteryEffectText(b, rk + 1)}</div>`;
-  return `<div class="td-mastline" style="--c:${n.br.color}">習得で ${n.br.name}マスタリー +1 (${c + 1} / ${nx || c + 1}${nx ? ` ・ ${MASTERY_RANK[rk + 1]}まであと ${nx - c - 1}` : ""})</div>`;
+  const verb = skLearned(n.id) ? "ON にすると" : "習得で";   // OFF のスキルはマスタリーに数えていない
+  if (nx && c + 1 >= nx) return `<div class="td-mastline up" style="--c:${n.br.color}">${verb} <b>${n.br.name}マスタリー ${MASTERY_RANK[rk + 1]}</b> にランクアップ! → ${masteryEffectText(b, rk + 1)}</div>`;
+  return `<div class="td-mastline" style="--c:${n.br.color}">${verb} ${n.br.name}マスタリー +1 (${c + 1} / ${nx || c + 1}${nx ? ` ・ ${MASTERY_RANK[rk + 1]}まであと ${nx - c - 1}` : ""})</div>`;
 }
 function tryLearn(id){
   const n = SKILL[id];
@@ -310,9 +374,13 @@ function masteryCheck(){
     mastSeen[br.key] = rk;
   }
 }
-// 習得 / 振り直しのあと: スキルで増減する機体数や表示を合わせ直す
-function onSkillsChanged(){
-  masteryInvalidate(); masteryCheck();
+// 習得 / 振り直し / ON・OFF のあと: スキルで増減する機体数や表示を合わせ直す
+// silent = マスタリーのランクが変わっても通知しない (ON/OFF の付け外しで「到達!」を出さない)
+function onSkillsChanged(silent){
+  skillsRev++;
+  masteryInvalidate();
+  if (silent){ for (const br of BRANCHES) mastSeen[br.key] = masteryRank(br.key); }
+  else masteryCheck();
   syncBots(); syncCoinBots(); syncMachines();   // 機兵系統の機数もすぐ合わせる
   gMul = globalDmgMul();
   save(); refreshTree(); renderPanels(true); hudSig = "";
@@ -322,7 +390,7 @@ function toggleTree(open){
   if (want && (!started || cleared)) return;
   treeOpen = want;
   $("treeOverlay").classList.toggle("open", treeOpen);
-  if (!treeOpen){ hoverId = null; return; }
+  if (!treeOpen){ hoverId = null; tapToggle = false; return; }
   if (!treeBuilt) buildTree();
   if (!tv.s){   // 初回は中心 (系統の入口) が見える倍率で開く
     const r = $("treeView").getBoundingClientRect();
@@ -337,7 +405,7 @@ $("treeClose").addEventListener("click", () => toggleTree(false));
 $("respecBtn").addEventListener("click", () => {
   if (!Object.keys(state.skills).length) return;
   if (!confirm("習得したスキルを全て解除して、スキルポイントを振り直しますか？ (無料)")) return;
-  state.skills = {};
+  state.skills = {}; state.skillOff = {}; skillOffSync();
   burns.clear(); bombs.length = 0; bombSet.clear(); vuln.clear();
   machineReset();   // 機兵系統: 子機・ナノマシン・落下物も片付ける
   selId = null;
@@ -346,13 +414,17 @@ $("respecBtn").addEventListener("click", () => {
 $("treeWorld").addEventListener("click", e => {
   const el = e.target.closest(".tn");
   if (!el) return;
-  selId = el.dataset.id; refreshTree();
+  const id = el.dataset.id;
+  if (tapToggle && skLearned(id)){ selId = id; setSkillsOff([id], !skDisabled(id)); return; }   // ON/OFF パネルの「タップで切り替え」
+  selId = id; refreshTree();
 });
-$("treeWorld").addEventListener("dblclick", e => { const el = e.target.closest(".tn"); if (el) tryLearn(el.dataset.id); });
+$("treeWorld").addEventListener("dblclick", e => { const el = e.target.closest(".tn"); if (el && !tapToggle) tryLearn(el.dataset.id); });
 $("treeWorld").addEventListener("mouseover", e => { const el = e.target.closest(".tn"); if (el && hoverId !== el.dataset.id){ hoverId = el.dataset.id; renderDetail(); } });
 $("treeWorld").addEventListener("mouseout", e => { if (e.target.closest(".tn") && hoverId){ hoverId = null; renderDetail(); } });
 $("treeDetail").addEventListener("click", e => {
   if (e.target.closest("#tdClose")){ clearTreeSelection(); return; }
+  if (e.target.closest("#tdHelpClose")){ state.treeHelpOff = true; save(); refreshTree(); return; }
+  if (e.target.closest("#tdToggle")){ if (selId) setSkillsOff([selId], !skDisabled(selId)); return; }
   if (e.target.closest("#learnBtn")) tryLearn(selId);
 });
 
@@ -381,7 +453,11 @@ window.addEventListener("keydown", e => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.code === "KeyT" && !isTypingTarget(e)){ toggleTree(); return; }
   if (treeOpen){
-    if (e.key === "Escape"){ if (selId) clearTreeSelection(); else toggleTree(false); }   // 選択中はまずポップオーバーを閉じる
+    if (e.key === "Escape"){   // 選択中はまずポップオーバーを、ON/OFF パネルを開いていればそれを閉じる
+      if (selId) clearTreeSelection();
+      else if (swOpen){ swOpen = false; tapToggle = false; refreshTree(); }
+      else toggleTree(false);
+    }
     else if (e.key === "Enter" && selId) tryLearn(selId);
     return;
   }

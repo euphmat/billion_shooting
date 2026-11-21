@@ -44,17 +44,21 @@ cv.addEventListener("click", e => { if (!touchCanvas) inspectAtClient(e.clientX,
 const applyZoom = f => { zoom = Math.max(0.004, Math.min(2.5, zoom * f)); };
 
 // ---------- 自動画質調整 ----------
-// 高解像度ディスプレイで描画が追いつかないとき (平均 40fps 未満が約3秒続いたら)、
-// キャンバスの解像度を 1倍に落とす。十分軽くなったら (20秒以上 55fps 超) 元に戻す (戻すのは1回まで)
-let dprCap = 2, frameEMA = 16.7, slowFrames = 0, fastFrames = 0, dprRestores = 0;
-function trackFrameRate(ms){
-  if (!(ms > 0) || ms > 100) return;           // 裏タブ復帰などの異常値は無視
+// 高解像度ディスプレイで描画が追いつかないとき (目標の 2/3 未満の fps が約3秒続いたら)、
+// キャンバスの解像度を 1倍に落とす。十分軽くなったら (20秒以上 目標に近い fps) 元に戻す (戻すのは1回まで)。
+// 解像度の上限は 2倍、省電力モードでは 1.5倍 (target = 目標のフレーム間隔 ms。省電力モードは 30fps)
+const dprMax = () => state.powerSave ? 1.5 : 2;
+let dprCap = dprMax(), frameEMA = 16.7, slowFrames = 0, fastFrames = 0, dprRestores = 0;
+function trackFrameRate(ms, target){
+  if (!(ms > 0) || ms > 100) return;           // 裏タブ復帰・一時停止中の間引きなどの異常値は無視
   frameEMA += (ms - frameEMA) * 0.05;
   if (dprCap > 1 && (window.devicePixelRatio || 1) > 1){
-    slowFrames = frameEMA > 25 ? slowFrames + 1 : 0;
-    if (slowFrames > 120){ dprCap = 1; slowFrames = fastFrames = 0; resize(); }
+    slowFrames = frameEMA > target * 1.5 ? slowFrames + 1 : 0;
+    if (slowFrames > 2000 / target){ dprCap = 1; slowFrames = fastFrames = 0; resize(); }
   } else if (dprCap === 1 && dprRestores < 1){
-    fastFrames = frameEMA < 18 ? fastFrames + 1 : 0;
-    if (fastFrames > 1200){ dprCap = 2; dprRestores++; fastFrames = slowFrames = 0; resize(); }
+    fastFrames = frameEMA < target * 1.08 ? fastFrames + 1 : 0;
+    if (fastFrames > 20000 / target){ dprCap = dprMax(); dprRestores++; fastFrames = slowFrames = 0; resize(); }
   }
 }
+// 設定の「省電力モード」を切り替えた時: 解像度の上限を合わせ直す
+function applyPowerSave(){ dprCap = dprMax(); frameEMA = state.powerSave ? 1000 / 30 : 1000 / 60; slowFrames = fastFrames = dprRestores = 0; resize(); }
