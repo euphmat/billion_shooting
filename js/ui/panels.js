@@ -351,9 +351,20 @@ function loadoutClick(e){
     return;
   }
   if (e.target.closest("[data-bauto]")){
-    const def = botDefaultDPS();
-    const cand = WEAPON_KEYS.filter(k => state.weaponsOwned[k] && k !== state.weapon && botWeaponDPS(k) > def).sort((a, b) => botWeaponDPS(b) - botWeaponDPS(a));
-    for (let i = 0; i < botCount(); i++) setBotWeapon(i, cand[i] || null);
+    // おまかせ編成: 余り武器の中で強いものから、一番弱いスロット (デフォルト砲のスロット含む) へ差していく。
+    // 装備中の武器を外すことは絶対にしない。旧実装は「デフォルト砲より強い武器」だけで全スロットを
+    // 埋め直していたため、候補に入らない武器が全部外れた。しかもデフォルト砲DPSは自機武器のLvで
+    // 膨らむので、自機を鍛えるほど候補が減り、最悪の場合は全員の装備が外れていた。
+    const held = new Set();
+    for (let i = 0; i < botCount(); i++){ const k = botWeaponAt(i); if (k) held.add(k); }
+    const spare = WEAPON_KEYS.filter(k => state.weaponsOwned[k] && k !== state.weapon && !held.has(k))
+                             .sort((a, b) => botWeaponDPS(b) - botWeaponDPS(a));
+    for (const k of spare){
+      let worst = -1, worstD = Infinity;
+      for (let i = 0; i < botCount(); i++){ const d = botSlotDPS(i); if (d < worstD){ worstD = d; worst = i; } }
+      if (worst < 0 || botWeaponDPS(k) <= worstD) break;
+      setBotWeapon(worst, k);
+    }
     botSlotSel = -1; sndBuy(); save(); refreshBotViews(); updateHUD(); return;
   }
   if (e.target.closest("[data-bclear]")){

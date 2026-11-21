@@ -122,7 +122,10 @@ function botEqHTML(){
   const slots = Array.from({ length: total }, (_, i) => botTileHTML(i, maxDps)).join("");
   let spare = WEAPON_KEYS.filter(k => state.weaponsOwned[k] && k !== state.weapon);
   const def = botDefaultDPS();
-  const canAuto = spare.some(k => botWeaponDPS(k) > def);
+  // おまかせが実際に何か変える時だけ押せるように: 余り武器が一番弱いスロットより強いこと
+  let minSlotDps = Infinity;
+  for (let i = 0; i < total; i++) minSlotDps = Math.min(minSlotDps, botSlotDPS(i));
+  const canAuto = spare.some(k => shelfHolder(k) < 0 && botWeaponDPS(k) > minSlotDps);
   const sel = botSlotSel >= 0 && botSlotSel < total ? botSlotSel : -1;
   const base = sel >= 0 ? botSlotDPS(sel) : def;
   const baseLabel = sel >= 0 ? `ボット${sel + 1}の現在比` : "デフォルト砲比";
