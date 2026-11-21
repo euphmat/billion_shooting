@@ -166,15 +166,8 @@ function frame(now){
       cb.retargetT -= dt;
       if (cb.target && cb.target.gone){ cb.target = null; cb.retargetT = 0; }
       if (cb.retargetT <= 0){
+        // 追従: 自機から 2600 以内 / ボット追従: 担当ボットの近く 950 以内のコインだけ (範囲は pickCoinTarget 側で絞る)
         cb.target = coinsArr.length ? pickCoinTarget(cb, claims(), cbSpd, cbVac) : null;
-        if (cb.target && cbMode === "follow"){   // 追従: 自機から遠いコインは追わない
-          const pdx = cb.target.x - player.x, pdy = cb.target.y - player.y;
-          if (pdx * pdx + pdy * pdy > 2600 * 2600) cb.target = null;
-        }
-        if (cb.target && cbMode === "botfollow"){   // ボット追従: 担当ボットの近くのコインだけ拾う
-          const tdx2 = cb.target.x - cb.x, tdy2 = cb.target.y - cb.y;
-          if (tdx2 * tdx2 + tdy2 * tdy2 > 950 * 950) cb.target = null;
-        }
         cb.idle = cb.target ? null : (cbMode === "solo" ? pickIdleSpot(cb, cbSpd) : null);
         cb.retargetT = 0.15;
       }

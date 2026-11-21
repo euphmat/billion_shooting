@@ -125,10 +125,15 @@ function coinClusterValue(claims, cn, r){
   }
   return v;
 }
+// 自機からこれ以上離れたコインは「取り残し」: 自機の磁石では二度と拾われないので、近くのコインより必ず先に拾う
+const STRAND_R = 1200;
 function pickCoinTarget(bot, claims, speed, vacuum){
   const prev = bot.target;
   if (prev) claims.owner.delete(prev);
-  const solo = state.cbMode === "solo";
+  const mode = state.cbMode || "follow", solo = mode === "solo";
+  // モードごとの行動範囲 (範囲外のコインは候補にしない: 選んでから捨てると、近くに拾えるコインがあっても待機してしまう)
+  const playerCap2 = mode === "follow" ? 2600 * 2600 : Infinity, botCap2 = mode === "botfollow" ? 950 * 950 : Infinity;
+  const strand2 = STRAND_R * STRAND_R, strandKeep2 = (STRAND_R * 0.75) ** 2;   // 狙い中の取り残しは少し近づいても取り残し扱いのまま (目標のブレ防止)
   const mr2 = magnetRange() ** 2, sepR2 = (solo ? 1000 : Math.max(140, vacuum * 1.2)) ** 2, cr = Math.max(60, vacuum);
   // 他ボットの目標地点を数値の配列にしておく (コインごとに Map を回さない)
   // 独立モードでは僚機の現在位置も割り引き対象に入れる: 誰かが働いている場所は「担当済み」
@@ -139,12 +144,15 @@ function pickCoinTarget(bot, claims, speed, vacuum){
   // 1つの山 (480px 圏) に向かう台数の上限。独立モードは 2 台まで:
   // 余ったボットは別の山や持ち場に回り、1箇所に固まらない。自分の今の目標は上限の対象外
   const scan = crewCap => {
-    let best = null, bestS = -Infinity;
+    let best = null, bestS = -Infinity, bestTier = 0;
     for (const cn of coinsArr){
-      const pdx = cn.x - player.x, pdy = cn.y - player.y;
-      if (pdx*pdx + pdy*pdy < mr2) continue;                   // 自機の磁石圏内は放っておいても回収される
+      const pdx = cn.x - player.x, pdy = cn.y - player.y, pd2 = pdx*pdx + pdy*pdy;
+      if (pd2 < mr2 || pd2 > playerCap2) continue;             // 自機の磁石圏内は放っておいても回収される
       const dx = cn.x - bot.x, dy = cn.y - bot.y, dd = dx*dx + dy*dy;
-      if (dd > cap2) continue;
+      if (dd > cap2 || dd > botCap2) continue;
+      // 取り残し (tier 1) は近くのコイン (tier 0) より常に優先。同じ tier の中では従来のスコアで比べる
+      const tier = pd2 > strand2 || (cn === prev && pd2 > strandKeep2) ? 1 : 0;
+      if (tier < bestTier) continue;
       const ow = claims.owner.get(cn);
       if (ow && ow !== bot) continue;                          // 他ボットが狙っているコイン
       if (crewCap < Infinity && cn !== prev){
@@ -157,7 +165,7 @@ function pickCoinTarget(bot, claims, speed, vacuum){
       }
       // スコア = 周辺のコイン価値 / 到着時間 (+目標を維持するボーナスでブレ防止)
       const t = Math.sqrt(dd) / speed + 0.35, keep = cn === prev ? 1.3 : 1;
-      if (coinNeighborhood(claims, cn).sum / t * keep <= bestS) continue;
+      if (tier === bestTier && coinNeighborhood(claims, cn).sum / t * keep <= bestS) continue;
       // 他ボットの目標・位置の近くは割り引く (吸引エリアの重なりを避ける)
       let crowd = 0;
       for (let k = 0; k < others.length; k += 2){
@@ -165,7 +173,7 @@ function pickCoinTarget(bot, claims, speed, vacuum){
         if (ex*ex + ey*ey < sepR2) crowd++;
       }
       const s = coinClusterValue(claims, cn, cr) / t * keep / (1 + (solo ? 3 : 2.5) * crowd);
-      if (s > bestS){ bestS = s; best = cn; }
+      if (tier > bestTier || s > bestS){ bestS = s; best = cn; bestTier = tier; }
     }
     return best;
   };
