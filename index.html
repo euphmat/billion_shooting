@@ -65,7 +65,7 @@
     <div id="artOverlay">
       <div class="tree-head">
         <h3>アーティファクト</h3>
-        <span class="tree-hint">衛星惑星の宝箱から手に入る恒久パッシブ。所持しているだけで全て自動発動</span>
+        <span class="tree-hint">衛星惑星の宝箱から手に入る。持っているだけで効果が出る</span>
         <button id="artClose" class="icon-btn" aria-label="閉じる">×</button>
       </div>
       <div id="artSummary"></div>
@@ -126,11 +126,11 @@
       <p>1億ブロックの超巨大惑星「地球」を破壊せよ。<br>
          <span class="b-long">WASD で移動 / スペース長押しで高速移動 / ブロックに近づくと自動射撃 / マウスホイールでズーム</span>
          <span class="b-short">右下のスティックで移動 / » ボタンで高速移動 / ブロックに近づくと自動射撃 / ピンチでズーム</span><br>
-         ブロックを壊すと<b>コインと素材</b>が手に入る。素材は全168種、地層ごとに違う。<br>
-         <span class="b-long">集めた素材とコインで、右の工房で装備 (全137種) を<b>製作・強化</b>しよう。</span>
-         <span class="b-short">集めた素材とコインで、<b>工房</b>ボタンから装備 (全137種) を製作・強化しよう。</span><br>
-         ブロックを壊すとレベルアップ。<span class="b-long">T キーで</span><span class="b-short">SKILL ボタンで</span>スキルツリー (全170種) を開こう。<br>
-         <span class="note">音が出ます。開始ボタンを押すと効果音が有効になります。</span></p>
+         ブロックを壊すと<b>コインと素材</b>が手に入る。<br>
+         <span class="b-long">右の工房で、素材とコインを使って装備を<b>製作・強化</b>する。</span>
+         <span class="b-short"><b>工房</b>ボタンから、素材とコインで装備を<b>製作・強化</b>する。</span><br>
+         レベルアップで得たスキルポイントは、<span class="b-long">T キー</span><span class="b-short">SKILL ボタン</span>で開くスキルツリーで使う。<br>
+         <span class="note">開始すると効果音が鳴ります。</span></p>
       <button class="bigbtn" id="startBtn">START</button>
       <button class="ghostbtn" id="startInstallBtn" hidden>▼ アプリとしてインストール</button>
       <div id="clearBadge" class="clear-badge" hidden>★ 惑星破壊達成</div>
@@ -255,7 +255,7 @@
       <div class="settings-row">
         <div>
           <div class="settings-label">攻撃・破壊音</div>
-          <div class="settings-desc">射撃音とブロックの破壊・爆発音だけをオフにできます（コイン・購入・レベルアップなどの音は鳴ります）</div>
+          <div class="settings-desc">射撃音とブロックの破壊・爆発音だけをオフにします（コイン・購入・レベルアップなどの音は鳴ります）</div>
         </div>
         <label class="switch">
           <input type="checkbox" id="atkSndToggle" checked>
@@ -266,7 +266,7 @@
       <div class="settings-row">
         <div>
           <div class="settings-label">演出を控えめにする</div>
-          <div class="settings-desc">爆発のリング・破片・ダメージ数値・素材の文字を減らします。画面がうるさいと感じるとき、動作が重いときに</div>
+          <div class="settings-desc">爆発のリング・破片・ダメージ数値・素材の文字を減らします</div>
         </div>
         <label class="switch">
           <input type="checkbox" id="fxLowToggle">
@@ -277,7 +277,7 @@
       <div class="settings-row">
         <div>
           <div class="settings-label">省電力モード</div>
-          <div class="settings-desc">描画を 30fps・控えめな解像度に抑えて、スマホの発熱と電池の減りを抑えます (スマホでは最初から ON)。重いときやスマホが熱くなるときに</div>
+          <div class="settings-desc">描画を 30fps・低めの解像度にして、発熱と電池の減りを抑えます (スマホでは最初から ON)</div>
         </div>
         <label class="switch">
           <input type="checkbox" id="powerSaveToggle">

@@ -77,9 +77,9 @@ function botPanelHTML(){
       sw: crewSwitchHTML("bots"), off: n > 0 && state.off.bots,
       stats:[["合計DPS", fmtD(botsTotalDPS()), true], ["倍率", "x" + fmtX(botMul())], ["強化", "Lv." + state.botLv], ["稼働", botCount() + "機"]] })
     + (total > 0 ? `<button class="nav-row" data-boteq-open>${iconBadge("bot", "#57e39a")}<span class="nr-main"><span class="nr-title">武器を持たせる (編成)</span><span class="nr-sub">装備済み ${equippedN}/${total}機 ・ 余った武器 ${spareN}点</span></span>${equippedN < total && spareN > 0 ? `<span class="st-pill go">空き ${total - equippedN}</span>` : ""}<span class="nr-arrow">›</span></button>`
-      : `<p class="hint-box">まずは1機製造しよう。余った武器を持たせると、その撃ち方で一緒に掘ってくれる。</p>`)
+      : `<p class="hint-box">製造したボットには、余った武器を持たせられる。</p>`)
     + (n > 0 ? botModeSegHTML("bot") : "")
-    + secTitleHTML("製造・強化", "ボットを増やし、強くする")
+    + secTitleHTML("製造・強化")
     + `<div class="alist">${crewRowHTML("bot")}${crewRowHTML("bupgrade")}</div>`
     + secTitleHTML("衛星テクノロジー", "衛星惑星の素材で開発", `${core + armor}/${BOT_CORE_MAX + BOT_ARMOR_MAX}`)
     + `<div class="alist">${crewRowHTML("botcore")}${crewRowHTML("botarmor")}</div>`;
@@ -116,7 +116,7 @@ function eqShelfTileHTML(k, base, baseLabel, selIdx){
 }
 function botEqHTML(){
   const total = botCount();
-  if (!total) return `<p class="lo-empty">攻撃ボットがまだいない。工房の「攻撃ボット」タブで製造すると、ここで装備を持たせられる。</p>`;
+  if (!total) return `<p class="lo-empty">攻撃ボットがまだいない。工房の「攻撃ボット」タブで製造できる。</p>`;
   let maxDps = 0;
   for (let i = 0; i < total; i++) maxDps = Math.max(maxDps, botSlotDPS(i));
   const slots = Array.from({ length: total }, (_, i) => botTileHTML(i, maxDps)).join("");
@@ -177,8 +177,8 @@ function coinBotPanelHTML(){
   return fleetCardHTML({ icon:"coinbot", accent:"#ffd60a", name:"コイン回収ボット", n, max:COINBOT_MAX, extra: total > n ? `+${total - n} 追加` : "",
       sw: crewSwitchHTML("coinBots"), off: n > 0 && state.off.coinBots,
       stats:[["回収額", "x" + (botCoinMul() * skMul("c_haul", 1.10)).toFixed(2), true], ["速度", Math.round(coinBotSpeed())], ["吸引", Math.round(coinBotVacuum())], ["場のコイン", fieldCoins]] })
-    + (n > 0 ? botModeSegHTML("coinbot") : `<p class="hint-box">落ちたコインを自動で拾う相棒。1機目を製造するとモジュールも組み込めるようになる。</p>`)
-    + secTitleHTML("製造", "回収ボットを増やす")
+    + (n > 0 ? botModeSegHTML("coinbot") : `<p class="hint-box">落ちたコインを自動で拾う。1機目を製造すると、モジュールを組み込める。</p>`)
+    + secTitleHTML("製造")
     + `<div class="alist">${crewRowHTML("coinbot")}</div>`
     + secTitleHTML("モジュール", n > 0 ? "買えるものから順に並ぶ" : "回収ボットが1機以上必要", `${modOn}/${CB_MOD_KEYS.length}`)
     + `<div class="alist">${mods.map(k => crewRowHTML("cbmod:" + k)).join("")}</div>`;

@@ -31,41 +31,41 @@ const BOT_CORE_COST  = lv => niceRound(80000 * Math.pow(3.5, lv));
 const BOT_ARMOR_COST = lv => niceRound(60000 * Math.pow(3.2, lv));
 
 // ---------- 回収ボットの装備 (モジュール) ----------
-/* key: { name, icon, accent, max, cost(lv), mats(lv), eff(lv) 説明, tagline, desc } */
+/* key: { name, icon, accent, max, cost(lv), mats(lv), eff(lv) 説明, desc } */
 const scaleRec = (rec, lv, step) => { const o = {}; for (const k in rec) o[k] = Math.ceil(rec[k] * Math.pow(step, lv)); return o; };
 const CB_MODULES = {
   coil:   { name:"磁気コイル",     icon:"magnet",  accent:"#8fd3ff", max:30, base:120, cstep:1.5, mats:{ magnetite:30, copperOre:30 }, mstep:1.22,
-            tagline:"吸い寄せる力を、巻き上げる。", desc:"磁鉄鉱を巻いたコイル。コインを引き寄せる吸引範囲が広がる。",
+            desc:"磁鉄鉱を巻いたコイル。コインを引き寄せる吸引範囲が広がる。",
             eff: lv => `吸引範囲 +${lv * 12}%` },
   frame:  { name:"軽合金フレーム", icon:"speed",   accent:"#d8e0e8", max:30, base:150, cstep:1.5, mats:{ bauxite:30, titaniumOre:10 }, mstep:1.22,
-            tagline:"軽くなれば、速くなる。", desc:"アルミとチタンの骨格。機体が軽くなり、移動速度が上がる。",
+            desc:"アルミとチタンの骨格。機体が軽くなり、移動速度が上がる。",
             eff: lv => `移動速度 +${lv * 10}%` },
   plating:{ name:"金メッキ",       icon:"coin",    accent:"#ffd60a", max:20, base:300, cstep:1.6, mats:{ goldOre:20 }, mstep:1.3,
-            tagline:"金は金を呼ぶ。", desc:"機体を金で覆う。回収ボットが拾ったコインの額が増える。",
+            desc:"回収ボットが拾ったコインの額が増える。",
             eff: lv => `ボット回収コイン +${lv * 5}%` },
   hatch:  { name:"拡張ハッチ",     icon:"bag",     accent:"#c0c0c0", max:10, base:200, cstep:1.7, mats:{ ironOre:40, zincOre:20 }, mstep:1.3,
-            tagline:"大きく開けて、まとめて飲み込む。", desc:"回収口を広げる。すれ違うだけで拾える接触範囲が広がる。",
+            desc:"回収口を広げる。すれ違うだけで拾える接触範囲が広がる。",
             eff: lv => `接触回収の範囲 +${lv * 20}%` },
   scanner:{ name:"鉱物スキャナ",   icon:"eye",     accent:"#9be15d", max:10, base:400, cstep:1.7, mats:{ quartz:30, silverOre:20 }, mstep:1.3,
-            tagline:"コインの下に、何かが埋まっている。", desc:"回収ボットがコインを拾うとき、その場所の地層の素材を一緒に見つけてくる。",
+            desc:"回収ボットがコインを拾うとき、その場所の地層の素材も見つける。",
             eff: lv => `コイン回収時 ${lv * 4}% で素材 +1` },
   nozzle: { name:"推進ノズル",     icon:"flame",   accent:"#ff9346", max:5, base:500, cstep:2, mats:{ sulfur:40, magma:20 }, mstep:1.5,
-            tagline:"遠いコインほど、急いで取りに行く。", desc:"硫黄とマグマで燃える補助ブースター。目標まで400以上離れているときの速度が上がる。",
+            desc:"硫黄とマグマで燃える補助ブースター。目標まで400以上離れているときの速度が上がる。",
             eff: lv => `長距離ブースト +${lv * 30}%` },
   replicator:{ name:"複製回路",    icon:"twin",    accent:"#80ffc0", max:3, base:2000, cstep:5, mats:{ silicon:60, lithium:40 }, mstep:2,
-            tagline:"ひとつ作れば、もうひとつ生まれる。", desc:"シリコンとリチウムの自己複製回路。回収ボットが1機おまけで加わる。",
+            desc:"シリコンとリチウムの自己複製回路。回収ボットが1機おまけで加わる。",
             eff: lv => `回収ボット +${lv}機` },
   interest:{ name:"利息回路",      icon:"clock",   accent:"#e8f0f8", max:10, base:1500, cstep:1.8, mats:{ platinumOre:30, silverOre:50 }, mstep:1.3,
-            tagline:"待てば、増える。", desc:"地面に落ちてから2秒以上たったコインは、回収ボットが拾うと利息がつく。",
+            desc:"地面に落ちてから2秒以上たったコインは、回収ボットが拾うと利息がつく。",
             eff: lv => `落ちて2秒以上のコイン +${lv * 10}%` },
   gravLens:{ name:"重力レンズ",    icon:"hole",    accent:"#c792ff", max:5, base:1e5, cstep:2.5, mats:{ helium3:40, darkMatter:20 }, mstep:1.5,
-            tagline:"空間ごと、引き寄せる。", desc:"ヘリウム3と暗黒物質で空間を曲げる。吸引範囲と吸引力が大きく伸びる。",
+            desc:"ヘリウム3と暗黒物質で空間を曲げる。吸引範囲と吸引力が大きく伸びる。",
             eff: lv => `吸引範囲 +${lv * 40}%・吸引力 +${lv * 30}%` },
   anchor: { name:"時空アンカー",   icon:"warp",    accent:"#40e0d0", max:1, base:1e6, cstep:1, mats:{ chronite:80 }, mstep:1,
-            tagline:"歩かない。跳ぶ。", desc:"クロナイトの錨。目標まで800以上離れていると、その手前へ瞬間移動する。",
+            desc:"クロナイトの錨。目標まで800以上離れていると、その手前へ瞬間移動する。",
             eff: lv => lv ? "ワープ稼働中" : "ワープ" },
   stargate:{ name:"星核ワープコア", icon:"warp",   accent:"#fff2b0", max:3, base:3e5, cstep:3, mats:{ novalite:30, nereidpearl:20 }, mstep:1.8,
-            tagline:"星の核で、距離を消す。", desc:"ノヴァライトの核で空間を折り畳む。吸引が大きく伸び、ワープの距離制限も緩む (アンカーなしでもワープできる)。",
+            desc:"ノヴァライトの核で空間を折り畳む。吸引が大きく伸び、ワープの距離制限も緩む (アンカーなしでもワープできる)。",
             eff: lv => `吸引範囲 +${lv * 30}%・吸引力 +${lv * 50}%・ワープ距離 -${lv * 150}` },
 };
 const CB_MOD_KEYS = Object.keys(CB_MODULES);

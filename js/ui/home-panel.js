@@ -55,13 +55,13 @@ function goalHTML(){
     </div>`;
   }
   if (state.bots < BOT_MAX && !canBuy(buyDef("bot"))) html += actRowHTML(crewRowOpts("bot"));
-  return html || `<p class="empty">目標はすべて達成済み。強化で惑星を削り切ろう。</p>`;
+  return html || `<p class="empty">目標はすべて達成済み。</p>`;
 }
 function homePanelHTML(){
   const { craft, crew, equip } = homeReady();
   const buyN = craft.length + crew.length, n = buyN + (equip ? 1 : 0);
   let html = equippedCardHTML() + bulkUpBarHTML(bulkUpPreview(true));
-  html += secTitleHTML("今すぐできること", n ? "押せばすぐ強くなる" : "", buyN > 1 ? `<button class="mini-act all" data-buyall title="製作・ボット・モジュールを上から順に1回ずつ買う (持ち替えはしない。払えなくなったら止まる)">すべて1回ずつ (${buyN})</button>` : n ? `${n}件` : "");
+  html += secTitleHTML("今すぐできること", "", buyN > 1 ? `<button class="mini-act all" data-buyall title="製作・ボット・モジュールを上から順に1回ずつ買う (持ち替えはしない。払えなくなったら止まる)">すべて1回ずつ (${buyN})</button>` : n ? `${n}件` : "");
   if (n){
     html += `<div class="alist">`;
     if (equip) html += equipRowHTML(equip);
@@ -70,9 +70,9 @@ function homePanelHTML(){
     html += crew.map(crewRowHTML).join("");
     html += `</div>`;
   } else {
-    html += `<div class="hint-box">今すぐ買えるものはない。ブロックを壊してコインと素材を集めよう。<br>下の「次の目標」で、何を集めればいいか分かる。</div>`;
+    html += `<div class="hint-box">今すぐ買えるものはない。集める素材は下の「次の目標」に出る。</div>`;
   }
-  html += secTitleHTML("次の目標", "これを目指して掘る");
+  html += secTitleHTML("次の目標");
   html += `<div class="alist">${goalHTML()}</div>`;
   return html;
 }

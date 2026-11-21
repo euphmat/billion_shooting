@@ -301,14 +301,14 @@ function renderDetail(){
     $("treeDetail").innerHTML = `<div class="td-empty"><div class="td-top"><b>スキルツリー</b><button class="td-close" id="tdHelpClose" aria-label="説明を閉じる">×</button></div>
       <p>ブロックを壊すと経験値が入り、レベルアップでスキルポイントが手に入る (5レベルごとにボーナス +1)。レベル1ごとに全ダメージ +1.5%。</p>
       <p>説明の「攻撃の◯%」は、工房パネル上部の<b>「攻撃」</b>の値が基準。「最大HPの◯%」は、そのブロックの最大HPが基準。</p>
-      <p>中心から外へ、線でつながった順に習得できる。スキルは全てパッシブ (常時発動)。外周の大きなスキルは各系統の切り札。</p>
+      <p>中心から外へ、線でつながった順に習得できる。スキルは全てパッシブ (常時発動)。</p>
       <p>${TOUCH_UI ? "ノードをタップで選択、下に出る「習得」「強化」ボタンで習得・強化。" : "ノードをクリックすると、近くに詳細と「習得」「強化」ボタンが出る。ダブルクリックか Enter でも習得・強化できる。"}</p>
-      <p>習得したスキルは、余ったスキルポイントで<b>Lv${SK_MAX_LV} まで強化</b>できる (1回ごとに習得と同じSP)。強化するたびに効果の量 (ダメージ・倍率・獲得量・付与率など) が +${Math.round(SK_AMP_STEP * 100)}% ずつ増え、Lv${SK_MAX_LV} で <b>×${SK_AMP[SK_MAX_LV].toFixed(2)}</b>。発動の間隔・範囲・数は変わらないので、強化しても重くならない (連射・速度・機数のスキルは、その分が威力に回る)。量で伸ばせないスキルは、強化分がその系統の主役ステータスに上乗せされる。ノード右上の数字がスキルLv。</p>
+      <p>習得したスキルは、余ったスキルポイントで<b>Lv${SK_MAX_LV} まで強化</b>できる (1回ごとに習得と同じSP)。強化するたびに効果の量 (ダメージ・倍率・獲得量・付与率など) が +${Math.round(SK_AMP_STEP * 100)}% ずつ増え、Lv${SK_MAX_LV} で <b>×${SK_AMP[SK_MAX_LV].toFixed(2)}</b>。発動の間隔・範囲・数は変わらない (連射・速度・機数のスキルは、その分が威力に回る)。量で伸ばせないスキルは、強化分がその系統の主役ステータスに上乗せされる。ノード右上の数字がスキルLv。</p>
       <p>習得済みノードの<b>緑の点は「いま発動中」</b>、灰色の点は「条件待ち」の印。上の「発動状況」ボタンで、現在の付与率と今セッションの発動回数を出せる。詳細では効果が現在値でどう変わるかも数値で出る。</p>
       <p>習得済みのスキルは<b>「ON/OFF」</b>ボタンから、個別・系統ごと・まとめて無効にできる (習得とスキルポイントはそのまま)。この説明は × で閉じ、「?」でまた開ける。</p>
       ${BRANCHES.map(b => `<div class="td-br" style="color:${b.color}"><b>${b.name}</b><span>${b.sub}</span></div>`).join("")}
       <div class="td-mast-head">系統マスタリー</div>
-      <p>同じ系統のスキルを <b>${MASTERY_AT.join(" / ")}</b> 個習得するたびにランクアップ。系統の主役ステータスが大きく伸び、自機のまわりを系統色の光球が回り始める。</p>
+      <p>同じ系統のスキルを <b>${MASTERY_AT.join(" / ")}</b> 個習得するたびにランクアップ。系統の主役ステータスが大きく伸び、自機のまわりを系統色の光球が回る。</p>
       ${BRANCHES.map(b => { const rk = masteryRank(b.key), nx = masteryNextAt(b.key); return `<div class="td-mast" style="--c:${b.color}"><b>${b.name} ${MASTERY_RANK[rk]}</b><span>${masteryEffectText(b.key, rk)}</span>${nx ? `<small>次 (${masteryCount(b.key)}/${nx}): ${masteryEffectText(b.key, rk + 1)}</small>` : `<small>完全制覇</small>`}</div>`; }).join("")}</div>`;
     positionDetail();
     return;
