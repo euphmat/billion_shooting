@@ -234,6 +234,7 @@ const SKILL_PROC = {
   f_nuke: [["fnuke", "戦術核"]], f_titan: [["fstomp", "踏みつけ"], ["fsalvo", "ミサイル"]], f_omega: [["fomega", "暴走"]],
   f_ultimate: [["fnano", "分解"], ["fsplit", "分裂"]],
   f0_scrap: [["f0drone", "自爆ドローン"]], f0_scrap2: [["f0drone", "自爆ドローン"]],
+  a0_steady: [["mark", "刻印の炸裂"]], d_cruise: [["broadside", "舷側斉射"]],
   f0_mines: [["f0mine", "地雷"]], f0_kamikaze: [["f0kami", "突撃"]], f0_pack: [["f0pack", "撤収爆破"]],
 };
 function skillProcLines(n){
@@ -245,7 +246,7 @@ function skillProcLines(n){
 // 習得済みスキルの「いま発動しているか」: 条件付きスキルと、元素の前提が要る派生スキだけ条件を見る (他は常時発動)
 const SKILL_COND = {
   a_combo: () => combo > 0, c_combo: () => combo >= 10, a_warm: () => heat > 0.05,
-  a_close: () => nearClose, a_point: () => nearClose, d_cruise: () => !!player.moving,
+  a_close: () => nearClose, a_point: () => nearClose,
 };
 const SKILL_NEED_ELEM = {
   b_frost2: "frost", b_icebreak: "frost", b_frost3: "frost", b_frostbite: "frost", b_iceage: "frost", b_zero: "frost", b_permafrost: "frost",
@@ -269,11 +270,11 @@ function renderTreeStats(){
   el.hidden = !state.treeStatsOn;   // 既定では出さない (ヘッダーの「発動状況」ボタンで開閉)
   if (!state.treeStatsOn) return;
   const t = elemTotals(), P = skillProc;
-  const sig = [t.burn, t.frost, t.acid, t.rad, t.shock, elemMul(), P.burn, P.frost, P.acid, P.rad, P.shock, P.blast, P.chain, P.treasure, P.dimension, P.planetkiller, P.chainreact, P.tycoon, P.fleetburst, P.automine, P.stareater, P.annihilation, P.elemnova, P.goldify, P.planetbeam, P.devour, P.diswave, P.frip, P.fdisch, P.fbomb, P.fshell, P.fnuke, P.fstomp, P.fomega, P.fsplit, P.f0drone, P.f0mine, P.f0kami, P.f0pack, fCount, fOmega > 0].join("|");
+  const sig = [t.burn, t.frost, t.acid, t.rad, t.shock, elemMul(), P.burn, P.frost, P.acid, P.rad, P.shock, P.blast, P.chain, P.treasure, P.dimension, P.planetkiller, P.chainreact, P.tycoon, P.fleetburst, P.automine, P.stareater, P.annihilation, P.elemnova, P.goldify, P.planetbeam, P.devour, P.diswave, P.frip, P.fdisch, P.fbomb, P.fshell, P.fnuke, P.fstomp, P.fomega, P.fsplit, P.f0drone, P.f0mine, P.f0kami, P.f0pack, P.mark, P.broadside, fCount, fOmega > 0].join("|");
   if (sig === treeStatsSig) return;
   treeStatsSig = sig;
   const pct = v => (v * 100).toFixed(v > 0 && v < 0.1 ? 1 : 0) + "%";
-  const procs = [["blast", "発破"], ["chain", "連破"], ["treasure", "お宝出現"], ["treasureBreak", "お宝破壊"], ["firestorm", "火炎嵐"], ["icebreak", "氷砕"], ["thermo", "熱衝撃"], ["meteor", "隕石"], ["bolt", "落雷"], ["quake", "地震"], ["jackpot", "JACKPOT"], ["dimension", "次元崩壊"], ["planetkiller", "軌道砲撃"], ["chainreact", "連鎖反応"], ["tycoon", "大当たり"], ["fleetburst", "一斉射撃"], ["automine", "自動採掘"], ["stareater", "星喰い"], ["annihilation", "消滅砲撃"], ["elemnova", "元素新星"], ["goldify", "黄金化"], ["planetbeam", "惑星破壊ビーム"], ["devour", "星喰い・真"], ["diswave", "解体波"], ["frip", "解体"], ["freplicate", "複製"], ["fdisch", "放電"], ["frail", "レールガン"], ["fbomb", "爆撃"], ["fshell", "砲撃"], ["fnuke", "戦術核"], ["fstomp", "踏みつけ"], ["fomega", "暴走"], ["fsplit", "分裂"], ["f0drone", "自爆ドローン"], ["f0mine", "地雷"], ["f0kami", "突撃"], ["f0pack", "撤収爆破"]]
+  const procs = [["blast", "発破"], ["chain", "連破"], ["treasure", "お宝出現"], ["treasureBreak", "お宝破壊"], ["firestorm", "火炎嵐"], ["icebreak", "氷砕"], ["thermo", "熱衝撃"], ["meteor", "隕石"], ["bolt", "落雷"], ["quake", "地震"], ["jackpot", "JACKPOT"], ["dimension", "次元崩壊"], ["planetkiller", "軌道砲撃"], ["chainreact", "連鎖反応"], ["tycoon", "大当たり"], ["fleetburst", "一斉射撃"], ["automine", "自動採掘"], ["stareater", "星喰い"], ["annihilation", "消滅砲撃"], ["elemnova", "元素新星"], ["goldify", "黄金化"], ["planetbeam", "惑星破壊ビーム"], ["devour", "星喰い・真"], ["diswave", "解体波"], ["frip", "解体"], ["freplicate", "複製"], ["fdisch", "放電"], ["frail", "レールガン"], ["fbomb", "爆撃"], ["fshell", "砲撃"], ["fnuke", "戦術核"], ["fstomp", "踏みつけ"], ["fomega", "暴走"], ["fsplit", "分裂"], ["f0drone", "自爆ドローン"], ["f0mine", "地雷"], ["f0kami", "突撃"], ["f0pack", "撤収爆破"], ["mark", "刻印"], ["broadside", "舷側斉射"]]
     .filter(([k]) => P[k] > 0).map(([k, l]) => `${l} <b>${P[k]}回</b>`).join(" ・ ");
   el.innerHTML = `<span class="ts-group"><b class="ts-title">発動状況</b>元素付与率 (${WEAPONS[state.weapon].name}) 燃焼 <b>${pct(t.burn)}</b> ・ 氷結 <b>${pct(t.frost)}</b> ・ 腐食 <b>${pct(t.acid)}</b> ・ 放射 <b>${pct(t.rad)}</b> ・ 放電 <b>${pct(t.shock)}</b> ／ 状態異常ダメージ <b>×${elemMul().toFixed(2)}</b></span>`
     + `<span class="ts-group">付与回数 燃焼 <b>${P.burn}回</b> ・ 氷結 <b>${P.frost}回</b> ・ 腐食 <b>${P.acid}回</b> ・ 放射 <b>${P.rad}回</b> ・ 放電 <b>${P.shock}回</b>${procs ? ` ／ ${procs}` : ""}</span>`

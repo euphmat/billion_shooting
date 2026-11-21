@@ -36,7 +36,7 @@ const skillProc = { burn: 0, frost: 0, acid: 0, rad: 0, shock: 0, thermo: 0, bol
   dimension: 0, planetkiller: 0, chainreact: 0, tycoon: 0, fleetburst: 0, automine: 0, stareater: 0,
   annihilation: 0, elemnova: 0, goldify: 0, planetbeam: 0, devour: 0, diswave: 0,
   frip: 0, freplicate: 0, fdisch: 0, frail: 0, fmagma: 0, fbomb: 0, fshell: 0, fnuke: 0, fstomp: 0, fsalvo: 0, fomega: 0, fnano: 0, fsplit: 0,
-  f0drone: 0, f0mine: 0, f0kami: 0, f0pack: 0 };   // 序盤機兵 (f0_*: 自爆ドローン / 地雷 / 突撃 / 撤収爆破)
+  f0drone: 0, f0mine: 0, f0kami: 0, f0pack: 0, mark: 0, broadside: 0 };   // mark = 刻印弾の炸裂 (a0_steady) / broadside = 舷側斉射 (d_cruise)   // 序盤機兵 (f0_*: 自爆ドローン / 地雷 / 突撃 / 撤収爆破)
 // x, y を渡すと、その場所にスキル名の発動タグを出す (ui/notify.js の procTag。間引きは向こうで行う)
 function bumpProc(k, x, y){ skillProc[k]++; if (x !== undefined) procTag(k, x, y); }
 // 奥義の大きな発動は、アーティファクトと同じ左上フィード (#artFeed) に名前を出す (チップのプール・集約は artifacts.js 側)
@@ -242,7 +242,6 @@ function globalDmgMul(){
   if (sk("a_ultimate")) m *= 3;   // 惑星消滅プロトコル (究極)
   if (sk("a_combo")) m *= 1 + Math.min(30, combo) * 0.005;
   if (sk("a_warm"))  m *= 1 + 0.2 * heat;
-  if (sk("d_cruise") && player.moving) m *= 1.12;
   if (sk("c_goldbullet")) m *= 1 + (sk("c_goldbullet2") ? 0.05 : 0.03) * Math.floor(Math.log10(Math.max(1, state.coins)) + 1);
   if (sk("c_god")) m *= 1 + 0.06 * Math.floor(Math.log10(Math.max(1, state.totalCoins)) + 1);
   if (sk("d_god")) m *= 1 + Math.min(0.4, 0.02 * crewCount());

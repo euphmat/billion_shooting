@@ -76,6 +76,7 @@ function earlyBreakPre(idx, gx, gy, m){
   if (sk("c0_boom") && m.explosive) v *= 3;
   if (sk("c0_chain") && dmgDepth >= 2) v *= 1.2;
   if (sk("c0_expedition") && bodyAt(gx, gy) > 0) v *= 1.25;
+  if (idx === markIdx){ v *= 5; markBurst(idx, gx, gy); }   // 刻印弾 (game/skill-fx.js): 刻印ブロックはコイン ×5 で炸裂
   return v;
 }
 function earlyBreakXpMul(idx, gx, gy){

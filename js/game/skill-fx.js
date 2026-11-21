@@ -493,8 +493,61 @@ function autopilot(dt){
 }
 
 
+/* ---------- 刻印弾 (a0_steady): 8秒ごとに近くのいちばん硬いブロックへ刻印。壊れると炸裂 (コイン ×5 は skill-early.js) ---------- */
+let markIdx = -1, markT = 1, markAt = 0;
+function markUpdate(dt, now){
+  if (!sk("a0_steady")){ markIdx = -1; return; }
+  if (markIdx >= 0 && isDestroyed(markIdx)) markIdx = -1;   // 刻印のまま炸裂せずに消えた (起こらないはずの保険)
+  markT -= dt;
+  if (markT > 0) return;
+  markT = 8;
+  let best = -1, bestHP = 0;
+  for (const i of findNearestBlocks(player.x, player.y, atkRange() * 1.5, 24)){ const hp = blockMaxHP(i % D, (i / D) | 0); if (hp > bestHP){ bestHP = hp; best = i; } }
+  if (best < 0){ markT = 1; return; }
+  markIdx = best; markAt = now;
+  const p = blockPos(best);
+  addBeam({ x1: player.x, y1: player.y, x2: p.x, y2: p.y, w: 1.5, color: "rgba(255,70,70,.85)", life: 180 });
+  addRing({ x: p.x, y: p.y, r: BS * 1.6, color: "255,70,70", dur: 320 });
+}
+function markBurst(idx, gx, gy){
+  markIdx = -1;
+  const x = g2w(gx), y = g2w(gy), d = blockMaxHP(gx, gy) * 0.5;
+  bumpProc("mark", x, y);
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++){
+    if ((dx || dy) && dx * dx + dy * dy <= 5) aftershock(liveAt(gx + dx, gy + dy), d, SHOCK_NONE);
+  }
+  addRing({ x, y, r: BS * 3, color: "255,70,70", dur: 420 });
+  addRing({ x, y, r: BS * 1.5, color: "255,220,200", dur: 260 });
+  sndBoom();
+}
+/* ---------- 舷側斉射 (d_cruise): 10秒ごとに左右の舷側から6発ずつ、真横へ貫通する砲弾 ---------- */
+let broadT = 4;
+function broadsideUpdate(dt, now){
+  if (!sk("d_cruise")) return;
+  broadT -= dt;
+  if (broadT > 0) return;
+  if (findNearestBlock(player.x, player.y, atkRange() * 1.4) < 0 && !nearestMob(player.x, player.y, atkRange() * 1.4)){ broadT = 0.5; return; }   // 撃つ相手がいない
+  broadT = 10;
+  bumpProc("broadside", player.x, player.y);
+  const dmg = playerDamage() * 2, spd = 900 * BULLET_SPD_MUL, life = atkRange() * 1.4 / spd;
+  const ca = Math.cos(player.angle), sa = Math.sin(player.angle);
+  for (const side of [-1, 1]){
+    const a = player.angle + side * Math.PI / 2;
+    for (let k = 0; k < 6; k++){
+      const off = (k - 2.5) * 7;   // 艦首から艦尾へ並んだ砲門
+      const sx = player.x + ca * off + Math.cos(a) * 10, sy = player.y + sa * off + Math.sin(a) * 10;
+      const aa = a + (k - 2.5) * 0.05;
+      if (bullets.length < 900) bullets.push({ x: sx, y: sy, vx: Math.cos(aa) * spd, vy: Math.sin(aa) * spd, dmg, splash: 0, life, pierce: 5, lastHit: -1, color: "#57e39a", shape: "disc", sz: 4 });
+    }
+    addRing({ x: player.x + Math.cos(a) * 14, y: player.y + Math.sin(a) * 14, r: 26, color: "87,227,154", dur: 220 });
+  }
+  sndBoom();
+}
+
 // ---------- 毎フレーム ----------
 function skillsUpdate(dt, fdt, bdt, now){
+  markUpdate(dt, now);
+  broadsideUpdate(dt, now);
   if (comboT > 0){ comboT -= dt; if (comboT <= 0) combo = 0; }
   heatT -= dt;
   heat = Math.max(0, Math.min(1, heat + (heatT > 0 ? dt / 10 : -dt / 3)));
@@ -639,6 +692,17 @@ function skillsDraw(now, toScreen){
       const [sx, sy] = toScreen(g2w(b.idx % D), g2w((b.idx / D) | 0));
       ctx.fillStyle = (now / 120 | 0) % 2 ? "#ff5a46" : "#fff";
       ctx.beginPath(); ctx.arc(sx, sy, Math.max(2, px * 0.2), 0, 7); ctx.fill();
+    }
+    ctx.lineWidth = 1;
+  }
+  // 刻印弾: 刻印されたブロックに赤い照準 (ゆっくり回る)
+  if (markIdx >= 0){
+    const [sx, sy] = toScreen(g2w(markIdx % D), g2w((markIdx / D) | 0)), r = Math.max(7, px * 0.9), a0 = (now - markAt) / 600;
+    ctx.strokeStyle = "rgba(255,70,70,.95)"; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, 7); ctx.stroke();
+    for (let k = 0; k < 4; k++){
+      const a = a0 + k * Math.PI / 2, c = Math.cos(a), s = Math.sin(a);
+      ctx.beginPath(); ctx.moveTo(sx + c * r * 0.55, sy + s * r * 0.55); ctx.lineTo(sx + c * r * 1.45, sy + s * r * 1.45); ctx.stroke();
     }
     ctx.lineWidth = 1;
   }
