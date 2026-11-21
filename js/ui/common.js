@@ -277,13 +277,14 @@ function matSubPlan(coins, mats, subMats){
 }
 // buyDef の結果からプランを引く (素材代用が効く購入 = 武器強化だけ。代用プールは d.subMats = 製作素材)
 const matSubPlanFor = d => d && d.matSub ? matSubPlan(d.coins, d.mats, d.subMats) : null;
-// 内訳表示: 「製作素材払い: ○○ ×n 他m種 = Xコイン分 + コイン Y」(代用が無い時は空文字)
+// 内訳表示: 「支払い: 石 132・木材 126 (258コイン分) + コイン 2,342」(代用が無い時は空文字)
+// 使う素材は消費の多い順に3種まで名前を出す (強化ボタンの主表示と同じ素材が先頭に来る)
 function matSubText(plan){
   if (!plan || plan.subTotal <= 0) return "";
-  const first = plan.subs[0];
-  let s = `製作素材払い: ${MAT[first.k].name} ×${fmt(first.n)}`;
-  if (plan.subs.length > 1) s += ` 他${plan.subs.length - 1}種`;
-  s += ` = ${fmt(plan.subTotal)}コイン分`;
+  const subs = plan.subs.slice().sort((a, b) => b.n - a.n);
+  let s = "支払い: " + subs.slice(0, 3).map(x => `${MAT[x.k].name} ${fmt(x.n)}`).join("・");
+  if (subs.length > 3) s += ` 他${subs.length - 3}種`;
+  s += ` (${fmt(plan.subTotal)}コイン分)`;
   if (plan.coinsPay > 0) s += ` + コイン ${fmt(plan.coinsPay)}`;
   return s;
 }
@@ -351,7 +352,7 @@ function buyReason(dataBuy){
     // 武器強化: 要求素材が不足なら素材不足、そうでなければ実質所持 (コイン+製作素材換算) での不足分を出す
     if (d.mats) for (const k in d.mats){ const lack = d.mats[k] - invOf(k); if (lack > 0) return `${MAT[k].name} が不足 (あと ${fmt(lack)})`; }
     const p = matSubPlan(d.coins, d.mats, d.subMats);
-    return `コイン・素材が不足 (あと ${fmt(p.short)})`;
+    return `あと ${fmt(p.short)} コイン分たりない (コインか製作素材を集める)`;
   }
   if (state.coins < d.coins) return `コイン不足 (あと ${fmt(d.coins - state.coins)})`;
   if (d.mats) for (const k in d.mats){ const lack = d.mats[k] - invOf(k); if (lack > 0) return `${MAT[k].name} が不足 (あと ${fmt(lack)})`; }

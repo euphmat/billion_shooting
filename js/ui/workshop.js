@@ -54,13 +54,6 @@ function evoUniqueHTML(k, s, cls){
   const shown = Math.max(1, s), col = EVO_COLORS[Math.max(1, s)];
   return `<div class="evo-uniq${s ? "" : " locked"}${cls ? " " + cls : ""}" style="--ec:${col};--wc:${WEAPONS[k].accent}"><div class="eu-head"><span class="eu-badge">固有覚醒</span><b>${evoUName(k, s)}</b>${s ? `<span class="eu-st">★${s}</span>` : `<span class="eu-st">★1で目覚める</span>`}</div><div class="eu-txt">${evoUText(k, shown)}</div></div>`;
 }
-// 装備中カードの1行: 次の覚醒までのレベルと、その時に伸びるもの
-function evoNextHTML(k){
-  const s = evoStar(k), nx = evoNextLv(k), lv = weaponLvOf(k);
-  if (!nx) return `<div class="evo-next max" style="--ec:${EVO_COLORS[EVO_MAX]}">★${EVO_MAX}「${EVO_TITLE[EVO_MAX]}」完全覚醒 ・ 威力 ×${fmtX(evoPowerMul(k))}</div>${evoUniqueHTML(k, s, "mini")}`;
-  const prev = s ? EVO_LV[s - 1] : 0, pct = Math.round((lv - prev) / (nx - prev) * 100);
-  return `<div class="evo-next" style="--ec:${EVO_COLORS[s + 1]}"><span class="evo-bar"><i style="width:${pct}%"></i></span>Lv.${nx} で <b>★${s + 1}「${EVO_TITLE[s + 1]}」</b> ・ 固有「${EVO_UNIQUE[k] ? EVO_UNIQUE[k].name : ""}」${s ? "強化" : "が目覚める"} (${evoUShort(k, s + 1)}) ・ ${EVO_FX_TEXT[s + 1]}</div>${s ? evoUniqueHTML(k, s, "mini") : ""}`;
-}
 // 詳細: 覚醒の道のり (★1〜★10 の各段階で何が起きるか)
 function evoRoadHTML(k){
   const s = state.weaponsOwned[k] ? evoStar(k) : 0, fams = EVO_FAM_OF[k];
@@ -71,19 +64,52 @@ function evoRoadHTML(k){
   return `<div class="evo-road">${evoUniqueHTML(k, s)}<div class="wd-label">覚醒の道のり ${s ? evoStarsHTML(k) : ""} (★1〜★${EVO_MAX}) ・ 特性 <b>${fams.map(f => f.name).join(" + ")}</b></div><ol>${rows}</ol></div>`;
 }
 
-/* ---------- 装備中の武器カード (武器タブ・おすすめタブの先頭) ---------- */
+/* ---------- 装備中の武器カード (武器タブ・おすすめタブの先頭) ----------
+   v102: 横に詰め込むと狭い画面で名前が「石…」に潰れたので、上から
+   「武器の名前と強さ → 次の覚醒 → 強化 (必要素材・支払い・ボタン) → 持ち替え」の順に縦へ積む。
+   どの段も幅いっぱいを使い、ボタンは一番下に1つだけ */
+// 固有覚醒の数値の変化 「威力188%→210%」(同じ値の項目はそのまま)
+function evoUDiffHTML(k, s){
+  const a = evoUShort(k, s).split("・"), b = evoUShort(k, s + 1).split("・");
+  return b.map((nb, i) => {
+    const na = a[i];
+    if (!na || na === nb) return `<span>${nb}</span>`;
+    let p = 0; while (p < na.length && p < nb.length && na[p] === nb[p] && !/[\d.]/.test(na[p])) p++;
+    return `<span class="chg">${na}<i>→</i><b>${nb.slice(p)}</b></span>`;
+  }).join("");
+}
+function eqEvoHTML(k){
+  const s = evoStar(k), nx = evoNextLv(k), lv = weaponLvOf(k), u = EVO_UNIQUE[k];
+  if (!nx) return `<div class="eq-evo max" style="--ec:${EVO_COLORS[EVO_MAX]}"><div class="ev-row"><b>★${EVO_MAX}「${EVO_TITLE[EVO_MAX]}」完全覚醒</b><span class="ev-lv">威力 ×${fmtX(evoPowerMul(k))}</span></div>${evoUniqueHTML(k, s)}</div>`;
+  const prev = s ? EVO_LV[s - 1] : 0, pct = Math.round((lv - prev) / (nx - prev) * 100);
+  const uniq = !u ? "" : s
+    ? evoUniqueHTML(k, s).replace(/<\/div>$/, `<div class="eu-next"><span class="eu-nl">★${s + 1}で</span>${evoUDiffHTML(k, s)}</div></div>`)
+    : evoUniqueHTML(k, 0);
+  return `<div class="eq-evo" style="--ec:${EVO_COLORS[s + 1]}">
+    <div class="ev-row"><span class="ev-k">次の覚醒</span><b>★${s + 1}「${EVO_TITLE[s + 1]}」</b><span class="ev-lv">Lv.${lv} <i>/</i> ${nx}</span></div>
+    <span class="ev-bar"><i style="width:${pct}%"></i></span>
+    ${uniq}
+    <div class="ev-fx">★${s + 1} の演出: ${EVO_FX_TEXT[s + 1]}</div>
+  </div>`;
+}
 function equippedCardHTML(){
-  const k = state.weapon, w = WEAPONS[k], lv = weaponLvOf(k), d = buyDef("wupgrade:" + k);
+  const k = state.weapon, w = WEAPONS[k], lv = weaponLvOf(k), buy = "wupgrade:" + k, d = buyDef(buy);
   const tierUp = Math.floor((lv + 1) / 10) > Math.floor(lv / 10);
   return `<div class="eqcard" style="--accent:${w.accent}" data-tip="weapon:${k}">
-    <div class="ar-top">${iconBadge(w.icon, w.accent)}
-      <div class="ar-main"><div class="eqc-label">装備中の武器</div>
-        <div class="ar-title"><span class="ar-name">${w.name}</span><span class="lv-pill">Lv.${lv}</span>${evoStar(k) ? evoStarsHTML(k, "sm") : ""}</div>
-        <div class="ar-eff">DPS <b>${fmtD(weaponDPS(w) * weaponPowerMul(k))}</b> ・ ${w.tag}${tierUp ? ` ・ <span class="up">次で威力 +50%</span>` : ""}</div>
-        ${evoNextHTML(k)}</div>
-      ${d ? `<button class="act-btn" data-buy="wupgrade:${k}" ${canBuy(d) ? "" : "disabled"}><span class="ab-label">強化</span>${upCostSpan("wupgrade:" + k, d)}</button>` : ""}
+    <div class="eq-head">${iconBadge(w.icon, w.accent)}
+      <div class="eq-id"><div class="eqc-label">装備中の武器</div>
+        <div class="eq-name">${w.name}</div>
+        <div class="eq-meta"><span class="lv-pill">Lv.${lv}</span>${evoStar(k) ? evoStarsHTML(k, "sm") : ""}<span class="eq-dps">DPS <b>${fmtD(weaponDPS(w) * weaponPowerMul(k))}</b></span><span class="eq-tag">${w.tag}</span></div>
+      </div>
     </div>
-    ${d ? `<div class="ar-foot">${recipeChips(d.mats, true)}</div>${matSubHTML("wupgrade:" + k)}${buyReasonHTML("wupgrade:" + k)}` : ""}
+    ${eqEvoHTML(k)}
+    ${d ? `<div class="eq-up">
+      <div class="eu-row"><b>強化</b><span>Lv.${lv} → ${lv + 1}</span>${tierUp ? `<span class="up">威力 +50%</span>` : ""}${EVO_LV.includes(lv + 1) ? `<span class="up">★${evoStarAt(lv + 1)} 覚醒!</span>` : ""}</div>
+      ${recipeChips(d.mats, true)}
+      ${matSubHTML(buy)}
+      <button class="act-btn eq-btn" data-buy="${buy}" ${canBuy(d) ? "" : "disabled"}><span class="ab-label">強化する</span>${upCostSpan(buy, d)}</button>
+      ${buyReasonHTML(buy)}
+    </div>` : ""}
     ${quickSwapHTML()}
   </div>`;
 }
