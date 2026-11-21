@@ -52,13 +52,13 @@ function infuseElements(idx, gx, gy, dmg){
   if (sk("b_elem") && Math.random() < 0.10) kind = ["burn", "frost", "acid"][(Math.random() * 3) | 0];   // 元素付与: ランダムに1つ (雷は放電判定側)
   const roll = k => kind === k || (ec[k] > 0 && Math.random() < ec[k]);
   if (roll("burn") && (burns.size < 800 || burns.has(idx))){ const bd = dmg * 0.15 * burnSetMul(); burns.set(idx, { d: bd, t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn", g: 0 }); bumpProc("burn"); chainReact(idx, gx, gy, "burn", bd); elemNova(idx, gx, gy, "burn", bd); }
-  if (roll("acid") && (burns.size < 800 || burns.has(idx))){ const ad = dmg * 0.3 * elemMul() * (sk("b_acid") ? 1.5 : 1) * (1 + artVal("acid")); burns.set(idx, { d: ad, t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" }); bumpProc("acid"); chainReact(idx, gx, gy, "acid", ad); elemNova(idx, gx, gy, "acid", ad); }
-  if (ec.rad > 0 && Math.random() < ec.rad && (burns.size < 800 || burns.has(idx))){ const rd = dmg * 0.3 * elemMul(); burns.set(idx, { d: rd, t: 4, rad: true, k: "rad" }); bumpProc("rad"); chainReact(idx, gx, gy, "rad", rd); elemNova(idx, gx, gy, "rad", rd); }
+  if (roll("acid") && (burns.size < 800 || burns.has(idx))){ const ad = dmg * 0.3 * elemMul() * skMul("b_acid", 1.5) * (1 + artVal("acid")); burns.set(idx, { d: ad, t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" }); bumpProc("acid"); chainReact(idx, gx, gy, "acid", ad); elemNova(idx, gx, gy, "acid", ad); }
+  if (ec.rad > 0 && Math.random() < ec.rad && (burns.size < 800 || burns.has(idx))){ const rd = dmg * 0.3 * elemMul() * skLvMul("b_radio"); burns.set(idx, { d: rd, t: 4, rad: true, k: "rad" }); bumpProc("rad"); chainReact(idx, gx, gy, "rad", rd); elemNova(idx, gx, gy, "rad", rd); }
   if (roll("frost")){
     if (sk("b_thermo") && burns.has(idx)){   // 熱衝撃: 燃焼中の氷結で大爆発 (両方消える)
       burns.delete(idx);
       addRing({ x: g2w(gx), y: g2w(gy), r: BS * 2, t: performance.now(), color: "255,150,60", dur: 300 });
-      damageBlock(idx, blockMaxHP(gx, gy) * 0.15, 0);
+      damageBlock(idx, blockMaxHP(gx, gy) * 0.15 * skA("b_thermo"), 0);
       bumpProc("thermo", g2w(gx), g2w(gy));
     } else if (frosts.size < 1500 || frosts.has(idx)){
       const freshFrost = !frosts.has(idx);
@@ -83,7 +83,7 @@ function chainReact(idx, gx, gy, kind, baseD){
     for (const [dx, dy] of N8){
       const j = liveAt(gx + dx, gy + dy);
       if (j < 0) continue;
-      damageBlock(j, baseD * 3, 0);
+      damageBlock(j, baseD * 3 * skA("b_chainreaction"), 0);
       if (kind === "frost"){ if (frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 2); frostGen.set(j, 2); } }
       else if (burns.size < 800 || burns.has(j)){
         if (kind === "burn") burns.set(j, { d: baseD, t: 2, k: "burn", g: 3 });
@@ -112,7 +112,7 @@ function elemNova(idx, gx, gy, kind, baseD){
       if (dx * dx + dy * dy > 36) continue;
       const j = liveAt(gx + dx, gy + dy);
       if (j < 0 || j === idx) continue;
-      damageBlock(j, baseD * 10, 0);
+      damageBlock(j, baseD * 10 * skA("b_ultimate"), 0);
       if (kind === "frost"){ if (frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 2); frostGen.set(j, 2); } }   // 伝播した氷結は世代2 (それ以上広がらない)
       else if (burns.size < 800 || burns.has(j)){
         if (kind === "burn") burns.set(j, { d: baseD, t: 2, k: "burn", g: 3 });   // 燃え移りは世代上限 (g=3) で打ち切り
@@ -236,16 +236,17 @@ function processBreakQueue(){
 function globalDmgMul(){
   let m = levelDmgMul() * (1 + artVal("dmg")) * artMul("dmgMul");   // 惑星の心臓: 全ダメージ ×1.5 (乗算キー)
   m *= masteryMul("a");   // 破壊マスタリー
-  if (sk("a_train")) m *= 1.06;
-  if (sk("a_apex")) m *= 1.5;   // 殲滅プロトコル (奥義)
-  if (sk("a_planetkiller")) m *= 1.5;   // 惑星殺し・極 (奥義)
-  if (sk("a_ultimate")) m *= 3;   // 惑星消滅プロトコル (究極)
-  if (sk("a_combo")) m *= 1 + Math.min(30, combo) * 0.005;
-  if (sk("a_warm"))  m *= 1 + 0.2 * heat;
-  if (sk("c_goldbullet")) m *= 1 + (sk("c_goldbullet2") ? 0.05 : 0.03) * Math.floor(Math.log10(Math.max(1, state.coins)) + 1);
-  if (sk("c_god")) m *= 1 + 0.06 * Math.floor(Math.log10(Math.max(1, state.totalCoins)) + 1);
-  if (sk("d_god")) m *= 1 + Math.min(0.4, 0.02 * crewCount());
-  else if (sk("d_synergy")) m *= 1 + Math.min(0.2, 0.01 * crewCount());
+  // スキルLvの増幅 (skMul / skA) は data/skills.js の「スキルの強化」を参照
+  m *= skMul("a_train", 1.06);
+  m *= skMul("a_apex", 1.5);   // 殲滅プロトコル (奥義)
+  m *= skMul("a_planetkiller", 1.5);   // 惑星殺し・極 (奥義)
+  m *= skMul("a_ultimate", 3);   // 惑星消滅プロトコル (究極)
+  if (sk("a_combo")) m *= 1 + Math.min(30, combo) * 0.005 * skA("a_combo");
+  if (sk("a_warm"))  m *= 1 + 0.2 * heat * skA("a_warm");
+  if (sk("c_goldbullet")) m *= 1 + (0.03 * skA("c_goldbullet") + 0.02 * skA("c_goldbullet2")) * Math.floor(Math.log10(Math.max(1, state.coins)) + 1);   // 富の弾丸は +3% → +5% の差分 (+2%) を足す
+  if (sk("c_god")) m *= 1 + 0.06 * skA("c_god") * Math.floor(Math.log10(Math.max(1, state.totalCoins)) + 1);
+  if (sk("d_god")) m *= 1 + Math.min(0.4, 0.02 * crewCount()) * skA("d_god");
+  else if (sk("d_synergy")) m *= 1 + Math.min(0.2, 0.01 * crewCount()) * skA("d_synergy");
   m *= earlyGlobalMul();   // 序盤スキル (game/skill-early.js)
   return m;
 }
@@ -254,30 +255,33 @@ function globalDmgMul(){
 function skillHitMods(idx, gx, gy, dmg, hp){
   let m = gMul;
   const max = blockMaxHP(gx, gy);
-  if (hp >= max && sk("a_first")) m *= 1.2;
+  if (hp >= max && sk("a_first")) m *= skMul("a_first", 1.2);
   { const voidEye = artHas("lg_void");   // 虚無の単眼: 会心率 +25%、会心ダメは最低でも ×3、専用演出フラグを立てる
-    const ac = (sk("a_crit") ? 0.06 : 0) + (sk("a_apex") ? 0.10 : 0) + MASTERY.a.crit[masteryRank("a")] + artVal("crit") / 100 + (voidEye ? 0.25 : 0) + earlyCritAdd(hp, max);   // 破壊マスタリー: 会心率 / 序盤スキル
-    if (ac > 0 && Math.random() < ac){ let cm = (sk("a_critx") ? 3 : 2) + artVal("critd") / 100; if (voidEye){ cm = Math.max(cm, 3); dmgVoidFlag = true; } m *= cm; earlyOnCrit(); } }   // 会心 (スキル+アーティファクト合算)
-  if (sk("a_deep")) m *= 1 + (sk("a_deep2") ? 2.0 : 1.0) * blockDepth(gx, gy);
+    const ac = skAdd("a_crit", 0.06) + skAdd("a_apex", 0.10) + MASTERY.a.crit[masteryRank("a")] + artVal("crit") / 100 + (voidEye ? 0.25 : 0) + earlyCritAdd(hp, max);   // 破壊マスタリー: 会心率 / 序盤スキル
+    if (ac > 0 && Math.random() < ac){ let cm = 2 + skAdd("a_critx", 1) + artVal("critd") / 100; if (voidEye){ cm = Math.max(cm, 3); dmgVoidFlag = true; } m *= cm; earlyOnCrit(); } }   // 会心 (スキル+アーティファクト合算)
+  if (sk("a_deep")) m *= 1 + (skA("a_deep") + skA("a_deep2")) * blockDepth(gx, gy);   // 深層掘削・改は +100% → +200% の差分を足す
   if (artVal("deep")) m *= 1 + artVal("deep") * blockDepth(gx, gy);   // アーティファクト: 深さダメ
-  if (sk("a_abyss") && blockDepth(gx, gy) >= 0.5) m *= 1.25;
-  if (sk("a_core") && MATS[materialAt(gx, gy)].layer === 6) m *= 3;   // 内核の素材のみ (衛星レイヤー追加で index がずれたので固定)
-  if (nearClose) m *= sk("a_point") ? 1.45 : 1.3;
+  if (sk("a_abyss") && blockDepth(gx, gy) >= 0.5) m *= skMul("a_abyss", 1.25);
+  if (sk("a_core") && MATS[materialAt(gx, gy)].layer === 6) m *= skMul("a_core", 3);   // 内核の素材のみ (衛星レイヤー追加で index がずれたので固定)
+  if (nearClose) m *= 1 + skAdd("a_close", 0.3) + skAdd("a_point", 0.15);   // 至近弾は +30% → +45% の差分
   if (sk("a_weak")){
     const v = vuln.get(idx) || 0;
-    m *= 1 + 0.04 * v;
+    m *= 1 + 0.04 * v * skA("a_weak");
     if (v < 10){ if (vuln.size > 3000) vuln.clear(); vuln.set(idx, v + 1); }
   }
-  if (frosts.has(idx)) m *= (sk("b_iceage") ? 1.8 : sk("b_frost") ? 1.5 : 1.3) + artVal("frostV");   // 氷結は脆い
-  if (sk("b_chill")){ m *= 1.05; if (frosts.has(idx)) m *= 1.1; }   // 冷気
-  if (sk("b_magma") && burns.has(idx)) m *= 1.25;   // マグマ化: 燃焼中は脆い
-  if (sk("b_melt") && burns.get(idx) && burns.get(idx).k === "acid") m *= 1.2;   // 溶解: 腐食中は脆い
-  if (embers.has(idx)) m *= 1.2;   // 残り火
-  if (overloads.has(idx)) m *= 1.25;   // 過負荷
+  if (frosts.has(idx)) m *= 1.3 + skAdd("b_frost", 0.2) + skAdd("b_iceage", 0.3) + artVal("frostV");   // 氷結付与 +30→50% / 氷河期 →80% (差分を足す)   // 氷結は脆い
+  if (sk("b_chill")){ m *= skMul("b_chill", 1.05); if (frosts.has(idx)) m *= skMul("b_chill", 1.1); }   // 冷気
+  if (sk("b_magma") && burns.has(idx)) m *= skMul("b_magma", 1.25);   // マグマ化: 燃焼中は脆い
+  if (sk("b_melt") && burns.get(idx) && burns.get(idx).k === "acid") m *= skMul("b_melt", 1.2);   // 溶解: 腐食中は脆い
+  if (embers.has(idx)) m *= skMul("b_ember", 1.2);   // 残り火
+  if (overloads.has(idx)) m *= skMul("b_overload", 1.25);   // 過負荷
   if (evoVuln.size){ const ev = evoVuln.get(idx); if (ev){ if (nowMs < ev.u) m *= ev.x; else evoVuln.delete(idx); } }   // 固有覚醒: 弱点露出
+  // 連射スキルのLv: 連射そのもの (弾数 = 処理量) は Lv1 のまま、強化で伸びるはずだった分を威力に換算する
+  if (curPl) m *= skRateAsDmg("a_rapid", 1.08) * skRateAsDmg("a_rapid2", 1.2) * (f0Heat > 0 && sk("f0_exhaust") ? (1 + f0Heat * 0.01 * skA("f0_exhaust")) / (1 + f0Heat * 0.01) : 1);
+  else if (curCrew) m *= skRateAsDmg("d_rate", 1.15) * skRateAsDmg("d_rate2", 1.25);
   m *= earlyHitMul(idx, gx, gy, hp, max);   // 序盤スキル (game/skill-early.js)
   dmg *= m;
-  if (sk("a_ap")) dmg += max * 0.0005;
+  if (sk("a_ap")) dmg += max * 0.0005 * skA("a_ap");
   if (curFx && curFx.ap) dmg += max * curFx.ap;   // 装備の徹甲
   return dmg;
 }
@@ -297,10 +301,10 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
     addRing({ x: dx2, y: dy2, r: BS * 2.6, t: performance.now(), color: "200,120,255", dur: 420 });
     addRing({ x: dx2, y: dy2, r: BS * 1.6, t: performance.now(), color: "255,120,255", dur: 320 });
     dimFx.push({ x: dx2, y: dy2, t: 0, kind: "dimension" });
-    rawDamage(() => damageRadius(dx2, dy2, BS * 2, dmg * 8));
+    rawDamage(() => damageRadius(dx2, dy2, BS * 2, dmg * 8 * skA("a_dimension")));
   }
   if (cur < 0 && dmg < 1e300 && !curCarry && sk("a_overkill")){   // 弾・照射は damageBlock の余剰引き継ぎで強化される
-    let carry = -cur, cx = gx, cy = gy;
+    let carry = -cur * skA("a_overkill"), cx = gx, cy = gy;   // 強化で引き継ぐ余剰が増える (移る先は最大6個のまま)
     for (let k = 0; k < 6 && carry > 0; k++){
       let j = -1;
       const o = (Math.random() * 4) | 0;
@@ -317,7 +321,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
     for (let k = 0; k < 3 && cand.length; k++){
       const j = cand.splice((Math.random() * cand.length) | 0, 1)[0];
       addBeam({ x1:x, y1:y, x2:g2w(j % D), y2:g2w((j / D) | 0), t:performance.now(), w:1.5, color:"#ffe14d", zig:true, life:130 });
-      damageBlock(j, dmg * 1.5, 0);
+      damageBlock(j, dmg * 1.5 * skA("a_bolt"), 0);
     }
   }
   // 放電: 隣へ跳ねる (伝導体/テスラで連鎖、過負荷で脆くする)。装備の特性が無くても、スキルの放電付与で走る
@@ -325,7 +329,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
   if (shockP > 0 && Math.random() < shockP){
     bumpProc("shock");
     let left = sk("b_tesla") ? 3 : sk("b_conductor") ? 2 : 1;
-    let from = idx, dealt = dmg * 0.5 * elemMul() * (sk("b_shock") ? 1.5 : 1);
+    let from = idx, dealt = dmg * 0.5 * elemMul() * skMul("b_shock", 1.5) * skLvMul("b_conductor") * skLvMul("b_tesla");   // 伝導体・テスラコイルは跳ねる数が本体。強化分は放電の威力に回す
     const hitSet = new Set([idx]);
     while (left-- > 0){
       const fx = from % D, fy = (from / D) | 0, cand = [];
@@ -333,7 +337,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
       if (!cand.length) break;
       const j = cand[(Math.random() * cand.length) | 0];
       addBeam({ x1:g2w(fx), y1:g2w(fy), x2:g2w(j % D), y2:g2w((j / D) | 0), t:performance.now(), w:1.5, color:(curFx && curFx.accent) || "#ffe14d", zig:true, life:100 });
-      const sd = dealt * (sk("b0_superc") && frosts.has(j) ? 2 : 1);   // 超伝導 (序盤スキル): 氷結中は ×2
+      const sd = dealt * (frosts.has(j) ? skMul("b0_superc", 2) : 1);   // 超伝導 (序盤スキル): 氷結中は ×2
       rawDamage(() => damageBlock(j, sd, 0));
       earlyOnShock(j, sd);   // 焦雷 (序盤スキル)
       if (sk("b_overload")) overloads.set(j, 2);
@@ -341,7 +345,7 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
     }
   }
   if (cur > 0){
-    if (sk("a_burn") && (burns.size < 500 || burns.has(idx))){ burns.set(idx, { d: dmg * 0.15 * burnSetMul(), t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn" }); bumpProc("burn"); }
+    if (sk("a_burn") && (burns.size < 500 || burns.has(idx))){ burns.set(idx, { d: dmg * 0.15 * burnSetMul() * skA("a_burn"), t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn" }); bumpProc("burn"); }
     if (curPl){
       if (sk("c_goldhand") && Math.random() < 0.03 && goldSet.size < 4000) goldSet.add(idx);
       infuseElements(idx, gx, gy, dmg);   // 元素付与 (スキル): どの武器でも状態異常が乗る
@@ -355,28 +359,28 @@ function skillAfterHit(idx, gx, gy, dmg, cur){
 function coinMulStatic(){
   let m = (1 + artVal("coin")) * artMul("coinMul");   // 黄金の特異点: コイン ×2 (乗算キー)
   m *= masteryMul("c");   // 財宝マスタリー
-  if (sk("c_merchant")) m *= 1.10;
-  if (sk("c_king")) m *= 1.3;
-  if (sk("c_bonus2")) m *= 1.2;
-  if (sk("c_combo")) m *= 1 + Math.min(20, Math.floor(combo / 10)) * 0.02;
-  if (sk("c_eldorado")) m *= 2;   // 黄金郷 (奥義)
-  if (sk("c_philosopher")) m *= 1.5;   // 無限財宝 (奥義)
-  if (sk("c_ultimate")) m *= 5;   // 無限黄金郷 (究極)
-  if (sk("c_bonus3")) m *= 1.25;
-  if (sk("c_king3")) m *= 1.2;
+  m *= skMul("c_merchant", 1.10);
+  m *= skMul("c_king", 1.3);
+  m *= skMul("c_bonus2", 1.2);
+  if (sk("c_combo")) m *= 1 + Math.min(20, Math.floor(combo / 10)) * 0.02 * skA("c_combo");
+  m *= skMul("c_eldorado", 2);   // 黄金郷 (奥義)
+  m *= skMul("c_philosopher", 1.5);   // 無限財宝 (奥義)
+  m *= skMul("c_ultimate", 5);   // 無限黄金郷 (究極)
+  m *= skMul("c_bonus3", 1.25);
+  m *= skMul("c_king3", 1.2);
   m *= earlyCoinMul();   // 序盤スキル (game/skill-early.js)
   return m;
 }
 function coinSkillMul(){
   let m = coinMulStatic();
-  if (sk("c_lucky") && Math.random() < 0.08) m *= 2;
-  if (sk("c_jackpot") && ++jackN >= (sk("c_jackpot2") ? 400 : 1000)){ jackN = 0; bumpProc("jackpot", player.x, player.y - 30); const jm = sk("c_jackpot2") ? 50 : 30; m *= jm; }
+  if (sk("c_lucky") && Math.random() < skChance("c_lucky", 0.08)) m *= 2;   // コインが倍になるだけ (処理は増えない) なので、確率そのものを強化
+  if (sk("c_jackpot") && ++jackN >= (sk("c_jackpot2") ? 400 : 1000)){ jackN = 0; bumpProc("jackpot", player.x, player.y - 30); const jm = 30 * skA("c_jackpot") + 20 * skA("c_jackpot2"); m *= jm; }   // 大当たりは 30倍 → 50倍 の差分 (+20倍)
   return m;
 }
 function skillOnBreak(idx, gx, gy, kind, rare){
   let xp = blockXP(gx, gy) * MATS[materialAt(gx, gy)].xp;
-  if (sk("c_xp")) xp *= 1.15;
-  if (rare && sk("c_know")) xp *= sk("c_know2") ? 12 : 5;
+  xp *= skMul("c_xp", 1.15);
+  if (rare && sk("c_know")) xp *= 1 + 4 * skA("c_know") + 7 * skA("c_know2");   // 5倍 / 真理の鑑定 12倍 (ボーナス分を増幅)
   if (curFx && curFx.xpMul) xp *= curFx.xpMul;
   xp *= evoXpMul();   // 固有覚醒: 経験値の加速 (夢見の加護)
   const dfx = dungeonFxAt(gx, gy); if (dfx) xp *= dfx.xp;   // ダンジョン固有効果: 経験値倍率
@@ -397,7 +401,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
     }
     if (sk("b_firestorm") && !firestorming){   // 火炎嵐: 燃焼中の撃破で爆発 (余波キュー経由)
       bumpProc("firestorm", x, y);
-      const fd = fire.d * (sk("b_supernova") ? 12 : 6), rr = sk("b_supernova") ? 2 : 1;
+      const fd = fire.d * (6 * skA("b_firestorm") + 6 * skA("b_supernova")), rr = sk("b_supernova") ? 2 : 1;   // 威力 6倍 / 超新星 12倍 (範囲はLvで広げない)
       for (let dy = -rr; dy <= rr; dy++) for (let dx = -rr; dx <= rr; dx++){
         if (dx || dy) aftershock(liveAt(gx + dx, gy + dy), fd, SHOCK_FIRE);
       }
@@ -406,16 +410,16 @@ function skillOnBreak(idx, gx, gy, kind, rare){
   }
   if (wasFrost && sk("b_icebreak") && !shattering){   // 氷砕: 氷結中の撃破で氷片が飛ぶ
     bumpProc("icebreak", x, y);
-    const d = blockMaxHP(gx, gy) * (sk("b_glacier") ? 0.12 : 0.05), dirs = sk("b_glacier") ? N8 : N4;
+    const d = blockMaxHP(gx, gy) * (0.05 * skA("b_icebreak") + 0.07 * skA("b_glacier")), dirs = sk("b_glacier") ? N8 : N4;
     for (const [dx, dy] of dirs) aftershock(liveAt(gx + dx, gy + dy), d, SHOCK_SHATTER);
   }
   if (wasFrost && sk("b_frost3") && frostG < 2) for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && frosts.size < 1500 && !frosts.has(j)){ frosts.set(j, 3 + (sk("b_frost2") ? 2 : 0)); frostGen.set(j, frostG + 1); bumpProc("frost"); } }   // 氷結伝播 (2世代まで)
-  const shat = !shattering ? (sk("a_shatter") ? (sk("a_shatter2") ? 0.12 : 0.05) : 0) + (curFx && curFx.shatter ? curFx.shatter : 0) : 0;
+  const shat = !shattering ? (sk("a_shatter") ? 0.05 * skA("a_shatter") + 0.07 * skA("a_shatter2") : 0) + (curFx && curFx.shatter ? curFx.shatter : 0) : 0;
   if (shat > 0){   // 破砕で壊れたブロックは弾けない (連鎖で星ごと崩れないように)
     const d = blockMaxHP(gx, gy) * shat;
     for (const [dx, dy] of N4) aftershock(liveAt(gx + dx, gy + dy), d, SHOCK_SHATTER);
   }
-  if (sk("a_meteor") && ++breakN >= (sk("a_meteor2") ? 120 : 300)){ breakN = 0; bumpProc("meteor", x, y); meteors.push({ x, y, t: 0.6, r: BS * 4, dmg: playerDamage() * 10 }); }
+  if (sk("a_meteor") && ++breakN >= (sk("a_meteor2") ? 120 : 300)){ breakN = 0; bumpProc("meteor", x, y); meteors.push({ x, y, t: 0.6, r: BS * 4, dmg: playerDamage() * 10 * skA("a_meteor") * skLvMul("a_meteor2") }); }   // 隕石群は間隔が本体。強化分は隕石の威力に回す
   if (artHas("lg_nova") && !novaBusy && ++novaArtN >= 50){ novaArtN = 0; novaBusy = true; try { supernovaAt(x, y); } finally { novaBusy = false; } }   // 超新星の核: 50個破壊ごと
   if (artHas("lg_gaia") && !shattering && Math.random() < 0.30){   // 大地母神の腕: 隣接ブロックも一緒に砕く (緑の衝撃波)
     bumpArtProc("lg_gaia");
@@ -423,11 +427,11 @@ function skillOnBreak(idx, gx, gy, kind, rare){
     addRing({ x, y, r: BS * 1.8, color: "90,220,120", dur: 320 });
   }
   if (sk("e_reso") && !resonating){   // 鉱脈共鳴: 隣の同じ素材も一緒に削れる
-    const pw = 0.2, mi = materialAt(gx, gy);
+    const pw = 0.2 * skA("e_reso"), mi = materialAt(gx, gy);
     for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0 && materialAt(gx + dx, gy + dy) === mi) aftershock(j, blockMaxHP(gx + dx, gy + dy) * pw, SHOCK_RESO); }
   }
   if (sk("e_reso3") && !resonating){   // 共鳴増幅: 2マス先の同じ素材にも届く
-    const pw2 = 0.3, rr = 2, mi2 = materialAt(gx, gy);
+    const pw2 = 0.3 * skA("e_reso3"), rr = 2, mi2 = materialAt(gx, gy);
     for (let dy = -rr; dy <= rr; dy++) for (let dx = -rr; dx <= rr; dx++){
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 2) continue;
       const j = liveAt(gx + dx, gy + dy);
@@ -440,7 +444,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
     for (let yy = Math.max(0, gy - rb); yy <= Math.min(D - 1, gy + rb); yy++)
       for (let xx = Math.max(0, gx - rb); xx <= Math.min(D - 1, gx + rb); xx++){
         const j = liveAt(xx, yy);
-        if (j >= 0 && Math.hypot(g2w(xx) - x, g2w(yy) - y) <= r) aftershock(j, blockMaxHP(xx, yy) * 0.03, SHOCK_NONE);
+        if (j >= 0 && Math.hypot(g2w(xx) - x, g2w(yy) - y) <= r) aftershock(j, blockMaxHP(xx, yy) * 0.03 * skA("e_quake2"), SHOCK_NONE);
       }
     addRing({ x, y, r, t: performance.now(), color: "242,166,90", dur: 600 });
     sndBoom();
@@ -449,10 +453,10 @@ function skillOnBreak(idx, gx, gy, kind, rare){
   if (treasureSet.has(idx)){
     bumpProc("treasureBreak", x, y);
     treasureSet.delete(idx);
-    const tm = MATS[materialAt(gx, gy)], tb = sk("e_treasure3") ? 12 : sk("e_treasure2") ? 8 : 4;
+    const tm = MATS[materialAt(gx, gy)], tb = Math.max(4, Math.round(4 * skA("e_treasure") + 4 * skA("e_treasure2") + 4 * skA("e_treasure3")));   // +4 / +8 / +12個 (各段の差分を増幅)
     invAdd(tm.key, tb); noteDrop(x, y, tm, tb);
-    gainXP(blockXP(gx, gy) * (sk("e_treasure3") ? 4 : 2));   // 通常分と合わせて 3倍 / 5倍
-    const cv = Math.max(5, Math.round(blockCoinValue(gx, gy) * 2)), cn2 = sk("e_treasure3") ? 8 : 5;
+    gainXP(blockXP(gx, gy) * (2 * skLvMul("e_treasure") + 2 * skA("e_treasure3")));   // 通常分と合わせて 3倍 / 5倍
+    const cv = Math.max(5, Math.round(blockCoinValue(gx, gy) * 2 * skLvMul("e_treasure") * skLvMul("e_treasure2"))), cn2 = sk("e_treasure3") ? 8 : 5;   // 枚数はそのまま、1枚の額が強化で増える
     for (let i = 0; i < cn2; i++){ const a = Math.random() * Math.PI * 2, sp = 120 + Math.random() * 260; spawnCoin({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, value: cv, chest: false, age: 0 }); }
     addRing({ x, y, r: BS * 2.2, t: performance.now(), color: "255,214,64", dur: 500 });
   }
@@ -482,7 +486,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
   // --- 自動採掘網 (奥義): 破壊時 20% で周囲 3x3 を追加で削る (発破採掘とは別系統で重複発動可) ---
   if (sk("e_automine") && !automining && !blasting && Math.random() < 0.20){
     bumpProc("automine", x, y);
-    for (const [dx, dy] of N8){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) aftershock(j, blockMaxHP(gx + dx, gy + dy) * 0.5, SHOCK_AUTOMINE); }
+    for (const [dx, dy] of N8){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) aftershock(j, blockMaxHP(gx + dx, gy + dy) * 0.5 * skA("e_automine"), SHOCK_AUTOMINE); }
     addRing({ x, y, r: BS * 1.9, color: "80,220,255", dur: 300 });
   }
   // --- 星喰い (奥義): 100個破壊ごとに十字4方向を一直線に貫通破壊 (各方向 最大20セル、報酬あり) ---
@@ -540,7 +544,7 @@ function gainCoin(c, byBot){
   const n = c.n || 1;   // 合体コインの構成枚数。取得は1回でも、発動抽選は構成枚数ぶん回して期待値を落とさない
   if (byBot){
     v *= botCoinMul();
-    if (sk("c_haul")) v *= 1.10;
+    v *= skMul("c_haul", 1.10);
     if (c.age > 2 && cbInterest() > 0) v *= 1 + cbInterest();
     if (cbScanChance() > 0){ const sc = cbScanChance(); for (let k = 0; k < n; k++) if (Math.random() < sc) scanMaterialAt(c.x, c.y); }   // 鉱物スキャナ
   }
@@ -551,19 +555,19 @@ function gainCoin(c, byBot){
   if (!c.dup && sk("c_tycoon")){   // 大富豪の蓄財 (奥義): コイン獲得時 3% で ×20 バースト + 金の雨 + フィード
     const per = Math.max(1, Math.round(v / n));   // 1枚あたりの額 (n=1 では従来と完全一致)
     for (let k = 0; k < n; k++) if (Math.random() < 0.03){
-      const burst = per * 20;
+      const burst = Math.round(per * 20 * skA("c_tycoon"));
       addCoins(burst); bumpProc("tycoon");
       goldRainFx.push({ x: c.x, y: c.y });
       addRing({ x: c.x, y: c.y, r: BS * 2.4, t: performance.now(), color: "255,214,10", dur: 420 });
       skillFeed("tycoon", `大当たり! +${fmt(burst)}コイン`, "💰", "#ffd60a");
     }
   }
-  if (sk("c_piggy")) piggy += v * (sk("c_piggy2") ? 0.2 : 0.1);
+  if (sk("c_piggy")) piggy += v * (0.1 * skA("c_piggy") + 0.1 * skA("c_piggy2"));
   if (!c.dup && sk("c_spill")){
     const per = Math.max(1, Math.round(c.value / n));
     for (let k = 0; k < n; k++) if (Math.random() < 0.05){
       const a = Math.random() * Math.PI * 2;
-      spawnCoin({ x: c.x, y: c.y, vx: Math.cos(a) * 420, vy: Math.sin(a) * 420, value: per, dup: true, age: 0 });
+      spawnCoin({ x: c.x, y: c.y, vx: Math.cos(a) * 420, vy: Math.sin(a) * 420, value: Math.round(per * skA("c_spill")), dup: true, age: 0 });   // 枚数 (確率) はそのまま、こぼれる額が強化で増える
     }
   }
 }

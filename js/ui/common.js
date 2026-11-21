@@ -364,10 +364,10 @@ function buyDef(dataBuy){
   const d = buyDefRaw(dataBuy);
   if (!d) return d;
   if (d.mats){
-    const f = (sk("e_master") ? 0.9 : 1) * (sk("e_master2") ? 0.9 : 1) * (sk("e_god") ? 0.8 : 1);
+    const f = skMul("e_master", 0.9) * skMul("e_master2", 0.9) * skMul("e_god", 0.8);
     if (f < 1){ const out = {}; for (const k in d.mats) out[k] = Math.max(1, Math.floor(d.mats[k] * f)); d.mats = out; }
   }
-  if (d.coins && sk("e_design")) d.coins = Math.floor(d.coins * 0.9);
+  if (d.coins && sk("e_design")) d.coins = Math.floor(d.coins * skMul("e_design", 0.9));
   return d;
 }
 

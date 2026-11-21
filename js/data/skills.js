@@ -7,6 +7,8 @@
    - スキルは6系統 x 58種 (序盤24種 + 通常30種 + 奥義3種 + 究極1種)。6系統目「機兵」は独立稼働する自律機兵 (game/machines.js) で、必要SPが高い
    - 各系統は同じ形の木 (EARLY_TOPO → TOPO) で、親を習得すると子が解放される。序盤24種の効果は game/skill-early.js
    - 効果は全て sk("id") で「習得しているか」を見るだけ。振り直しても状態が壊れない
+   - 習得したスキルは Lv10 まで強化できる (state.skills[id] = スキルLv)。強化で伸びるのは効果の量だけで、
+     発動の頻度・範囲・数は変えない (処理が重くならない)。仕組みは下の「スキルの強化」と「系統への還元」
    - 1000時間級の放置を見据え、個々の倍率は控えめに。積み重ねで効いてくる
    - スキルは全てパッシブ (常時発動)。毎フレーム処理は game/skill-fx.js、画面は ui/skilltree.js
    ========================================================= */
@@ -475,8 +477,15 @@ const SKILLS = [], SKILL = {};
     br.total = early.length + list.length;
   });
 })();
-for (const k of Object.keys(state.skills)) if (!SKILL[k]) delete state.skills[k];   // 古いセーブの知らないIDは捨てる
-for (const k of Object.keys(state.skillOff)) if (state.skills[k] !== 1) delete state.skillOff[k];   // 習得していないスキルの OFF 印は捨てる
+// スキルLvの上限と、Lvごとの効果の増幅率 (説明は下の「スキルの強化」)
+const SK_MAX_LV = 10, SK_AMP_STEP = 0.25;
+const SK_AMP = [0];
+for (let l = 1; l <= SK_MAX_LV; l++) SK_AMP.push(1 + SK_AMP_STEP * (l - 1));
+for (const k of Object.keys(state.skills)){   // 古いセーブの知らないIDは捨て、スキルLvは 1〜10 の整数にそろえる (旧セーブの 1 = Lv1)
+  if (!SKILL[k]) { delete state.skills[k]; continue; }
+  state.skills[k] = Math.max(1, Math.min(SK_MAX_LV, Math.floor(+state.skills[k]) || 1));
+}
+for (const k of Object.keys(state.skillOff)) if (!(state.skills[k] > 0)) delete state.skillOff[k];   // 習得していないスキルの OFF 印は捨てる
 
 // ---------- 習得 / レベル ----------
 /* スキルの ON / OFF: 習得済みのスキルは個別・系統ごと・一括で無効にできる (state.skillOff = {id: 1})。
@@ -485,18 +494,45 @@ for (const k of Object.keys(state.skillOff)) if (state.skills[k] !== 1) delete s
    - 系統マスタリーも有効なスキルだけを数える (OFF にした系統は主役ステータスの伸びも止まる)
    - sk は毎フレーム何千回も呼ばれるので、OFF が1つも無い間は state.skillOff を引かない */
 let skOffN = 0;
-const skillOffSync = () => { skOffN = 0; for (const k in state.skillOff) if (state.skills[k] === 1) skOffN++; };
+const skillOffSync = () => { skOffN = 0; for (const k in state.skillOff) if (state.skills[k] > 0) skOffN++; };
 skillOffSync();
-const sk = id => state.skills[id] === 1 && (skOffN === 0 || state.skillOff[id] !== 1);
-const skLearned = id => state.skills[id] === 1;
-const skDisabled = id => state.skills[id] === 1 && state.skillOff[id] === 1;
+const sk = id => state.skills[id] > 0 && (skOffN === 0 || state.skillOff[id] !== 1);
+const skLearned = id => state.skills[id] > 0;
+const skDisabled = id => state.skills[id] > 0 && state.skillOff[id] === 1;
+const skLv = id => state.skills[id] | 0;   // 習得しているスキルLv (OFF でもそのまま。未習得は 0)
+
+/* ---------- スキルの強化 (Lv1〜10) ----------
+   state.skills[id] = スキルLv。習得で Lv1、そこから余ったスキルポイントで Lv10 まで強化できる。
+   - 強化1回ごとに、習得と同じだけのスキルポイント (n.cost) を払う
+   - 強化で増えるのは「効果の量」だけ: ダメージ・倍率・獲得量・会心率・付与率・回復量など。
+     発動の頻度 (間隔・発動率)・範囲・機数・連鎖数のように「毎フレームの処理量」を決めるものは Lv1 のまま。
+     だから全スキルを Lv10 にしても、処理の重さは Lv1 と変わらない (範囲型の発動は、回数ではなく1発の威力が伸びる)
+   - 量は Lv1 を 1 として SK_AMP[lv] 倍 (Lv10 で ×3.25)。+X% の効果は +X% × 増幅率、×M の効果は ボーナス部分 (M-1) が増幅、
+     -X% (被ダメージ・コスト減) は M^増幅率 で効く (0 や負にはならない)
+   - 効果側は skA(id) (増幅率。未習得 / OFF は 0) ・ skAdd(id, v) ・ skMul(id, m) で読む。
+     どれも sk と同じく state.skills を1回引いて表を見るだけなので、毎フレーム何千回呼んでも軽い */
+const skA = id => { const l = state.skills[id]; return l > 0 && (skOffN === 0 || state.skillOff[id] !== 1) ? SK_AMP[l] : 0; };
+const skAdd = (id, v) => v * skA(id);                     // (sk(id) ? v : 0) の強化版
+const skMul = (id, m) => { const a = skA(id); return a === 0 ? 1 : m >= 1 ? 1 + (m - 1) * a : Math.pow(m, a); };   // (sk(id) ? m : 1) の強化版
+const skLvMul = id => { const a = skA(id); return a > 1 ? a : 1; };   // Lv1 では ×1、強化した分だけ伸びる (間隔・範囲などが本体のスキルで、強化分を関連する効果の威力に回す時に使う)
+// 速度・連射のスキル用: 速度は Lv1 の値のまま (弾数・処理を増やさない)、強化で伸びるはずだった分を威力に換算して返す (Lv1 は ×1)
+const skRateAsDmg = (id, r) => { const a = skA(id); return a > 1 ? (1 + (r - 1) * a) / r : 1; };
+const skChance = (id, p, cap) => Math.min(cap || 0.95, p * skA(id));   // 確率の強化 (発動しても処理が増えないもの専用: 会心・コイン倍化など)
 let skillsRev = 0;   // 習得・振り直し・ON/OFF のたびに増やす (工房の表示キャッシュなど「スキルが変わったか」の目印)
 const xpNeed  = lv => Math.floor(25 + 25 * Math.pow(lv, 2.1));   // レベルアップはゆっくり
 const spTotal = () => (state.lv - 1) + Math.floor(state.lv / 5);
-const spSpent = () => { let n = 0; for (const k in state.skills) n += SKILL[k].cost; return n; };
+// 使ったSP (強化1回 = 習得と同じSP)。HUD が毎フレーム見るので、習得・強化・振り直し (skillsRev が進む) まで結果を使い回す
+let spCache = 0, spCacheRev = -1, spCacheObj = null;
+const spSpent = () => {
+  if (spCacheRev === skillsRev && spCacheObj === state.skills) return spCache;
+  let n = 0; for (const k in state.skills) n += SKILL[k].cost * state.skills[k];
+  spCache = n; spCacheRev = skillsRev; spCacheObj = state.skills;
+  return n;
+};
 const spLeft  = () => spTotal() - spSpent();
 const skillUnlocked = n => (!n.parent || skLearned(n.parent.id)) && state.lv >= (n.reqLv || 0);
 const canLearn = n => !skLearned(n.id) && skillUnlocked(n) && spLeft() >= n.cost;
+const canUpgrade = n => skLearned(n.id) && skLv(n.id) < SK_MAX_LV && spLeft() >= n.cost;
 const levelDmgMul = () => 1 + 0.015 * (state.lv - 1);
 
 /* ---------- 系統マスタリー: 同じ系統のスキルを習得するほど、その系統そのものが強くなる ----------
@@ -513,20 +549,48 @@ const MASTERY = {
   e: { stat: "素材ドロップ",     mul: [1, 1.1, 1.25, 1.45, 1.75, 2.2, 3],  fx: "琥珀の光球" },
   f: { stat: "機兵の威力",       mul: [1, 1.15, 1.35, 1.6, 2, 2.6, 3.5], frate: [0, 0.03, 0.06, 0.1, 0.14, 0.18, 0.25], fx: "蒼紫の光球" },
 };
+/* ---------- スキルLvの「系統への還元」 ----------
+   効果に増やせる量が無いスキル (ON/OFF 型・範囲・間隔・機数・連鎖数が本体のもの、序盤の未実装分) は、
+   強化した分 (Lv2 以降) をその系統の主役ステータス (マスタリーと同じ: 全ダメージ / 状態異常 / コイン / 仲間 / 素材 / 機兵) に足す。
+   1段階あたり +1% × √(必要SP) (序盤 1SP: +1% / 深さ8 10SP: +3.2% / 奥義 100〜300SP: +10〜17% / 究極 1000SP: +32%)。
+   範囲や間隔は広げないので処理は増えない。マスタリーと一緒にキャッシュするので、毎フレームの計算も増えない */
+const SKILL_LV_SPILL = new Set(`
+  a0_far a0_crack a0_hunt a0_barrel a0_crackx a0_counter a0_beast a0_trial a0_grit a0_heat
+  a0_pierce a0_valor a0_flash a0_charge a0_frag b0_ember b0_trail b0_cycle b0_frostfilm b0_flint
+  b0_calor b0_static b0_mobfire b0_heal b0_acidrain b0_affinity b0_storm b0_shockspeed b0_coolbarrel b0_prism
+  b0_splash b0_scorchbolt b0_mobfreeze b0_frostarmor c0_magnet c0_bounty c0_wind c0_wage c0_star c0_meditate
+  c0_stay c0_dense c0_fest c0_insurance c0_botlog d0_thruster d0_slip d0_afterburn d0_repair d0_botrange
+  d0_rally d0_armed d0_flare d0_overdrive d0_reverse d0_evade d0_radar d0_supply d0_shieldbots d0_tow
+  d0_mine d0_ace d0_cover d0_escape e0_border e0_streak e0_trace e0_near e0_omen e0_through
+  e0_find e0_collect e0_hunch e0_drone e0_tunnel e0_fossil e0_layer e0_patience e0_xp e0_mobore
+  f0_collect f0_guard f0_charge f0_salvage a_double a_spread a_triple b_frost2 b_burn2 b_frost3
+  b_kindling b_wildfire b_permafrost c_goldhand d_boost d_ap d_reinforce d_reinforce2 e_blast e_chain
+  e_scan e_blast2 e_scan2 e_blast3 e_chain2 e_stareater e_ultimate f_spider f_spider2 f_replicate
+  f_replicate2 f_spider3
+`.trim().split(/\s+/));
+const SPILL_PER = 0.04;   // 増幅率 1 (= Lv 4段階分) あたり、√(必要SP) × 4% → 1段階 +1% × √SP
+const skSpills = id => SKILL_LV_SPILL.has(id);
+const skSpillRate = n => SPILL_PER * Math.sqrt(n.cost);   // 増幅率 1 あたりの上乗せ
 let mastLen = 0;   // 習得のたびに増やして、キャッシュを捨てる合図にする (skilltree.js の onSkillsChanged / probeWith)
-let mastCache = null;   // { obj: state.skills, r: {a:rank,...}, n: {a:count,...} }  (習得・振り直しで作り直す)
+let mastCache = null;   // { obj: state.skills, r: {a:rank,...}, n: {a:count,...}, m: {a:主役ステータス倍率,...} }  (習得・振り直しで作り直す)
 function masteryData(){
   if (mastCache && mastCache.obj === state.skills && mastCache.len === mastLen) return mastCache;
-  const n = { a: 0, b: 0, c: 0, d: 0, e: 0, f: 0 }, r = {};
-  for (const id in state.skills) if (SKILL[id] && sk(id)) n[SKILL[id].br.key]++;   // OFF のスキルは数えない
-  for (const k in n){ let rk = 0; for (const t of MASTERY_AT) if (n[k] >= t) rk++; r[k] = rk; }
-  mastCache = { obj: state.skills, len: mastLen, n, r };
+  const n = { a: 0, b: 0, c: 0, d: 0, e: 0, f: 0 }, sp = { a: 0, b: 0, c: 0, d: 0, e: 0, f: 0 }, r = {}, m = {};
+  for (const id in state.skills){
+    const sn = SKILL[id];
+    if (!sn || !sk(id)) continue;   // OFF のスキルは数えない
+    n[sn.br.key]++;
+    if (SKILL_LV_SPILL.has(id)) sp[sn.br.key] += skSpillRate(sn) * (skA(id) - 1);   // 強化分 (Lv1 は 0) を系統へ還元
+  }
+  for (const k in n){ let rk = 0; for (const t of MASTERY_AT) if (n[k] >= t) rk++; r[k] = rk; m[k] = MASTERY[k].mul[rk] * (1 + sp[k]); }
+  mastCache = { obj: state.skills, len: mastLen, n, r, m, sp };
   return mastCache;
 }
 const masteryInvalidate = () => { mastLen++; };
 const masteryRank = br => masteryData().r[br];
 const masteryCount = br => masteryData().n[br];
-const masteryMul = br => MASTERY[br].mul[masteryRank(br)];
+const masteryMul = br => masteryData().m[br];   // マスタリーのランク倍率 × スキルLvの還元分
+const masterySpill = br => masteryData().sp[br];
 const masteryNextAt = br => { const c = masteryCount(br); for (const t of MASTERY_AT) if (c < t) return t; return 0; };
 const mastBursts = [];   // ランクアップの瞬間、自機から系統色の輪が広がる {t, color} (render/draw.js)
 // ランクの効果を1行で (ツリー画面・通知で使う)
@@ -543,9 +607,9 @@ function masteryEffectText(br, rk){
 }
 const blockXP = (gx, gy) => Math.max(1, Math.round(Math.sqrt(blockMaxHP(gx, gy) / 5)));
 function gainXP(n){
-  const g = n * (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1) * (sk("c_ultimate") ? 3 : 1) * MASTERY.c.xp[masteryRank("c")] * earlyXpMul();   // 財宝マスタリー: 経験値   // 星屑の王笏: 経験値 ×2 (乗算キー) / 無限財宝: ×1.5 / 無限黄金郷 (究極): ×3 / 序盤スキル
+  const g = n * (1 + artVal("xp")) * artMul("xpMul") * skMul("c_philosopher", 1.5) * skMul("c_ultimate", 3) * MASTERY.c.xp[masteryRank("c")] * earlyXpMul();   // 財宝マスタリー: 経験値   // 星屑の王笏: 経験値 ×2 (乗算キー) / 無限財宝: ×1.5 / 無限黄金郷 (究極): ×3 / 序盤スキル
   state.xp += g;
-  if (sk("c0_knowledge") && g > 0) addCoins(Math.round(g));   // 知識は財: 経験値と同じ額のコイン
+  if (sk("c0_knowledge") && g > 0) addCoins(Math.round(g * skA("c0_knowledge")));   // 知識は財: 経験値と同じ額のコイン
   while (state.xp >= xpNeed(state.lv)){
     state.xp -= xpNeed(state.lv); state.lv++;
     if (typeof onLevelUpHeal === "function") onLevelUpHeal();   // レベルアップでHP全回復
@@ -555,13 +619,13 @@ function gainXP(n){
 
 // ---------- 派生ステータス (各所から参照) ----------
 const atkRange   = () => ATTACK_RANGE;
-const crewMul    = () => (sk("d_command") ? 1.15 : 1) * (1 + artVal("cbot")) * masteryMul("d");   // 艦隊マスタリー: 仲間の威力
+const crewMul    = () => skMul("d_command", 1.15) * (1 + artVal("cbot")) * masteryMul("d");   // 艦隊マスタリー: 仲間の威力
 const crewCount  = () => state.bots + state.coinBots;
 const botCount     = () => act("bots") + (sk("d_reinforce") ? 1 : 0) + (sk("d_reinforce2") ? 1 : 0);
 const coinBotCount = () => act("coinBots") + (sk("d_drone") ? 1 : 0) + cbLv("replicator");
-const playerRate = () => (sk("a_rapid") ? 1.08 : 1) * (sk("a_rapid2") ? 1.2 : 1) * (1 + artVal("rate")) * earlyRateMul();
-const crewRate   = () => (sk("d_rate") ? 1.15 : 1) * (sk("d_rate2") ? 1.25 : 1) * earlyCrewRateMul();
+const playerRate = () => (sk("a_rapid") ? 1.08 : 1) * (sk("a_rapid2") ? 1.2 : 1) * (1 + artVal("rate")) * earlyRateMul();   // 連射はスキルLvで上げない (弾数 = 処理量)。強化分は skillHitMods で威力に換算
+const crewRate   = () => (sk("d_rate") ? 1.15 : 1) * (sk("d_rate2") ? 1.25 : 1) * earlyCrewRateMul();   // 同上 (強化分は仲間の威力に換算)
 // 素材ドロップ倍率 (装備の触媒効果はヒット時に別に掛かる)
-const matDropMul = () => (1 + artVal("drop")) * (1 + (sk("c_vein") ? 0.15 : 0)) * (sk("e_master") ? 2 : 1) * (sk("e_master2") ? 2 : 1) * (sk("e_god") ? 3 : 1) * (sk("c_eldorado") ? 1.5 : 1) * (sk("c_philosopher") ? 1.5 : 1) * (sk("e_rights") ? 2 : 1) * (sk("c_ultimate") ? 3 : 1) * masteryMul("e");   // 無限黄金郷 (究極): 素材 ×3 / 採掘マスタリー
-const elemMul    = () => (sk("b_elem") ? 1.2 : 1) * (1 + artVal("elem")) * (artHas("lg_crown") ? 1.75 : 1) * (sk("b_singularity") ? 2 : 1) * (sk("b_core") ? 1.5 : 1) * (sk("b_ultimate") ? 5 : 1) * masteryMul("b");   // 元素マスタリー / 元素の心得: 状態異常ダメージ / 元素の王冠: ×1.75 / 特異点: ×2 / 原初元素炉: ×1.5 / ビッグバン元素炉 (究極): ×5
-const burnSetMul = () => elemMul() * (sk("b_burn") ? 1.5 : 1) * (sk("b_plasma") ? 2 : 1) * (1 + artVal("burn"));   // 燃焼の付与倍率
+const matDropMul = () => (1 + artVal("drop")) * (1 + skAdd("c_vein", 0.15)) * skMul("e_master", 2) * skMul("e_master2", 2) * skMul("e_god", 3) * skMul("c_eldorado", 1.5) * skMul("c_philosopher", 1.5) * skMul("e_rights", 2) * skMul("c_ultimate", 3) * masteryMul("e");   // 無限黄金郷 (究極): 素材 ×3 / 採掘マスタリー
+const elemMul    = () => skMul("b_elem", 1.2) * (1 + artVal("elem")) * (artHas("lg_crown") ? 1.75 : 1) * skMul("b_singularity", 2) * skMul("b_core", 1.5) * skMul("b_ultimate", 5) * masteryMul("b");   // 元素マスタリー / 元素の心得: 状態異常ダメージ / 元素の王冠: ×1.75 / 特異点: ×2 / 原初元素炉: ×1.5 / ビッグバン元素炉 (究極): ×5
+const burnSetMul = () => elemMul() * skMul("b_burn", 1.5) * skMul("b_plasma", 2) * (1 + artVal("burn"));   // 燃焼の付与倍率

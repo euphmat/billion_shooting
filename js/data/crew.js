@@ -22,7 +22,7 @@ const COINBOT_RECIPE = n => COINBOT_MATS[Math.min(n, COINBOT_MATS.length - 1)];
 const BOT_UP_MATS_LIST = ["copperOre", "ironOre", "titaniumOre", "tungstenOre", "diamond", "iridium", "stellarIron", "adamant", "singularityShard"];
 const BOT_UP_COST = () => niceRound(150 * Math.pow(1.55, state.botLv));
 const BOT_UP_MATS = () => { const o = {}; o[BOT_UP_MATS_LIST[Math.min(BOT_UP_MATS_LIST.length - 1, Math.floor(state.botLv / 5))]] = Math.ceil(20 * Math.pow(1.18, state.botLv % 5 + Math.floor(state.botLv / 5) * 2)); return o; };
-const botMul = () => (1 + 0.12 * state.botLv) * crewMul() * (sk("d_bot") ? 1.3 : 1) * (1 + (typeof artVal === "function" ? artVal("bot") : 0)) * (1 + 0.25 * (state.botCore || 0)) * (sk("d_grandfleet") ? 2 : 1) * (sk("d_ultimate") ? 3 : 1);   // 艦隊総攻撃 (奥義): 全ボット威力 ×2 / 惑星破壊艦隊 (究極): ×3
+const botMul = () => (1 + 0.12 * state.botLv) * crewMul() * skMul("d_bot", 1.3) * (1 + (typeof artVal === "function" ? artVal("bot") : 0)) * (1 + 0.25 * (state.botCore || 0)) * skMul("d_grandfleet", 2) * skMul("d_ultimate", 3);   // 艦隊総攻撃 (奥義): 全ボット威力 ×2 / 惑星破壊艦隊 (究極): ×3
 // ---------- 衛星テクノロジー (ボット強化) ----------
 const BOT_CORE_MAX = 5, BOT_ARMOR_MAX = 5;
 const BOT_CORE_MATS  = [{ magmalite:60 }, { permaice:60, toxicite:40 }, { prismore:70 }, { voltore:70, duneglass:40 }, { novalite:90 }];
@@ -73,8 +73,8 @@ const cbLv      = k => state.cbMod[k] || 0;
 const CB_COST   = k => { const m = CB_MODULES[k]; return niceRound(m.base * Math.pow(m.cstep, cbLv(k))); };
 const CB_MATS   = k => { const m = CB_MODULES[k]; return scaleRec(m.mats, cbLv(k), m.mstep); };
 const canUpgradeCB = k => state.coinBots > 0 && cbLv(k) < CB_MODULES[k].max && state.coins >= CB_COST(k) && invHas(CB_MATS(k));
-const coinBotSpeed  = () => 300 * (1 + 0.10 * cbLv("frame")) * (sk("d_drone") ? 1.2 : 1) * (sk("c_fleet") ? 1.15 : 1);
-const coinBotVacuum = () => 180 * (1 + 0.12 * cbLv("coil")) * (1 + 0.4 * cbLv("gravLens")) * (1 + 0.3 * cbLv("stargate")) * (sk("c_fleet") ? 1.2 : 1);
+const coinBotSpeed  = () => 300 * (1 + 0.10 * cbLv("frame")) * skMul("d_drone", 1.2) * skMul("c_fleet", 1.15);
+const coinBotVacuum = () => 180 * (1 + 0.12 * cbLv("coil")) * (1 + 0.4 * cbLv("gravLens")) * (1 + 0.3 * cbLv("stargate")) * (sk("c_fleet") ? 1.2 : 1);   // 吸引範囲はスキルLvで広げない (速度側は強化で伸びる)
 const coinBotPull   = () => 3200 * (1 + 0.3 * cbLv("gravLens")) * (1 + 0.5 * cbLv("stargate"));
 const coinBotTouchR = () => 40 * (1 + 0.2 * cbLv("hatch"));
 const botCoinMul    = () => 1 + 0.05 * cbLv("plating");

@@ -176,7 +176,7 @@ function coinBotPanelHTML(){
   const mods = CB_MOD_KEYS.slice().sort((a, b) => rank(a) - rank(b));
   return fleetCardHTML({ icon:"coinbot", accent:"#ffd60a", name:"コイン回収ボット", n, max:COINBOT_MAX, extra: total > n ? `+${total - n} 追加` : "",
       sw: crewSwitchHTML("coinBots"), off: n > 0 && state.off.coinBots,
-      stats:[["回収額", "x" + (botCoinMul() * (sk("c_haul") ? 1.10 : 1)).toFixed(2), true], ["速度", Math.round(coinBotSpeed())], ["吸引", Math.round(coinBotVacuum())], ["場のコイン", fieldCoins]] })
+      stats:[["回収額", "x" + (botCoinMul() * skMul("c_haul", 1.10)).toFixed(2), true], ["速度", Math.round(coinBotSpeed())], ["吸引", Math.round(coinBotVacuum())], ["場のコイン", fieldCoins]] })
     + (n > 0 ? botModeSegHTML("coinbot") : `<p class="hint-box">落ちたコインを自動で拾う相棒。1機目を製造するとモジュールも組み込めるようになる。</p>`)
     + secTitleHTML("製造", "回収ボットを増やす")
     + `<div class="alist">${crewRowHTML("coinbot")}</div>`

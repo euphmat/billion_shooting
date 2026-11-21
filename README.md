@@ -51,4 +51,4 @@ css/                  style.css (共通) と mobile.css (スマホ)
 
 - モジュールは使わず、全ファイルが通常の `<script>` としてグローバルを共有する。読み込み順は `js/manifest.js` の `APP_SCRIPTS` の順。
   読み込み時に実行されるコードは、先に読まれたファイルの定義にしか依存できない (関数の中から呼ぶ分には順番は関係ない)
-- リリース時は `js/manifest.js` の `APP_VERSION` を上げ、`js/ui/settings.js` のアップデート履歴に1行足す
+- リリース時は `js/manifest.js` の `APP_VERSION` を上げ、`js/ui/settings.js` のアップデート履歴の先頭に1件足す (公開日 `d` も入れる)

@@ -187,54 +187,43 @@ function draw(now){
 
   skillsDraw(now, toScreen);   // スキルの設置物・継続効果
 
-  // ---- units: 種類ごとにシルエットを描き分ける ----
-  // 自機: 三角の矢じり型
-  function ship(x, y, a, s){
-    const [sx, sy] = toScreen(x, y);
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(a); ctx.scale(s, s);
-    ctx.strokeStyle = "#fff"; ctx.beginPath();
-    ctx.moveTo(12, 0); ctx.lineTo(-9, -8); ctx.lineTo(-5, 0); ctx.lineTo(-9, 8); ctx.closePath(); ctx.stroke();
-    ctx.restore();
-  }
-  // 攻撃ボット: 四角い機体 + 砲身 (無骨なメカ)
-  function attackBotShape(x, y, a, accent){
-    const [sx, sy] = toScreen(x, y);
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(a);
-    ctx.strokeStyle = "#fff";
-    ctx.strokeRect(-8, -8, 16, 16);                    // 角ばった胴体
-    ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(15, 0); ctx.stroke();  // 砲身
-    ctx.beginPath(); ctx.arc(0, 0, 3, 0, 7); ctx.stroke();               // コア
-    if (accent){ ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(0, 0, 1.8, 0, 7); ctx.fill(); }   // 装備の色
-    ctx.beginPath(); ctx.moveTo(-8, -11); ctx.lineTo(-8, -8); ctx.moveTo(-8, 8); ctx.lineTo(-8, 11); ctx.stroke(); // 後部フィン
-    ctx.restore();
-  }
-  // コイン回収ボット: 丸いドローン (黄色) + 回る外周ドット
-  function coinBotShape(x, y, a, spin){
-    const [sx, sy] = toScreen(x, y);
-    ctx.save(); ctx.translate(sx, sy);
-    ctx.strokeStyle = "#ffd60a";
-    ctx.beginPath(); ctx.arc(0, 0, 8.5, 0, 7); ctx.stroke();             // 丸い本体
-    ctx.beginPath(); ctx.arc(0, 0, 3.2, 0, 7); ctx.stroke();             // 内側リング
-    ctx.fillStyle = "#ffd60a";
-    for (let k = 0; k < 3; k++){                                          // 周囲を回るドット
-      const t = spin + k * Math.PI * 2 / 3;
-      ctx.beginPath(); ctx.arc(Math.cos(t) * 12, Math.sin(t) * 12, 1.6, 0, 7); ctx.fill();
-    }
-    ctx.restore();
-  }
-  bots.forEach((b, bi) => { const wk = botWeaponAt(bi); attackBotShape(b.x, b.y, b.angle, wk ? WEAPONS[wk].accent : null); });
-  coinBots.forEach((cb, i) => coinBotShape(cb.x, cb.y, cb.angle, now / 350 + i * 1.7));
-  // ブースト演出 (シェイクは使わない): 残像は自機と同じ矢じり輪郭を薄く、噴射は事前レンダリング済みスプライト
+  // ---- units: SVG アート (render/unit-art.js) を部品ごとに重ねる。毎フレームは setTransform + drawImage だけ ----
+  const low = fxLow();
   const boostVis = boostOn && started && !cleared && !treeOpen && !artOpen && !mapOpen && !updOpen && !botEqOpen;
+  // 攻撃ボット: 影 → 噴射炎 (揺らぐ) → 本体 (ゆっくり浮遊) → 武器色のコア (明滅)
+  for (let bi = 0; bi < bots.length; bi++){
+    const b = bots[bi], [sx, sy] = toScreen(b.x, b.y);
+    if (sx < -40 || sy < -40 || sx > CW + 40 || sy > CH + 40) continue;
+    const wk = botWeaponAt(bi), ph = now / 1000 + bi * 1.9, S = 0.85 * (1 + 0.03 * Math.sin(ph * 2.6));
+    if (!low){ ctx.globalAlpha = 0.32; uaXf(sx + 3, sy + 5, b.angle); uaImg(UA.botShadow, 0, 0, S); ctx.globalAlpha = 1; }
+    uaXf(sx, sy, b.angle);
+    const fl = 0.45 + 0.12 * Math.sin(now / 31 + bi * 2.3);
+    uaImg(UA_FLAME_ORANGE, -12.6 * S, -12 * S, S * fl, S * 0.5);
+    uaImg(UA_FLAME_ORANGE, -12.6 * S, 12 * S, S * fl, S * 0.5);
+    uaImg(UA.bot, 0, 0, S);
+    ctx.globalAlpha = 0.7 + 0.3 * Math.sin(ph * 4.2);
+    uaImg(uaGlow(wk ? WEAPONS[wk].accent : "#9fd8ff"), 0, 0, S * 0.62);
+    ctx.globalAlpha = 1;
+  }
+  // コイン回収ボット: 影 → 金のドーム (浮遊) → 回るローターリング
+  for (let i = 0; i < coinBots.length; i++){
+    const cb = coinBots[i], [sx, sy] = toScreen(cb.x, cb.y);
+    if (sx < -40 || sy < -40 || sx > CW + 40 || sy > CH + 40) continue;
+    const S = 0.95 * (1 + 0.04 * Math.sin(now / 300 + i * 1.3));
+    if (!low){ ctx.globalAlpha = 0.3; uaXf(sx + 3, sy + 5, 0); uaImg(UA.blob, 0, 0, S); ctx.globalAlpha = 1; }
+    uaXf(sx, sy, 0); uaImg(UA.cbot, 0, 0, S);
+    uaXf(sx, sy, now / 220 + i * 1.7); uaImg(UA.cbRing, 0, 0, S);
+  }
+  // ブースト演出 (シェイクは使わない): 残像は自機と同じシルエットを発光輪郭で、噴射は事前レンダリング済みスプライト
   for (let i = boostGhosts.length - 1; i >= 0; i--){
     const g = boostGhosts[i], age = (now - g.t) / 380;
     if (age >= 1){ boostGhosts.splice(i, 1); continue; }
     const [sx, sy] = toScreen(g.x, g.y);
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(g.a);
-    ctx.strokeStyle = `rgba(125,249,255,${0.5 * (1 - age)})`; ctx.beginPath();
-    ctx.moveTo(12, 0); ctx.lineTo(-9, -8); ctx.lineTo(-5, 0); ctx.lineTo(-9, 8); ctx.closePath(); ctx.stroke();
-    ctx.restore();
+    ctx.globalAlpha = 0.6 * (1 - age);
+    uaXf(sx, sy, g.a); uaImg(UA_GHOST_CYAN, 0, 0, SHIP_S);
   }
+  ctx.globalAlpha = 1;
+  uaEnd();
   for (let i = boostParts.length - 1; i >= 0; i--){
     const p = boostParts[i], ageMs = now - p.t, age = ageMs / p.life;
     if (age >= 1){ boostParts.splice(i, 1); continue; }
@@ -245,7 +234,7 @@ function draw(now){
   ctx.globalAlpha = 1;
   drawShipAuras(now, toScreen);   // 覚醒の光輪・銃口の閃光・覚醒の瞬間・系統マスタリーの光球
   drawEvoUniques(now, toScreen);  // 固有覚醒: 光球・砲台・隕石の予告・加速中の輪 (data/evo-unique.js)
-  ship(player.x, player.y, player.angle, 1);
+  drawPlayerShip(now, toScreen, boostVis, low);
   drawArtifactsFx(now, toScreen);   // LEGENDARY の常時演出 (残像 / オーラ / きらめき / サイコロ)
   if (boostVis && !fxLow()){
     // 画面端のスピードライン: 端の帯だけに、進行方向と逆向きの短い線を流す (中央の文字表示は廃止。ボタンの点灯で分かる)
@@ -308,6 +297,29 @@ function draw(now){
   drawMinimap(now);
 }
 
+// ---------- 自機 (SVG アート: render/unit-art.js) ----------
+// 影 → 2基の噴射炎 (移動で伸び、ブーストで長く太く、常に小刻みに揺らぐ) → 機体 → 武器色のリアクター光 (脈動)
+// 旋回の速さで機体を少し細く描き、翼を傾けた (バンク) ように見せる。全て drawImage だけ
+const SHIP_S = 0.8;   // 自機アートの表示倍率 (ズームに関係なく一定の大きさ)
+let shipPrevA = 0, shipBank = 0;
+function drawPlayerShip(now, toScreen, boostVis, low){
+  let da = player.angle - shipPrevA;
+  shipPrevA = player.angle;
+  if (da > Math.PI) da -= Math.PI * 2; else if (da < -Math.PI) da += Math.PI * 2;
+  shipBank += (Math.max(-1, Math.min(1, da * 5)) - shipBank) * 0.15;
+  const [sx, sy] = toScreen(player.x, player.y), S = SHIP_S, sq = 1 - 0.3 * Math.abs(shipBank);
+  if (!low){ ctx.globalAlpha = 0.35; uaXf(sx + 4, sy + 7, player.angle, 1, sq); uaImg(UA.shipShadow, 0, 0, S); ctx.globalAlpha = 1; }
+  uaXf(sx, sy, player.angle, 1, sq);
+  const fl = 1 + 0.12 * Math.sin(now / 29) + 0.07 * Math.sin(now / 11.3);
+  const len = (boostVis ? 1.9 : player.moving ? 1 : 0.45) * fl, wid = boostVis ? 0.8 : 0.55;
+  uaImg(UA_FLAME_CYAN, -15.2 * S, -2.2 * S, S * len, S * wid);
+  uaImg(UA_FLAME_CYAN, -15.2 * S, 2.2 * S, S * len, S * wid);
+  uaImg(UA.ship, 0, 0, S);
+  const w = WEAPONS[state.weapon];
+  if (w){ ctx.globalAlpha = 0.55 + 0.3 * Math.sin(now / 260); uaImg(uaGlow(w.accent), -3 * S, 0, S * 0.42); ctx.globalAlpha = 1; }
+  uaEnd();
+}
+
 // ---------- 自機まわりの「強くなった」演出 ----------
 // 1. 銃口の閃光 (装備の色。★が上がるほど大きい)
 // 2. 覚醒の光輪: 装備中の武器が ★4 以上なら装備色の弧が自機を回る (★5 は虹色)
@@ -317,7 +329,7 @@ function drawShipAuras(now, toScreen){
   const [px, py] = toScreen(player.x, player.y), low = fxLow();
   const w = WEAPONS[state.weapon], ev = evoVis(state.weapon);   // 見た目の段階 (★2つで1段)
   if (player.muzzleT && now - player.muzzleT < 70){
-    const f = 1 - (now - player.muzzleT) / 70, nx = px + Math.cos(player.angle) * 13, ny = py + Math.sin(player.angle) * 13, R = (3 + 1.3 * ev) * f;
+    const f = 1 - (now - player.muzzleT) / 70, nx = px + Math.cos(player.angle) * 16, ny = py + Math.sin(player.angle) * 16, R = (3 + 1.3 * ev) * f;
     ctx.fillStyle = w.accent; ctx.globalAlpha = 0.85 * f; ctx.beginPath();
     for (let k = 0; k < 8; k++){ const r = k & 1 ? R * 0.4 : R, t = player.angle + k * Math.PI / 4; ctx.lineTo(nx + Math.cos(t) * r, ny + Math.sin(t) * r); }
     ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;

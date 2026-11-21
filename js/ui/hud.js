@@ -21,11 +21,11 @@ function coinRate(){
 }
 function updateHUD(){
   refreshAffordability();
-  const pct = state.destroyed / TARGET_TOTAL * 100, w = Math.max(pct, 0.05).toFixed(4) + "%", bar = $("sideProgress");
+  const pct = Math.min(100, state.destroyed / WORLD_TOTAL * 100), w = Math.max(pct, 0.05).toFixed(4) + "%", bar = $("sideProgress");
   setText($("sidePct"), pct.toFixed(pct < 10 ? 4 : 2) + "%");
   if (bar._w !== w){ bar._w = w; bar.style.width = w; }
   setText($("sideDestroyed"), "破壊 " + fmt(state.destroyed));
-  setText($("sideRemain"), "残り " + fmt(mainAlive));   // 主惑星の残数 (alive は全天体の合算なので、惑星の残りはこちらが正しい)
+  setText($("sideRemain"), "残り " + fmt(Math.max(0, WORLD_TOTAL - state.destroyed)));   // 全天体の残数 (破壊率と同じく全天体の合計で数える)
   setText($("sideCoins"), fmt(state.coins));
   const r = coinRate();
   setText($("sideRate"), r >= 1 ? "+" + fmt(r) + "/秒" : "");

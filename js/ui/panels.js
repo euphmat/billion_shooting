@@ -155,9 +155,9 @@ function applyBuy(dataBuy){
     state.coins -= d.coins;
     if (d.mats) invTake(d.mats);
   }
-  if (d.mats && sk("e_recycle")) for (const k in d.mats) if (Math.random() < 0.2) invAdd(k, Math.ceil(d.mats[k] / 2));   // 廃材リサイクル
+  if (d.mats && sk("e_recycle")) for (const k in d.mats) if (Math.random() < skChance("e_recycle", 0.2, 0.8)) invAdd(k, Math.ceil(d.mats[k] / 2));   // 廃材リサイクル
   d.apply();
-  if (sk("c_cashback") && state.coins < before) state.coins += Math.floor((before - state.coins) * (sk("c_cash2") ? 0.25 : 0.10));   // キャッシュバック
+  if (sk("c_cashback") && state.coins < before) state.coins += Math.floor((before - state.coins) * Math.min(0.9, 0.10 * skA("c_cashback") + 0.15 * skA("c_cash2")));   // キャッシュバック
   if (dataBuy.startsWith("craft:")) wSel = dataBuy.slice(6);
   return true;
 }

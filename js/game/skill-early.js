@@ -28,23 +28,23 @@ function earlyRangeMul(){ return sk("a0_barrel") ? 1.12 : 1; }
 function earlyBotRangeMul(){ return sk("d0_botrange") ? 1.15 : 1; }
 function earlyCrewShotMul(sx, sy, fromBot){
   let m = 1;
-  if (fromBot && sk("d0_formation")){ const dx = sx - player.x, dy = sy - player.y; if (dx * dx + dy * dy <= 192 * 192) m *= 1.2; }
+  if (fromBot && sk("d0_formation")){ const dx = sx - player.x, dy = sy - player.y; if (dx * dx + dy * dy <= 192 * 192) m *= skMul("d0_formation", 1.2); }
   return m;
 }
-function earlyCritAdd(hp, max){ return sk("a0_sharp") && hp >= max ? 0.15 : 0; }
+function earlyCritAdd(hp, max){ return hp >= max ? skAdd("a0_sharp", 0.15) : 0; }
 function earlyOnCrit(){}
 function earlyHitMul(idx, gx, gy, hp, max){
   let m = 1;
-  if (curPl && sk("a0_sight")) m *= 1.08;
-  if (curPl && sk("a0_rough")) m *= 0.8 + Math.random() * 0.8;
-  if (sk("a0_surface") && blockDepth(gx, gy) <= 0.2) m *= 1.2;
-  if (sk("a0_weakspot") && hp <= max * 0.25) m *= 1.25;
-  if (sk("a0_rock") && max >= eAtk() * 20) m *= 1.2;
-  if (sk("a0_spike") || sk("e0_buried")){ const n = eN4(gx, gy); if (sk("a0_spike") && n <= 2) m *= 1.2; if (sk("e0_buried") && n >= 4) m *= 1.25; }
-  if (sk("a0_gem")){ const mm = MATS[materialAt(gx, gy)]; if (mm.explosive) m *= 2; else if (mm.cat === "gem") m *= 1.4; }
-  if (sk("b0_combo") && frosts.has(idx) && burns.has(idx)) m *= 1.35;
-  if (curCrew && sk("d0_link")){ const t = ePlHit.get(idx); if (t && nowMs - t < 2000) m *= 1.3; }
-  if (curBot && sk("d0_botcrit") && Math.random() < 0.08) m *= 2;
+  if (curPl) m *= skMul("a0_sight", 1.08);
+  if (curPl && sk("a0_rough")) m *= 0.8 + Math.random() * 0.8 * skA("a0_rough");   // 強化で上振れの幅が広がる
+  if (sk("a0_surface") && blockDepth(gx, gy) <= 0.2) m *= skMul("a0_surface", 1.2);
+  if (sk("a0_weakspot") && hp <= max * 0.25) m *= skMul("a0_weakspot", 1.25);
+  if (sk("a0_rock") && max >= eAtk() * 20) m *= skMul("a0_rock", 1.2);
+  if (sk("a0_spike") || sk("e0_buried")){ const n = eN4(gx, gy); if (sk("a0_spike") && n <= 2) m *= skMul("a0_spike", 1.2); if (sk("e0_buried") && n >= 4) m *= skMul("e0_buried", 1.25); }
+  if (sk("a0_gem")){ const mm = MATS[materialAt(gx, gy)]; if (mm.explosive) m *= skMul("a0_gem", 2); else if (mm.cat === "gem") m *= skMul("a0_gem", 1.4); }
+  if (sk("b0_combo") && frosts.has(idx) && burns.has(idx)) m *= skMul("b0_combo", 1.35);
+  if (curCrew && sk("d0_link")){ const t = ePlHit.get(idx); if (t && nowMs - t < 2000) m *= skMul("d0_link", 1.3); }
+  if (curBot && sk("d0_botcrit") && Math.random() < skChance("d0_botcrit", 0.08)) m *= 2;   // 会心はダメージが増えるだけ (処理は増えない) なので確率を強化
   return m;
 }
 function earlyAfterHit(idx, gx, gy, dmg, cur){
@@ -53,36 +53,36 @@ function earlyAfterHit(idx, gx, gy, dmg, cur){
 function earlyOnShock(j, d){}
 
 // ---------- コイン / 経験値 ----------
-function earlyCoinMul(){ return sk("c0_rookie") && state.coins < state.lv * 2000 ? 1.3 : 1; }
+function earlyCoinMul(){ return state.coins < state.lv * 2000 ? skMul("c0_rookie", 1.3) : 1; }
 function earlyCoinPickMul(c, byBot){
   let m = 1;
-  if (!byBot && sk("c0_hand")) m *= 1.08;
-  if (sk("c0_quick") && (c.age || 0) <= 1) m *= 1.15;
+  if (!byBot) m *= skMul("c0_hand", 1.08);
+  if (sk("c0_quick") && (c.age || 0) <= 1) m *= skMul("c0_quick", 1.15);
   return m;
 }
 function earlyOnCoin(v, n, byBot){}
 function earlyXpMul(){
   let m = 1;
-  if (sk("c0_youth")) m *= 1 + 0.6 * Math.max(0, (60 - state.lv) / 59);
-  if (sk("c0_proud")) m *= 1 + 0.02 * eDigits(state.coins);
+  if (sk("c0_youth")) m *= 1 + 0.6 * skA("c0_youth") * Math.max(0, (60 - state.lv) / 59);
+  if (sk("c0_proud")) m *= 1 + 0.02 * skA("c0_proud") * eDigits(state.coins);
   return m;
 }
 function earlyBreakPre(idx, gx, gy, m){
   eFirst = sk("c0_firstfind") && !state.seen[m.key];
-  let v = eFirst ? 5 : 1;
-  if (sk("b0_scorch")){ const f = burns.get(idx); if (f && (!f.k || f.k === "burn")) v *= 1.3; }
-  if (sk("c0_surface") && blockDepth(gx, gy) <= 0.2) v *= 1.15;
-  if (sk("c0_rare") && matRarity(m) >= 2) v *= 1.5;
-  if (sk("c0_boom") && m.explosive) v *= 3;
-  if (sk("c0_chain") && dmgDepth >= 2) v *= 1.2;
-  if (sk("c0_expedition") && bodyAt(gx, gy) > 0) v *= 1.25;
-  if (idx === markIdx){ v *= 5; markBurst(idx, gx, gy); }   // 刻印弾 (game/skill-fx.js): 刻印ブロックはコイン ×5 で炸裂
+  let v = eFirst ? 1 + 4 * skA("c0_firstfind") : 1;
+  if (sk("b0_scorch")){ const f = burns.get(idx); if (f && (!f.k || f.k === "burn")) v *= skMul("b0_scorch", 1.3); }
+  if (sk("c0_surface") && blockDepth(gx, gy) <= 0.2) v *= skMul("c0_surface", 1.15);
+  if (sk("c0_rare") && matRarity(m) >= 2) v *= skMul("c0_rare", 1.5);
+  if (sk("c0_boom") && m.explosive) v *= skMul("c0_boom", 3);
+  if (sk("c0_chain") && dmgDepth >= 2) v *= skMul("c0_chain", 1.2);
+  if (sk("c0_expedition") && bodyAt(gx, gy) > 0) v *= skMul("c0_expedition", 1.25);
+  if (idx === markIdx){ v *= 1 + 4 * skLvMul("a0_steady"); markBurst(idx, gx, gy); }   // 刻印弾 (game/skill-fx.js): 刻印ブロックはコイン ×5 で炸裂
   return v;
 }
 function earlyBreakXpMul(idx, gx, gy){
-  let m = eFirst ? 3 : 1;
-  if (sk("b0_frostlearn") && frosts.has(idx)) m *= 1.5;
-  if (sk("c0_direct") && curPl && dmgDepth === 1) m *= 1.2;
+  let m = eFirst ? 1 + 2 * skA("c0_firstfind") : 1;
+  if (sk("b0_frostlearn") && frosts.has(idx)) m *= skMul("b0_frostlearn", 1.5);
+  if (sk("c0_direct") && curPl && dmgDepth === 1) m *= skMul("c0_direct", 1.2);
   return m;
 }
 function earlyOnBreak(idx, gx, gy, kind){}
@@ -91,15 +91,15 @@ function earlyOnBreak(idx, gx, gy, kind){}
 function earlyDropAdj(n, gx, gy, m){
   let mul = 1, add = 0;
   const dep = blockDepth(gx, gy), idx = gy * D + gx;
-  if (sk("e0_outcrop") && dep <= 0.15) mul *= 1.25;
-  if (sk("e0_deep")) mul *= 1 + 0.4 * Math.max(0, dep);
-  if (sk("e0_explo") && m.explosive) mul *= 2;
-  if (sk("e0_rubble") && dmgDepth >= 2) mul *= 1.2;
-  if (sk("e0_dust") && bodyAt(gx, gy) > 0) mul *= 1.3;
-  if (sk("e0_hard") && blockMaxHP(gx, gy) >= eAtk() * 20) add++;
-  if (sk("e0_metal") && (m.cat === "metal" || m.cat === "ore") && Math.random() < 0.2) add++;
-  if (sk("b0_extract")){ const f = burns.get(idx); if (f && f.k === "acid") add++; }
-  if (sk("f0_minemod") && curProto) add++;   // 序盤機兵 f0 採掘モジュール: プロト・砲台・自爆ドローンが壊したブロックは素材 +1 (自律機兵の破壊には付かない)
+  if (sk("e0_outcrop") && dep <= 0.15) mul *= skMul("e0_outcrop", 1.25);
+  if (sk("e0_deep")) mul *= 1 + 0.4 * skA("e0_deep") * Math.max(0, dep);
+  if (sk("e0_explo") && m.explosive) mul *= skMul("e0_explo", 2);
+  if (sk("e0_rubble") && dmgDepth >= 2) mul *= skMul("e0_rubble", 1.2);
+  if (sk("e0_dust") && bodyAt(gx, gy) > 0) mul *= skMul("e0_dust", 1.3);
+  if (sk("e0_hard") && blockMaxHP(gx, gy) >= eAtk() * 20) add += skA("e0_hard");
+  if (sk("e0_metal") && (m.cat === "metal" || m.cat === "ore") && Math.random() < 0.2) add += skA("e0_metal");
+  if (sk("b0_extract")){ const f = burns.get(idx); if (f && f.k === "acid") add += skA("b0_extract"); }
+  if (sk("f0_minemod") && curProto) add += skA("f0_minemod");   // 序盤機兵 f0 採掘モジュール: プロト・砲台・自爆ドローンが壊したブロックは素材 +1 (自律機兵の破壊には付かない)
   if (mul !== 1){ const x = n * mul, w = Math.floor(x); n = w + (Math.random() < x - w ? 1 : 0); }
-  return n + add;
+  return n + (add ? rndI(add) : 0);   // スキルLvで増えた端数は確率で繰り上げ
 }

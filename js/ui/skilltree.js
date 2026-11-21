@@ -39,7 +39,7 @@ function buildTree(){
   for (const n of SKILLS){
     const px = n.parent ? n.parent.x : TREE_C, py = n.parent ? n.parent.y : TREE_C;
     lines += `<line data-ln="${n.id}" x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${n.x.toFixed(1)}" y2="${n.y.toFixed(1)}" style="--c:${n.br.color}"/>`;
-    nodes += `<button class="tn${n.depth >= 8 ? " cap" : ""}${n.slot >= 33 ? " apex ultimate" : n.slot >= 30 ? " apex" : ""}" data-id="${n.id}" style="left:${n.x.toFixed(1)}px;top:${n.y.toFixed(1)}px;--c:${n.br.color}">${skillSVG(n)}${n.cost > 1 ? `<i class="tn-cost">${n.cost}</i>` : ""}</button>`;
+    nodes += `<button class="tn${n.depth >= 8 ? " cap" : ""}${n.slot >= 33 ? " apex ultimate" : n.slot >= 30 ? " apex" : ""}" data-id="${n.id}" style="left:${n.x.toFixed(1)}px;top:${n.y.toFixed(1)}px;--c:${n.br.color}">${skillSVG(n)}${n.cost > 1 ? `<i class="tn-cost">${n.cost}</i>` : ""}<i class="tn-lv"></i></button>`;
   }
   for (const br of BRANCHES){
     const r = treeRadius(6) + 78, x = TREE_C + Math.cos(br.ang) * r, y = TREE_C + Math.sin(br.ang) * r;
@@ -61,6 +61,11 @@ function refreshTree(){
     el.classList.toggle("off", off);              // 習得済みだが OFF (効果は止まっている)
     el.classList.toggle("can", !has && open && sp >= n.cost);
     el.classList.toggle("wait", !has && open && sp < n.cost);
+    const lv = skLv(n.id);
+    el.classList.toggle("up", has && lv < SK_MAX_LV && sp >= n.cost);   // まだ強化できる (SPも足りている)
+    el.classList.toggle("max", lv >= SK_MAX_LV);
+    const lvEl = el.lastElementChild, lvTx = lv > 1 ? (lv >= SK_MAX_LV ? "MAX" : "" + lv) : "";   // Lv1 は札を出さない (習得済みの色で分かる)
+    if (lvEl.textContent !== lvTx) lvEl.textContent = lvTx;
     el.classList.toggle("sel", n.id === selId);
     el.classList.toggle("live", ls === "live");   // 緑ドット: いま発動中
     el.classList.toggle("idle", ls === "idle");   // 灰ドット: 習得済みだが条件待ち
@@ -76,7 +81,8 @@ function refreshTree(){
   }
   $("treeCoreLv").textContent = state.lv;
   $("treeSp").innerHTML = `スキルポイント <b>${sp}</b>`;
-  $("treeCount").textContent = `習得 ${Object.keys(state.skills).length} / ${SKILLS.length}` + (skOffN ? ` ・ OFF ${skOffN}` : "");
+  let lvSum = 0, nLearn = 0; for (const k in state.skills){ lvSum += state.skills[k]; nLearn++; }
+  $("treeCount").textContent = `習得 ${nLearn} / ${SKILLS.length}` + (lvSum > nLearn ? ` ・ 強化 +${lvSum - nLearn}` : "") + (skOffN ? ` ・ OFF ${skOffN}` : "");
   $("treeSwBtn").classList.toggle("on", swOpen);
   $("treeSwBtn").classList.toggle("warn", skOffN > 0);
   $("treeStatsBtn").classList.toggle("on", !!state.treeStatsOn);
@@ -142,22 +148,23 @@ function probeStats(){
   const ec = elemChances();
   return {
     dmg: globalDmgMul(),
-    critP: (sk("a_crit") ? 0.06 : 0) + (sk("a_apex") ? 0.10 : 0) + MASTERY.a.crit[masteryRank("a")] + artVal("crit") / 100 + (artHas("lg_void") ? 0.20 : 0),
-    critX: Math.max((sk("a_critx") ? 3 : 2) + artVal("critd") / 100, artHas("lg_void") ? 3 : 0),
+    critP: skAdd("a_crit", 0.06) + skAdd("a_apex", 0.10) + MASTERY.a.crit[masteryRank("a")] + artVal("crit") / 100 + (artHas("lg_void") ? 0.20 : 0),
+    critX: Math.max(2 + skAdd("a_critx", 1) + artVal("critd") / 100, artHas("lg_void") ? 3 : 0),
     rate: playerRate(), bot: botMul(), crate: crewRate(),
     elem: elemMul(), burnD: burnSetMul(), drop: matDropMul(), speed: playerSpeed(),
-    coin: coinMulStatic(), xp: (1 + artVal("xp")) * artMul("xpMul") * (sk("c_philosopher") ? 1.5 : 1) * (sk("c_ultimate") ? 3 : 1) * MASTERY.c.xp[masteryRank("c")], vacuum: magnetRange(),
+    coin: coinMulStatic(), xp: (1 + artVal("xp")) * artMul("xpMul") * skMul("c_philosopher", 1.5) * skMul("c_ultimate", 3) * MASTERY.c.xp[masteryRank("c")], vacuum: magnetRange(),
     bots: botCount(), cbots: coinBotCount(),
     fpow: fPowStatic(), frate: fRateStatic(), funits: fDesiredCount(),   // 機兵系統
     ec_burn: ec.burn, ec_frost: ec.frost, ec_acid: ec.acid, ec_rad: ec.rad, ec_shock: ec.shock,
   };
 }
-function probeWith(id, on){
+// lv = 0 なら外した状態、1〜10 ならそのLv (ON) にした状態で測る
+function probeWith(id, lv){
   const had = state.skills[id], off = state.skillOff[id];
-  if (on){ state.skills[id] = 1; delete state.skillOff[id]; } else delete state.skills[id];
+  if (lv > 0){ state.skills[id] = lv; delete state.skillOff[id]; } else delete state.skills[id];
   skillOffSync(); masteryInvalidate();   // マスタリーのランクも付け外し後で測る
   const p = probeStats();
-  if (had) state.skills[id] = 1; else delete state.skills[id];
+  if (had) state.skills[id] = had; else delete state.skills[id];
   if (off) state.skillOff[id] = 1; else delete state.skillOff[id];
   skillOffSync(); masteryInvalidate();
   return p;
@@ -191,11 +198,16 @@ const PROBE_DEFS = [
 ];
 // 詳細ポップオーバー用: そのスキルで変わる数値を「現在 → 取得後」/「発動中 (このスキルで +n)」で出す
 function skillEffectLines(n){
-  const on = sk(n.id), verb = skLearned(n.id) ? "ON にすると" : "習得すると", cur = probeStats(), alt = probeWith(n.id, !on), rows = [];
+  const on = sk(n.id), lv = skLv(n.id), verb = skLearned(n.id) ? "ON にすると" : "習得すると", cur = probeStats(), rows = [];
+  const alt = probeWith(n.id, on ? 0 : Math.max(1, lv));
+  const nxt = on && lv < SK_MAX_LV ? probeWith(n.id, lv + 1) : null;   // 次のLvに強化した時の値
   for (const d of PROBE_DEFS){
     const a = cur[d.key], b = alt[d.key];
     if (Math.abs(a - b) < d.eps) continue;
-    if (on) rows.push(`<div class="td-fx on"><span class="td-fx-label">${d.label}</span> <b>${d.fmt(a)}</b><span class="td-fx-sub">発動中 ・ このスキルで ${d.diff(a - b)}</span></div>`);
+    if (on){
+      const c = nxt ? nxt[d.key] : a, up = Math.abs(c - a) >= d.eps ? ` → <b class="up">${d.fmt(c)}</b>` : "";
+      rows.push(`<div class="td-fx on"><span class="td-fx-label">${d.label}</span> <b>${d.fmt(a)}</b>${up}<span class="td-fx-sub">発動中 ・ このスキルで ${d.diff(a - b)}${up ? ` ・ Lv${lv + 1} で ${d.diff(c - b)}` : ""}</span></div>`);
+    }
     else rows.push(`<div class="td-fx"><span class="td-fx-label">${d.label}</span> <b>${d.fmt(a)}</b> → <b class="up">${d.fmt(b)}</b><span class="td-fx-sub">${verb} ${d.diff(b - a)}</span></div>`);
   }
   if (!rows.length) return "";
@@ -290,7 +302,8 @@ function renderDetail(){
       <p>ブロックを壊すと経験値が入り、レベルアップでスキルポイントが手に入る (5レベルごとにボーナス +1)。レベル1ごとに全ダメージ +1.5%。</p>
       <p>説明の「攻撃の◯%」は、工房パネル上部の<b>「攻撃」</b>の値が基準。「最大HPの◯%」は、そのブロックの最大HPが基準。</p>
       <p>中心から外へ、線でつながった順に習得できる。スキルは全てパッシブ (常時発動)。外周の大きなスキルは各系統の切り札。</p>
-      <p>${TOUCH_UI ? "ノードをタップで選択、下に出る「習得」ボタンで習得。" : "ノードをクリックすると、近くに詳細と「習得」ボタンが出る。ダブルクリックか Enter でも習得できる。"}</p>
+      <p>${TOUCH_UI ? "ノードをタップで選択、下に出る「習得」「強化」ボタンで習得・強化。" : "ノードをクリックすると、近くに詳細と「習得」「強化」ボタンが出る。ダブルクリックか Enter でも習得・強化できる。"}</p>
+      <p>習得したスキルは、余ったスキルポイントで<b>Lv${SK_MAX_LV} まで強化</b>できる (1回ごとに習得と同じSP)。強化するたびに効果の量 (ダメージ・倍率・獲得量・付与率など) が +${Math.round(SK_AMP_STEP * 100)}% ずつ増え、Lv${SK_MAX_LV} で <b>×${SK_AMP[SK_MAX_LV].toFixed(2)}</b>。発動の間隔・範囲・数は変わらないので、強化しても重くならない (連射・速度・機数のスキルは、その分が威力に回る)。量で伸ばせないスキルは、強化分がその系統の主役ステータスに上乗せされる。ノード右上の数字がスキルLv。</p>
       <p>習得済みノードの<b>緑の点は「いま発動中」</b>、灰色の点は「条件待ち」の印。上の「発動状況」ボタンで、現在の付与率と今セッションの発動回数を出せる。詳細では効果が現在値でどう変わるかも数値で出る。</p>
       <p>習得済みのスキルは<b>「ON/OFF」</b>ボタンから、個別・系統ごと・まとめて無効にできる (習得とスキルポイントはそのまま)。この説明は × で閉じ、「?」でまた開ける。</p>
       ${BRANCHES.map(b => `<div class="td-br" style="color:${b.color}"><b>${b.name}</b><span>${b.sub}</span></div>`).join("")}
@@ -306,18 +319,28 @@ function renderDetail(){
     : on ? (ls === "idle" ? `<div class="td-state">習得済み ・ 条件待ち (条件を満たすと発動)</div>` : `<div class="td-state on">習得済み ・ 発動中</div>`)
     : !open ? (n.parent && !sk(n.parent.id) ? `<div class="td-state">未解放 — 先に「${n.parent.name}」が必要</div>` : `<div class="td-state">未解放 — Lv ${n.reqLv} 以上で解放 (現在 Lv ${state.lv})</div>`)
     : sp < n.cost ? `<div class="td-state">スキルポイントが足りない (あと ${n.cost - sp})</div>` : "";
+  const lv = skLv(n.id), amp = v => "×" + v.toFixed(2);
+  // 量で伸ばせないスキル (範囲・間隔・機数などが本体) は、強化分が系統の主役ステータスに還元される (data/skills.js の SKILL_LV_SPILL)
+  const spill = skSpills(n.id), spPct = l => "+" + (skSpillRate(n) * (SK_AMP[l] - 1) * 100).toFixed(1) + "%";
+  const lvGain = spill
+    ? `強化分は${n.br.name}系統の${MASTERY[n.br.key].stat} <b>${spPct(lv)}</b>${lv < SK_MAX_LV ? ` → <b class="up">${spPct(lv + 1)}</b>` : " (最大)"}`
+    : `効果量 <b>${amp(SK_AMP[lv])}</b>${lv < SK_MAX_LV ? ` → <b class="up">${amp(SK_AMP[lv + 1])}</b>` : " (最大)"}`;
+  const lvLine = has ? `<div class="td-lv" style="--c:${n.br.color}"><b>Lv ${lv}</b> / ${SK_MAX_LV}<span class="td-lv-bar"><u style="width:${lv / SK_MAX_LV * 100}%"></u></span>${lvGain}</div>` : "";
+  const canUp = has && lv < SK_MAX_LV;
   $("treeDetail").innerHTML = `<div class="td-top" style="--c:${n.br.color}">
       <div class="td-icon">${skillSVG(n)}</div>
       <div><h4>${n.name}</h4><div class="td-meta">${n.br.name} ・ ${n.slot >= 33 ? "究極 ・ " : n.slot >= 30 ? "奥義 ・ " : ""}パッシブ</div></div>
       <button class="td-close" id="tdClose" aria-label="閉じる">×</button>
     </div>
     <p>${n.desc}</p>
-    <div class="td-cost">必要スキルポイント <b>${n.cost}</b>${n.reqLv ? ` ・ 必要Lv <b>${n.reqLv}</b>` : ""}</div>
+    <div class="td-cost">${has ? `強化に必要なスキルポイント <b>${canUp ? n.cost : "—"}</b>${canUp && sp < n.cost ? ` (あと ${n.cost - sp})` : ""}` : `必要スキルポイント <b>${n.cost}</b>${n.reqLv ? ` ・ 必要Lv <b>${n.reqLv}</b>` : ""}`}</div>
+    ${lvLine}
     ${status}
     ${masteryLineHTML(n)}
     ${skillEffectLines(n)}
     ${skillProcLines(n)}
     ${!has && n.id === selId ? `<button class="buy-btn" id="learnBtn" ${canLearn(n) ? "" : "disabled"}><span>習得する</span><span>${TOUCH_UI ? "" : "Enter"}</span></button>` : ""}
+    ${canUp && n.id === selId ? `<button class="buy-btn" id="learnBtn" ${canUpgrade(n) ? "" : "disabled"}><span>強化する (Lv${lv} → ${lv + 1})</span><span>${TOUCH_UI ? "" : "Enter"}</span></button>` : ""}
     ${has && n.id === selId ? `<button class="td-toggle${on ? "" : " off"}" id="tdToggle">${on ? "このスキルを OFF にする" : "このスキルを ON にする"}</button>` : ""}`;
   positionDetail();
 }
@@ -351,10 +374,11 @@ function masteryLineHTML(n){
   if (nx && c + 1 >= nx) return `<div class="td-mastline up" style="--c:${n.br.color}">${verb} <b>${n.br.name}マスタリー ${MASTERY_RANK[rk + 1]}</b> にランクアップ! → ${masteryEffectText(b, rk + 1)}</div>`;
   return `<div class="td-mastline" style="--c:${n.br.color}">${verb} ${n.br.name}マスタリー +1 (${c + 1} / ${nx || c + 1}${nx ? ` ・ ${MASTERY_RANK[rk + 1]}まであと ${nx - c - 1}` : ""})</div>`;
 }
+// 未習得なら習得 (Lv1)、習得済みなら1段階強化 (Lv10 まで)。どちらも n.cost のSPを払う
 function tryLearn(id){
   const n = SKILL[id];
-  if (!n || !canLearn(n)){ sndFail(); return; }
-  state.skills[id] = 1;
+  if (!n || !(canLearn(n) || canUpgrade(n))){ sndFail(); return; }
+  state.skills[id] = skLv(id) + 1;
   sndLevel();
   onSkillsChanged();
   const el = document.querySelector(`#treeWorld .tn[data-id="${id}"]`);   // 習得の瞬間: ノードが系統色に弾ける
@@ -406,23 +430,64 @@ $("treeBtn").addEventListener("click", () => toggleTree());
 $("treeClose").addEventListener("click", () => toggleTree(false));
 $("respecBtn").addEventListener("click", () => {
   if (!Object.keys(state.skills).length) return;
-  if (!confirm("習得したスキルを全て解除して、スキルポイントを振り直しますか？ (無料)")) return;
+  if (!confirm("習得したスキルを全て解除して、スキルポイントを振り直しますか？ (強化に使った分も全て戻る・無料)")) return;
   state.skills = {}; state.skillOff = {}; skillOffSync();
   burns.clear(); bombs.length = 0; bombSet.clear(); vuln.clear();
   machineReset();   // 機兵系統: 子機・ナノマシン・落下物も片付ける
   selId = null;
   onSkillsChanged();
 });
-$("treeWorld").addEventListener("click", e => {
-  const el = e.target.closest(".tn");
-  if (!el) return;
-  const id = el.dataset.id;
-  if (tapToggle && skLearned(id)){ selId = id; setSkillsOff([id], !skDisabled(id)); return; }   // ON/OFF パネルの「タップで切り替え」
-  selId = id; refreshTree();
-});
+function selectNode(id){
+  hoverId = null;
+  if (tapToggle && skLearned(id)){ selId = id; setSkillsOff([id], !skDisabled(id)); }   // ON/OFF パネルの「タップで切り替え」
+  else { selId = id; refreshTree(); }
+  if (TOUCH_UI) revealNode(id);
+}
+$("treeWorld").addEventListener("click", e => { const el = e.target.closest(".tn"); if (el) selectNode(el.dataset.id); });
 $("treeWorld").addEventListener("dblclick", e => { const el = e.target.closest(".tn"); if (el && !tapToggle) tryLearn(el.dataset.id); });
-$("treeWorld").addEventListener("mouseover", e => { const el = e.target.closest(".tn"); if (el && hoverId !== el.dataset.id){ hoverId = el.dataset.id; renderDetail(); } });
-$("treeWorld").addEventListener("mouseout", e => { if (e.target.closest(".tn") && hoverId){ hoverId = null; renderDetail(); } });
+// ホバーはマウスだけ。タッチの合成 mouseover で詳細を書き換えると、iOS が「ホバー表示」扱いにして最初のタップの click を捨てる
+// (= 1回目のタップでは選択されず習得ボタンも出ない) うえ、hoverId が残って詳細が前のノードのまま固まることがある
+$("treeWorld").addEventListener("pointerover", e => {
+  if (e.pointerType !== "mouse") return;
+  const el = e.target.closest(".tn");
+  if (el && hoverId !== el.dataset.id){ hoverId = el.dataset.id; renderDetail(); }
+});
+$("treeWorld").addEventListener("pointerout", e => {
+  if (e.pointerType !== "mouse" || !hoverId) return;
+  const el = e.target.closest(".tn");
+  if (el && !(e.relatedTarget && el.contains(e.relatedTarget))){ hoverId = null; renderDetail(); }
+});
+// タッチ: 縮小表示だとノードが指より小さいので、外したタップは近くのノードに吸着させる
+function nodeNear(cx, cy){
+  const vr = $("treeView").getBoundingClientRect();
+  let best = null, bd = Infinity;
+  for (const n of SKILLS){
+    const d = Math.hypot(vr.left + tv.x + n.x * tv.s - cx, vr.top + tv.y + n.y * tv.s - cy) - (n.depth >= 8 ? 33 : 23) * tv.s;
+    if (d < bd){ bd = d; best = n; }
+  }
+  return bd <= 22 ? best : null;
+}
+// タッチ: 選んだノードが下部の詳細シートや画面外に隠れていたら、シートより上の見える位置までツリーを動かす
+let revealAnim = 0;
+function revealNode(id){
+  const n = SKILL[id], det = $("treeDetail");
+  if (!n || det.hidden) return;
+  const vr = $("treeView").getBoundingClientRect(), dr = det.getBoundingClientRect();
+  const bottom = Math.min(vr.bottom, dr.top) - vr.top, m = 40;   // 見えている高さ (treeView 基準)
+  const nx = tv.x + n.x * tv.s, ny = tv.y + n.y * tv.s;
+  let dx = 0, dy = 0;
+  if (ny < m || ny > bottom - m) dy = Math.max(m, bottom / 2) - ny;
+  if (nx < m || nx > vr.width - m) dx = vr.width / 2 - nx;
+  if (!dx && !dy) return;
+  const x0 = tv.x, y0 = tv.y, t0 = performance.now(), my = ++revealAnim;
+  const step = t => {
+    if (my !== revealAnim || drag) return;   // 次の選択やドラッグが始まったらやめる
+    const k = Math.min(1, (t - t0) / 220), e = 1 - (1 - k) * (1 - k);
+    tv.x = x0 + dx * e; tv.y = y0 + dy * e; applyView();
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 $("treeDetail").addEventListener("click", e => {
   if (e.target.closest("#tdClose")){ clearTreeSelection(); return; }
   if (e.target.closest("#tdHelpClose")){ state.treeHelpOff = true; save(); refreshTree(); return; }
@@ -440,7 +505,13 @@ $("treeView").addEventListener("pointerdown", e => {
 });
 $("treeView").addEventListener("pointermove", e => { if (drag){ if (Math.abs(e.clientX - drag.sx) > 6 || Math.abs(e.clientY - drag.sy) > 6) drag.moved = true; tv.x = e.clientX - drag.x; tv.y = e.clientY - drag.y; applyView(); } });
 const endDrag = () => { drag = null; $("treeView").classList.remove("dragging"); };
-$("treeView").addEventListener("pointerup", () => { const d = drag; endDrag(); if (d && !d.moved && selId) clearTreeSelection(); });   // 何もない場所のクリック (ドラッグなし) で選択解除
+$("treeView").addEventListener("pointerup", e => {   // 何もない場所のクリック (ドラッグなし) で選択解除。タッチで近くにノードがあればそれを選ぶ
+  const d = drag; endDrag();
+  if (!d || d.moved) return;
+  const near = e.pointerType !== "mouse" && nodeNear(e.clientX, e.clientY);
+  if (near) selectNode(near.id);
+  else if (selId) clearTreeSelection();
+});
 $("treeView").addEventListener("pointercancel", endDrag);
 $("treeView").addEventListener("wheel", e => {
   e.preventDefault();

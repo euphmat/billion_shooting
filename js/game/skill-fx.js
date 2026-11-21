@@ -24,7 +24,7 @@ function levelUpFx(){
   if (typeof artHas === "function" && artHas("lg_scepter")) scepterStarfall();   // 星屑の王笏: 星が降り注ぐ
   addRing({ x: player.x, y: player.y, r: 260, t: performance.now(), color: "255,255,255", dur: 700 });
   let msg = `レベルアップ  Lv.${state.lv} (スキルポイント +${state.lv % 5 === 0 ? 2 : 1})`;
-  if (sk("c_bonus")){ const g = state.lv * 60; addCoins(g); msg += `  祝い金 +${fmt(g)}`; }
+  if (sk("c_bonus")){ const g = Math.round(state.lv * 60 * skA("c_bonus")); addCoins(g); msg += `  祝い金 +${fmt(g)}`; }
   toast(msg, "good", "levelup");
 }
 
@@ -33,34 +33,7 @@ function makeSprite(size, draw){
   const c = document.createElement("canvas"); c.width = c.height = size;
   const g = c.getContext("2d"); draw(g, size); return c;
 }
-// ファンネル: 菱形ビット本体 + 尾翼フィン + 発光コア + 砲口 (鼻は +x 方向)
-const funnelSpr = makeSprite(56, (g, S) => {
-  const cx = S / 2, cy = S / 2;
-  const body = g.createLinearGradient(cx - 20, 0, cx + 20, 0);
-  body.addColorStop(0, "#141c26"); body.addColorStop(0.55, "#33506b"); body.addColorStop(1, "#0d1218");
-  g.fillStyle = body; g.strokeStyle = "#7df9ff"; g.lineWidth = 1.6;
-  g.beginPath(); g.moveTo(cx + 20, cy); g.lineTo(cx + 2, cy - 11); g.lineTo(cx - 16, cy - 5); g.lineTo(cx - 20, cy); g.lineTo(cx - 16, cy + 5); g.lineTo(cx + 2, cy + 11); g.closePath(); g.fill(); g.stroke();
-  g.fillStyle = "#57e39a";
-  g.beginPath(); g.moveTo(cx - 14, cy - 4); g.lineTo(cx - 24, cy - 13); g.lineTo(cx - 10, cy - 10); g.closePath(); g.fill();
-  g.beginPath(); g.moveTo(cx - 14, cy + 4); g.lineTo(cx - 24, cy + 13); g.lineTo(cx - 10, cy + 10); g.closePath(); g.fill();
-  g.strokeStyle = "#dff6ff"; g.lineWidth = 2.4; g.beginPath(); g.moveTo(cx + 14, cy); g.lineTo(cx + 23, cy); g.stroke();
-  const core = g.createRadialGradient(cx - 2, cy, 0, cx - 2, cy, 10);
-  core.addColorStop(0, "#ffffff"); core.addColorStop(0.35, "#57e39a"); core.addColorStop(1, "rgba(87,227,154,0)");
-  g.fillStyle = core; g.beginPath(); g.arc(cx - 2, cy, 10, 0, 7); g.fill();
-});
-// オービタルボット: 重厚な二重リング軌道体 + 装甲セグメント + 金色コア (攻撃ボットと一目で違うシルエット)
-const orbitalSpr = makeSprite(104, (g, S) => {
-  const cx = S / 2, cy = S / 2;
-  g.strokeStyle = "#2c3e50"; g.lineWidth = 11; g.beginPath(); g.arc(cx, cy, 40, 0, 7); g.stroke();
-  g.strokeStyle = "#7df9ff"; g.lineWidth = 2.4; g.beginPath(); g.arc(cx, cy, 46, 0, 7); g.stroke();
-  g.strokeStyle = "#57e39a"; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, 34, 0, 7); g.stroke();
-  g.fillStyle = "#486581";
-  for (let k = 0; k < 4; k++){ const a = k * Math.PI / 2 + Math.PI / 4, x = cx + Math.cos(a) * 40, y = cy + Math.sin(a) * 40; g.save(); g.translate(x, y); g.rotate(a); g.fillRect(-7, -5, 14, 10); g.restore(); }
-  const core = g.createRadialGradient(cx, cy, 0, cx, cy, 17);
-  core.addColorStop(0, "#ffffff"); core.addColorStop(0.3, "#ffd60a"); core.addColorStop(0.7, "rgba(255,150,40,.55)"); core.addColorStop(1, "rgba(255,150,40,0)");
-  g.fillStyle = core; g.beginPath(); g.arc(cx, cy, 17, 0, 7); g.fill();
-  g.strokeStyle = "#ffe9a8"; g.lineWidth = 1.6; g.beginPath(); g.arc(cx, cy, 9, 0, 7); g.stroke();
-});
+// ファンネル / オービタル / 母艦の機体は render/unit-art.js の SVG アート (UA.funnel / UA.orbital / UA.mothership)
 // マズルフラッシュ: 十字スパイク + グロー
 const flashSpr = makeSprite(40, (g, S) => {
   const cx = S / 2, cy = S / 2;
@@ -116,38 +89,6 @@ const burstSprs = {
   diswave: burstSprite("rgba(255,170,80,.95)", "rgba(255,210,130,.85)"),        // 解体波 (究極): 橙白
   planetbeam: burstSprite("rgba(125,249,255,.95)", "rgba(190,250,255,.85)"),    // 惑星破壊ビーム (究極): 青白
 };
-// 惑星破壊艦隊の母艦: オービタル (104px) より遥かに大きい 240px の弩級艦 (鼻は +x 方向)。
-// 多層装甲 + 側部ポッド + 金のトリム + 発光コアストリップで「重さ」を出す
-const mothershipSpr = makeSprite(240, (g, S) => {
-  const cx = S / 2, cy = S / 2;
-  const eng = g.createRadialGradient(cx - 82, cy, 0, cx - 82, cy, 36);
-  eng.addColorStop(0, "rgba(160,240,255,.75)"); eng.addColorStop(1, "rgba(160,240,255,0)");
-  g.fillStyle = eng; g.beginPath(); g.arc(cx - 82, cy, 36, 0, 7); g.fill();
-  const hull = g.createLinearGradient(0, cy - 34, 0, cy + 34);
-  hull.addColorStop(0, "#0d1420"); hull.addColorStop(0.5, "#3d5a76"); hull.addColorStop(1, "#0a0f16");
-  g.fillStyle = hull; g.strokeStyle = "#9fd8ff"; g.lineWidth = 2;
-  g.beginPath();
-  g.moveTo(cx + 96, cy); g.lineTo(cx + 52, cy - 20); g.lineTo(cx + 8, cy - 30); g.lineTo(cx - 52, cy - 26);
-  g.lineTo(cx - 84, cy - 12); g.lineTo(cx - 84, cy + 12); g.lineTo(cx - 52, cy + 26); g.lineTo(cx + 8, cy + 30);
-  g.lineTo(cx + 52, cy + 20); g.closePath(); g.fill(); g.stroke();
-  g.fillStyle = "#22364c"; g.strokeStyle = "#7df9ff"; g.lineWidth = 1.6;
-  for (const sgn of [-1, 1]){
-    g.beginPath(); g.moveTo(cx + 30, cy + sgn * 30); g.lineTo(cx - 30, cy + sgn * 38); g.lineTo(cx - 62, cy + sgn * 30); g.lineTo(cx - 20, cy + sgn * 22); g.closePath(); g.fill(); g.stroke();
-  }
-  g.strokeStyle = "rgba(255,214,10,.75)"; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(cx + 60, cy - 13); g.lineTo(cx - 40, cy - 18); g.moveTo(cx + 60, cy + 13); g.lineTo(cx - 40, cy + 18); g.stroke();
-  g.strokeStyle = "rgba(125,249,255,.5)"; g.lineWidth = 1.2;
-  for (const off of [-44, -16, 16, 44]){ g.beginPath(); g.moveTo(cx + off, cy - 24); g.lineTo(cx + off, cy + 24); g.stroke(); }
-  const core = g.createLinearGradient(cx - 60, 0, cx + 70, 0);
-  core.addColorStop(0, "rgba(125,249,255,0)"); core.addColorStop(0.5, "#dff6ff"); core.addColorStop(1, "rgba(125,249,255,0)");
-  g.fillStyle = core; g.fillRect(cx - 60, cy - 3.5, 130, 7);
-  const cg = g.createRadialGradient(cx + 18, cy, 0, cx + 18, cy, 16);
-  cg.addColorStop(0, "#ffffff"); cg.addColorStop(0.4, "#7df9ff"); cg.addColorStop(1, "rgba(125,249,255,0)");
-  g.fillStyle = cg; g.beginPath(); g.arc(cx + 18, cy, 16, 0, 7); g.fill();
-  g.fillStyle = "#486581"; g.strokeStyle = "#dff6ff"; g.lineWidth = 1.4;
-  g.beginPath(); g.arc(cx + 34, cy - 16, 8, 0, 7); g.fill(); g.stroke();
-  g.beginPath(); g.arc(cx + 34, cy + 16, 8, 0, 7); g.fill(); g.stroke();
-});
 // 消滅砲撃の破片: 岩片スプライト (2種)
 const shardSprs = [0, 1].map(() => makeSprite(24, (g, S) => {
   const cx = S / 2, cy = S / 2;
@@ -172,7 +113,7 @@ function capstoneUpdate(dt, bdt, now){
     coreFrostT -= dt;
     if (coreFrostT <= 0){
       coreFrostT = frosts.size > 400 ? 1 : frosts.size > 120 ? 0.5 : 0.25;   // 件数が多いほど間隔を伸ばして集約 (DPS は 1%/秒で不変)
-      const frac = coreFrostT * 0.01;
+      const frac = coreFrostT * 0.01 * skA("b_core");
       rawDamage(() => { for (const idx of frosts.keys()) if (!isDestroyed(idx)) damageBlock(idx, blockMaxHP(idx % D, (idx / D) | 0) * frac, 0); });
     }
   }
@@ -188,7 +129,7 @@ function capstoneUpdate(dt, bdt, now){
       addRing({ x: player.x, y: player.y, r: R * 0.55, t: now, color: "255,150,60", dur: 650 });
       addRing({ x: player.x, y: player.y, r: R * 0.3, t: now, color: "255,230,190", dur: 500 });
       dimFx.push({ x: player.x, y: player.y, t: 0, kind: "planet", dur: 0.6 });
-      rawDamage(() => damageRadius(player.x, player.y, R, playerDamage() * 20 * gMul));
+      rawDamage(() => damageRadius(player.x, player.y, R, playerDamage() * 20 * gMul * skA("a_planetkiller")));
       sndBoom(true);
     }
   }
@@ -208,7 +149,7 @@ function capstoneUpdate(dt, bdt, now){
     f.trail.push({ x: f.x, y: f.y }); if (f.trail.length > 4) f.trail.shift();
     if (f.flash > 0) f.flash -= bdt;
     f.fireT -= bdt;
-    if (f.fireT <= 0){ f.fireT = 0.4; if (shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * (gf ? 2 : 1) * (sk("d_ultimate") ? 3 : 1) * masteryMul("d"), null, true)) f.flash = 0.06; }   // 間隔 0.4s × 1発 = 自機DPSの約15%/基 / 惑星破壊艦隊 (究極): ×3
+    if (f.fireT <= 0){ f.fireT = 0.4; if (shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * skLvMul("d_funnel") * skMul("d_grandfleet", 2) * skMul("d_ultimate", 3) * masteryMul("d"), null, true)) f.flash = 0.06; }   // 間隔 0.4s × 1発 = 自機DPSの約15%/基 / 惑星破壊艦隊 (究極): ×3
   }
   // オービタルボット: 大きく周回し、最も硬い対象へ徹甲レーザー (太ビーム + 着弾スパーク)
   const wantOrb = gf ? 2 : sk("d_orbital") ? 1 : 0;
@@ -223,7 +164,7 @@ function capstoneUpdate(dt, bdt, now){
     o.fireT -= bdt;
     if (o.fireT <= 0){
       o.fireT = 2.4;
-      const range = atkRange() * 1.3, dmg = playerDPS() * 0.40 * 2.4 * (gf ? 2 : 1) * (sk("d_ultimate") ? 3 : 1);   // 惑星破壊艦隊 (究極): ×3
+      const range = atkRange() * 1.3, dmg = playerDPS() * 0.40 * 2.4 * skLvMul("d_orbital") * skMul("d_grandfleet", 2) * skMul("d_ultimate", 3);   // 惑星破壊艦隊 (究極): ×3
       let bIdx = -1, bHard = 0;
       for (const i of findNearestBlocks(player.x, player.y, range, 14)){ const mh = blockMaxHP(i % D, (i / D) | 0); if (mh > bHard){ bHard = mh; bIdx = i; } }
       let bMob = null;
@@ -244,7 +185,7 @@ function capstoneUpdate(dt, bdt, now){
     if (fleetT <= 0){
       fleetT = 10; bumpProc("fleetburst");
       skillFeed("grandfleet", "艦隊総攻撃", "🛸", "#57e39a");
-      for (const f of funnels){ for (let k = 0; k < 3; k++) shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * 2 * 1.5 * (sk("d_ultimate") ? 3 : 1) * masteryMul("d"), null, true); f.flash = 0.09; }   // 惑星破壊艦隊 (究極): ×3
+      for (const f of funnels){ for (let k = 0; k < 3; k++) shoot(f.x, f.y, playerDPS() * 0.15 * 0.4 * 1.5 * skLvMul("d_funnel") * skMul("d_grandfleet", 2) * skMul("d_ultimate", 3) * masteryMul("d"), null, true); f.flash = 0.09; }   // 惑星破壊艦隊 (究極): ×3
     }
   }
   // 大富豪の蓄財: 金の雨 (イベント消費) / 無限財宝: 移動中の金の軌跡
@@ -302,7 +243,7 @@ function ultimateUpdate(dt, bdt, now){
         addBeam({ x1: mothership.x, y1: mothership.y, x2: tp.x, y2: tp.y, t: now, w: 3, color: "#ffffff", life: 260 });
         addRing({ x: tp.x, y: tp.y, r: BS * 8.5, t: now, color: "125,249,255", dur: 550 });
         dimFx.push({ x: tp.x, y: tp.y, t: 0, kind: "planetbeam", dur: 0.55 });
-        rawDamage(() => damageRadius(tp.x, tp.y, BS * 8, playerDPS() * 50));
+        rawDamage(() => damageRadius(tp.x, tp.y, BS * 8, playerDPS() * 50 * skA("d_ultimate")));
         mothership.flash = 0.18;
         sndBoom();
       } else mothership.fireT = 0.6;
@@ -372,11 +313,14 @@ function capstoneDraw(now, toScreen){
     ctx.drawImage(coinSpr, -size / 2, -size / 2, Math.max(2, size * (0.25 + 0.75 * sq)), size); ctx.restore();
   }
   if (sk("d_ultimate")){   // 母艦: 進行方向 (接線) を向いてゆっくり周回。発射時は船体が発光する
-    const [sx, sy] = toScreen(mothership.x, mothership.y), size = 150 * zoom;
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(mothership.ang - Math.PI / 2);
-    ctx.drawImage(mothershipSpr, -size / 2, -size / 2, size, size);
-    if (mothership.flash > 0){ ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.min(1, mothership.flash / 0.18) * 0.8; ctx.drawImage(mothershipSpr, -size / 2, -size / 2, size, size); }
-    ctx.restore();
+    // SVG アート (render/unit-art.js)。後部の主機関の炎が揺らぎ、発射時は船体が発光する
+    const [sx, sy] = toScreen(mothership.x, mothership.y), S = 150 / 240 * zoom;
+    uaXf(sx, sy, mothership.ang - Math.PI / 2);
+    const fl = 1 + 0.12 * Math.sin(now / 33) + 0.06 * Math.sin(now / 13);
+    uaImg(UA_FLAME_CYAN, -88 * S, 0, S * 2.6 * fl, S * 3.2);
+    uaImg(UA.mothership, 0, 0, S);
+    if (mothership.flash > 0){ ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.min(1, mothership.flash / 0.18) * 0.8; uaImg(UA.mothership, 0, 0, S); ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1; }
+    uaEnd();
   }
   for (const p of debrisParts){   // 消滅砲撃の破片 (回転しながら飛散し、寿命で薄れる)
     const [sx, sy] = toScreen(p.x, p.y), size = p.s * 2 * zoom;
@@ -389,8 +333,8 @@ function capstoneDraw(now, toScreen){
       ctx.fillStyle = `rgba(87,227,154,${0.05 + 0.05 * k})`;
       ctx.beginPath(); ctx.arc(tx, ty, 2 + k, 0, 7); ctx.fill();
     }
-    const [sx, sy] = toScreen(f.x, f.y), size = 27 * zoom;
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(f.face); ctx.drawImage(funnelSpr, -size / 2, -size / 2, size, size); ctx.restore();
+    const [sx, sy] = toScreen(f.x, f.y), S = 27 / 56 * zoom;
+    uaXf(sx, sy, f.face); uaImg(UA_FLAME_GREEN, -20 * S, 0, S * (0.7 + 0.15 * Math.sin(now / 29 + f.ang * 5)), S * 0.7); uaImg(UA.funnel, 0, 0, S); uaEnd();
     if (f.flash > 0){
       const nx = f.x + Math.cos(f.face) * 15, ny = f.y + Math.sin(f.face) * 15, [fx2, fy2] = toScreen(nx, ny), fs = 21 * zoom;
       ctx.save(); ctx.translate(fx2, fy2); ctx.rotate(f.face); ctx.globalCompositeOperation = "lighter";
@@ -400,8 +344,10 @@ function capstoneDraw(now, toScreen){
   for (const o of orbitals){   // リング軌道体 (チャージで脈動が強まる) + 発射フラッシュ
     const [sx, sy] = toScreen(o.x, o.y);
     const charge = 1 - Math.max(0, o.fireT) / 2.4;
-    const size = 56 * zoom * (1 + 0.05 * Math.sin(now / 200) + 0.1 * charge);
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(o.ang * 0.6); ctx.drawImage(orbitalSpr, -size / 2, -size / 2, size, size); ctx.restore();
+    const S = 56 / 104 * zoom * (1 + 0.05 * Math.sin(now / 200) + 0.1 * charge);
+    uaXf(sx, sy, o.ang * 0.6); uaImg(UA.orbital, 0, 0, S);
+    ctx.globalAlpha = 0.35 + 0.6 * charge; uaImg(uaGlow("#ffd60a"), 0, 0, S * 2.2 * (0.7 + 0.3 * charge)); ctx.globalAlpha = 1;   // チャージで金のコアが膨らむ
+    uaEnd();
     if (o.flash > 0){
       const fs = 30 * zoom;
       ctx.save(); ctx.translate(sx, sy); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.min(1, o.flash / 0.12);
@@ -534,7 +480,7 @@ function warpOutUpdate(dt){
   if (warpRunT >= (big ? 0.5 : 1) && warpCD <= 0){
     warpCD = 3;
     bumpProc("warpout", player.x, player.y);
-    blast(player.x, player.y, BS * (big ? 7 : 4), playerDamage() * (big ? 10 : 4), "120,190,255");
+    blast(player.x, player.y, BS * (big ? 7 : 4), playerDamage() * (4 * skA("d_auto") + 6 * skA("d_auto2")), "120,190,255");   // 威力 400% / 空間断裂 1000% (範囲はLvで広げない)
     addRing({ x: player.x, y: player.y, r: BS * (big ? 3 : 1.8), t: performance.now(), color: "230,245,255", dur: 260 });
   }
   warpRunT = 0;
@@ -559,7 +505,7 @@ function markUpdate(dt, now){
 }
 function markBurst(idx, gx, gy){
   markIdx = -1;
-  const x = g2w(gx), y = g2w(gy), d = blockMaxHP(gx, gy) * 0.5;
+  const x = g2w(gx), y = g2w(gy), d = blockMaxHP(gx, gy) * 0.5 * skLvMul("a0_steady");
   bumpProc("mark", x, y);
   for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++){
     if ((dx || dy) && dx * dx + dy * dy <= 5) aftershock(liveAt(gx + dx, gy + dy), d, SHOCK_NONE);
@@ -577,7 +523,7 @@ function broadsideUpdate(dt, now){
   if (findNearestBlock(player.x, player.y, atkRange() * 1.4) < 0 && !nearestMob(player.x, player.y, atkRange() * 1.4)){ broadT = 0.5; return; }   // 撃つ相手がいない
   broadT = 10;
   bumpProc("broadside", player.x, player.y);
-  const dmg = playerDamage() * 2, spd = 900 * BULLET_SPD_MUL, life = atkRange() * 1.4 / spd;
+  const dmg = playerDamage() * 2 * skA("d_cruise"), spd = 900 * BULLET_SPD_MUL, life = atkRange() * 1.4 / spd;
   const ca = Math.cos(player.angle), sa = Math.sin(player.angle);
   for (const side of [-1, 1]){
     const a = player.angle + side * Math.PI / 2;
@@ -607,13 +553,13 @@ function skillsUpdate(dt, fdt, bdt, now){
   // --- 財宝: 利息 / 貯金箱 ---
   if (sk("c_interest")){
     interestT -= dt;
-    if (interestT <= 0){ interestT = 10; const g = Math.floor(Math.min(state.coins * (sk("c_interest2") ? 0.008 : 0.003), state.lv * (sk("c_interest2") ? 200 : 100))); if (g > 0) addCoins(g); }
+    if (interestT <= 0){ interestT = 10; const g = Math.floor(Math.min(state.coins * (0.003 * skA("c_interest") + 0.005 * skA("c_interest2")), state.lv * (100 * skA("c_interest") + 100 * skA("c_interest2")))); if (g > 0) addCoins(g); }   // 利率・上限とも強化で伸びる
   }
   if (sk("c_piggy")){
     piggyT -= dt;
     if (piggyT <= 0){
       piggyT = 60;
-      if (piggy >= 1){ const g = Math.floor(piggy * (sk("c_piggy2") ? 2.5 : 1.5)); piggy = 0; addCoins(g); toast(`貯金箱が満期  +${fmt(g)} コイン`, "good"); }
+      if (piggy >= 1){ const g = Math.floor(piggy * (1 + 0.5 * skA("c_piggy") + 1.0 * skA("c_piggy2"))); piggy = 0; addCoins(g); toast(`貯金箱が満期  +${fmt(g)} コイン`, "good"); }
     }
   }
 
@@ -625,7 +571,7 @@ function skillsUpdate(dt, fdt, bdt, now){
     for (const [idx, t] of frosts){ if (isDestroyed(idx)){ frosts.delete(idx); frostGen.delete(idx); } else if (t <= 0.25){ frosts.delete(idx); frostGen.delete(idx); frostGone.push(idx); } else frosts.set(idx, t - 0.25); }
     for (const [idx, t] of embers){ if (t <= 0.25 || isDestroyed(idx)) embers.delete(idx); else embers.set(idx, t - 0.25); }
     for (const [idx, t] of overloads){ if (t <= 0.25 || isDestroyed(idx)) overloads.delete(idx); else overloads.set(idx, t - 0.25); }
-    if (frostGone.length && sk("b_frostbite")) rawDamage(() => { for (const idx of frostGone) if (!isDestroyed(idx)) damageBlock(idx, blockMaxHP(idx % D, (idx / D) | 0) * 0.03, 0); });   // 凍傷
+    if (frostGone.length && sk("b_frostbite")) rawDamage(() => { for (const idx of frostGone) if (!isDestroyed(idx)) damageBlock(idx, blockMaxHP(idx % D, (idx / D) | 0) * 0.03 * skA("b_frostbite"), 0); });   // 凍傷
     rawDamage(() => {
       for (const [idx, b] of burns){
         b.t -= 0.25;
@@ -642,9 +588,9 @@ function skillsUpdate(dt, fdt, bdt, now){
           continue;
         }
         let tick = b.d * 0.25;
-        if (sk("b_sun") && (!b.k || b.k === "burn")) tick += blockMaxHP(idx % D, (idx / D) | 0) * 0.0025;   // 太陽の核
-        if (sk("b_decay") && b.rad) tick += blockMaxHP(idx % D, (idx / D) | 0) * 0.00125;   // 崩壊
-        if (sk("b_core")) tick += blockMaxHP(idx % D, (idx / D) | 0) * 0.0025;   // 原初元素炉 (奥義): 状態異常中は追加で最大HP 1%/秒
+        if (sk("b_sun") && (!b.k || b.k === "burn")) tick += blockMaxHP(idx % D, (idx / D) | 0) * 0.0025 * skA("b_sun");   // 太陽の核
+        if (sk("b_decay") && b.rad) tick += blockMaxHP(idx % D, (idx / D) | 0) * 0.00125 * skA("b_decay");   // 崩壊
+        if (sk("b_core")) tick += blockMaxHP(idx % D, (idx / D) | 0) * 0.0025 * skA("b_core");   // 原初元素炉 (奥義): 状態異常中は追加で最大HP 1%/秒
         damageBlock(idx, tick, 0);
       }
     });
@@ -676,7 +622,7 @@ function skillsUpdate(dt, fdt, bdt, now){
       droneT = sk("d_bombdrone2") ? 2.2 : 4;
       const idx = findNearestBlock(player.x, player.y, atkRange());
       if (idx >= 0){
-        const dn = sk("d_bombdrone2") ? 2 : 1, dd = playerDamage() * (sk("d_bombdrone2") ? 6.5 : 3);
+        const dn = sk("d_bombdrone2") ? 2 : 1, dd = playerDamage() * (3 * skA("d_bombdrone") + 3.5 * skA("d_bombdrone2"));   // 機数・間隔はLvで変えない
         for (let i = 0; i < dn; i++){
           const a = Math.random() * Math.PI * 2;
           bullets.push({ x: player.x, y: player.y, vx: Math.cos(a) * 320 * BULLET_SPD_MUL, vy: Math.sin(a) * 320 * BULLET_SPD_MUL, dmg: dd, splash: 1, life: 5,
@@ -689,7 +635,7 @@ function skillsUpdate(dt, fdt, bdt, now){
   const w = evoW(state.weapon);   // 覚醒込み (僚機・影分身のガトリングも加速が伸びる)
   if (sk("d_wing")){
     wing.fireT -= bdt;
-    if (wing.fireT <= 0){ const p = wingPos(); wing.fireT = fireDelay(w, wing, shoot(p.x, p.y, shotDamage() * (0.3 + (sk("d_wing2") ? 0.3 : 0) + (sk("d_formation") ? 0.2 : 0)) * masteryMul("d"), state.weapon, false)); }
+    if (wing.fireT <= 0){ const p = wingPos(); wing.fireT = fireDelay(w, wing, shoot(p.x, p.y, shotDamage() * (0.3 * skA("d_wing") + skAdd("d_wing2", 0.3) + skAdd("d_formation", 0.2)) * masteryMul("d"), state.weapon, false)); }
   }
   if (sk("d_shadow")){
     hist.push({ x: player.x, y: player.y, angle: player.angle });
@@ -697,7 +643,7 @@ function skillsUpdate(dt, fdt, bdt, now){
     shadows.forEach((s, k) => {
       if (k >= shadowCount()) return;
       s.fireT -= fdt;
-      if (s.fireT <= 0){ const p = shadowPos(k); s.fireT = fireDelay(w, s, shoot(p.x, p.y, shotDamage() * ((sk("d_shadow3") ? 0.4 : 0.3) + (sk("d_formation") ? 0.2 : 0)) * masteryMul("d"), state.weapon, false)); }
+      if (s.fireT <= 0){ const p = shadowPos(k); s.fireT = fireDelay(w, s, shoot(p.x, p.y, shotDamage() * (0.3 * skA("d_shadow") + skAdd("d_shadow3", 0.1) + skAdd("d_formation", 0.2)) * skLvMul("d_shadow2") * masteryMul("d")   /* 影の軍団は体数が本体。強化分は分身の威力に回す */, state.weapon, false)); }
     });
   } else hist.length = 0;
   if (sk("d_sat")){
@@ -709,14 +655,14 @@ function skillsUpdate(dt, fdt, bdt, now){
       if (best >= 0){
         const p = blockPos(best);
         addBeam({ x1: player.x, y1: player.y - 52, x2: p.x, y2: p.y, t: now, w: 4, color: "#57e39a", life: 160 });
-        damageBlock(best, playerDamage() * (sk("d_sat2") ? 15 : 8), 0);
+        damageBlock(best, playerDamage() * (8 * skA("d_sat") + 7 * skA("d_sat2")), 0);
       } else satT = 0.5;
     }
   }
   if (player.moving){
     if (sk("d_ram")){
       ramT -= dt;
-      if (ramT <= 0){ ramT = sk("d_ram2") ? 0.09 : 0.15; damageRadius(player.x + Math.cos(player.angle) * 18, player.y + Math.sin(player.angle) * 18, 24, playerDamage() * (sk("d_ram2") ? 1.6 : 0.55)); }
+      if (ramT <= 0){ ramT = sk("d_ram2") ? 0.09 : 0.15; damageRadius(player.x + Math.cos(player.angle) * 18, player.y + Math.sin(player.angle) * 18, 24, playerDamage() * (0.55 * skA("d_ram") + 1.05 * skA("d_ram2"))); }
     }
     if (sk("d_wave")){
       waveDist += playerSpeed() * dt;
@@ -724,7 +670,7 @@ function skillsUpdate(dt, fdt, bdt, now){
       if (waveDist >= wThr){
         waveDist = 0;
         blast(player.x, player.y, sk("d_wave4") ? 220 : sk("d_wave3") ? 175 : 100,
-          playerDamage() * (sk("d_wave4") ? 9 : sk("d_wave3") ? 6 : sk("d_wave2") ? 4 : 1.5), "87,227,154");
+          playerDamage() * (1.5 * skA("d_wave") + 2.5 * skA("d_wave2") + 2 * skA("d_wave3") + 3 * skA("d_wave4")), "87,227,154");   // 150% / 400% / 600% / 900% (各段の差分を増幅。間隔・範囲はLvで変えない)
       }
     }
   }
@@ -762,19 +708,22 @@ function skillsDraw(now, toScreen){
     ctx.beginPath(); ctx.arc(sx, sy, m.r * zoom, 0, 7); ctx.stroke();
     ctx.beginPath(); ctx.arc(sx, sy, m.r * zoom * Math.min(1, m.t / 0.6), 0, 7); ctx.stroke(); ctx.lineWidth = 1;
   }
-  // 僚機 / 影分身 (自機と同じ矢じり型)
-  const tri = (p, a, color) => {
-    const [sx, sy] = toScreen(p.x, p.y);
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(a); ctx.strokeStyle = color; ctx.beginPath();
-    ctx.moveTo(10, 0); ctx.lineTo(-7, -6.5); ctx.lineTo(-4, 0); ctx.lineTo(-7, 6.5); ctx.closePath(); ctx.stroke();
-    ctx.restore();
-  };
-  if (sk("d_wing")) tri(wingPos(), player.angle, "#57e39a");
-  if (sk("d_shadow")) for (let k = 0; k < shadowCount(); k++){ const p = shadowPos(k); tri(p, p.angle === undefined ? player.angle : p.angle, "rgba(255,255,255,.5)"); }
-  // 守護衛星
+  // 僚機 (緑の小型戦闘機 + 噴射炎) / 影分身 (自機の発光シルエット) / 守護衛星 (ゆっくり回る)
+  const fl = 0.8 + 0.15 * Math.sin(now / 27);
+  if (sk("d_wing")){
+    const p = wingPos(), [sx, sy] = toScreen(p.x, p.y), S = 0.62;
+    uaXf(sx, sy, player.angle);
+    uaImg(UA_FLAME_GREEN, -15.2 * S, -2.2 * S, S * fl, S * 0.5); uaImg(UA_FLAME_GREEN, -15.2 * S, 2.2 * S, S * fl, S * 0.5);
+    uaImg(UA.wing, 0, 0, S);
+  }
+  if (sk("d_shadow")){
+    ctx.globalAlpha = 0.55;
+    for (let k = 0; k < shadowCount(); k++){ const p = shadowPos(k), [sx, sy] = toScreen(p.x, p.y); uaXf(sx, sy, p.angle === undefined ? player.angle : p.angle); uaImg(UA_GHOST_WHITE, 0, 0, SHIP_S * 0.85); }
+    ctx.globalAlpha = 1;
+  }
   if (sk("d_sat")){
     const [sx, sy] = toScreen(player.x, player.y - 52);
-    ctx.strokeStyle = "#57e39a"; ctx.beginPath();
-    ctx.moveTo(sx, sy - 7); ctx.lineTo(sx + 6, sy); ctx.lineTo(sx, sy + 7); ctx.lineTo(sx - 6, sy); ctx.closePath(); ctx.stroke();
+    uaXf(sx, sy + Math.sin(now / 420) * 1.5, Math.sin(now / 1300) * 0.35); uaImg(UA.sat, 0, 0, 1);
   }
+  uaEnd();
 }

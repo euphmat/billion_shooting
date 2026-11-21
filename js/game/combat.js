@@ -105,8 +105,8 @@ function damageBlock(idx, dmg, splash){
   const voidHit = top && dmgVoidFlag;   // 虚無の単眼の会心 (skillHitMods か弾の経路が立てる)。読んだら消費する
   if (top) dmgVoidFlag = false;
   let cur = hp - dmg;
-  if (top && cur > 0 && sk("a_execute") && cur <= blockMaxHP(gx, gy) * 0.1) cur = 0;   // 処刑
-  if (top && cur > 0 && sk("b_zero") && frosts.has(idx) && cur <= blockMaxHP(gx, gy) * 0.1) cur = 0;   // 絶対零度: 氷結中は残り1割で砕ける
+  if (top && cur > 0 && sk("a_execute") && cur <= blockMaxHP(gx, gy) * Math.min(0.3, 0.1 * skA("a_execute"))) cur = 0;   // 処刑 (強化で しきい値 10% → 最大30%)
+  if (top && cur > 0 && sk("b_zero") && frosts.has(idx) && cur <= blockMaxHP(gx, gy) * Math.min(0.3, 0.1 * skA("b_zero"))) cur = 0;   // 絶対零度: 氷結中は残り1割で砕ける
   if (top && cur > 0 && curFx && curFx.exec && cur <= blockMaxHP(gx, gy) * curFx.exec){ cur = 0; if (eu) evoExecFlag = true; }   // 装備の処刑
   // ダメージ数値用に「実際に削れた量」をブロック単位で貯める (表示は flushDmgLabels がまとめて行う)
   const dealt = hp - Math.max(0, cur);
@@ -134,13 +134,13 @@ function damageBlock(idx, dmg, splash){
   if (top) skillAfterHit(idx, gx, gy, dmg, cur);
   if (top && cur > 0 && curFx){
     if (curFx.burn && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * curFx.burn * burnSetMul(), t: 3 + (sk("b_plasma") ? 2 : 0), k: "burn" }); bumpProc("burn"); }   // 燃焼
-    if (curFx.acid && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * curFx.acid * elemMul() * (sk("b_acid") ? 1.5 : 1) * (1 + artVal("acid")), t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" }); bumpProc("acid"); }   // 腐食 (長く溶ける)
+    if (curFx.acid && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * curFx.acid * elemMul() * skMul("b_acid", 1.5) * (1 + artVal("acid")), t: 4 + (sk("b_acid") ? 2 : 0), k: "acid" }); bumpProc("acid"); }   // 腐食 (長く溶ける)
     if (curFx.radiation && (burns.size < 800 || burns.has(idx))){ burns.set(idx, { d: dmg * curFx.radiation * elemMul(), t: 4, rad: true, k: "rad" }); bumpProc("rad"); }   // 放射 (壊れると隣へ移る)
     if (curFx.frost){
       if (sk("b_thermo") && burns.has(idx)){   // 熱衝撃: 燃焼中の氷結で大爆発 (両方消える)
         burns.delete(idx);
         addRing({ x: g2w(gx), y: g2w(gy), r: BS * 2, t: nowMs, color: "255,150,60", dur: 300 });
-        damageBlock(idx, blockMaxHP(gx, gy) * 0.15, 0);
+        damageBlock(idx, blockMaxHP(gx, gy) * 0.15 * skA("b_thermo"), 0);
         bumpProc("thermo", g2w(gx), g2w(gy));
       } else if (frosts.size < 1500 || frosts.has(idx)){
         const freshFrost = !frosts.has(idx);
@@ -161,7 +161,7 @@ function damageBlock(idx, dmg, splash){
     else if (k === "shock"){ for (const [dx, dy] of N4){ const j = liveAt(gx + dx, gy + dy); if (j >= 0) damageBlock(j, dmg * 0.3, 0); } }
   }
   // 余剰ダメージ: オーバーキル習得時は、壊したブロックのHPの半分しか目減りしない
-  const over = (top && curCarry && cur < 0 && dmg > 0) ? (-cur + (sk("a_carry") ? hp : sk("a_overkill") ? hp * 0.5 : 0)) * raw / dmg : 0;
+  const over = (top && curCarry && cur < 0 && dmg > 0) ? (-cur + (sk("a_carry") ? hp * skA("a_carry") : sk("a_overkill") ? hp * 0.5 * skA("a_overkill") : 0)) * raw / dmg : 0;
   if (splash > 0){
     const sd = dmg * 0.5;
     for (let dy = -splash; dy <= splash; dy++) for (let dx = -splash; dx <= splash; dx++){
@@ -184,15 +184,15 @@ function onBlockBroken(idx){
   const rare = kind !== 0 || goldSet.has(idx);
   let value = blockCoinValue(gx, gy) * curCoinMul * coinSkillMul() * weaponYield();
   const goldified = sk("c_ultimate") && Math.random() < 0.05;   // 無限黄金郷 (究極): 破壊時 5% で黄金化 → そのブロックのコイン ×100
-  if (goldified) value *= 100;
-  if (kind === 1 && sk("c_gem")) value *= sk("c_gem2") ? 2.2 : 1.5;
-  if (sk("e_deepfit")) value *= 1 + 0.2 * blockDepth(gx, gy);   // 深層適性: 深いほどコイン増
+  if (goldified) value *= 100 * skA("c_ultimate");
+  if (kind === 1 && sk("c_gem")) value *= 1 + 0.5 * skA("c_gem") + 0.7 * skA("c_gem2");
+  if (sk("e_deepfit")) value *= 1 + 0.2 * skA("e_deepfit") * blockDepth(gx, gy);   // 深層適性: 深いほどコイン増
   value *= evoCoinMul();   // 固有覚醒: コインの加速 (黄金の洪水)
   value *= earlyBreakPre(idx, gx, gy, m);   // 序盤スキル (初物は素材を拾う前に判定するので dropMaterial より先)
   if (goldSet.delete(idx)) value *= GOLD_MUL;
   const bfx = dungeonFxAt(gx, gy); if (bfx){ value *= bfx.coin; if (bfx.gold && Math.random() < bfx.gold) value *= GOLD_MUL; }   // ダンジョン固有効果
   const chest = sk("c_king") && Math.random() < (sk("c_king2") ? 0.015 : 0.005);   // ミダス王: 宝箱
-  if (chest) value *= sk("c_king3") ? 60 : sk("c_king2") ? 30 : 20;
+  if (chest) value *= 20 * skA("c_king") + 10 * skA("c_king2") + 30 * skA("c_king3");   // 20倍 / 30倍 / 60倍 (各段の差分を増幅。宝箱の確率はLvで変えない)
   value = Math.max(1, Math.round(value));
   dropMaterial(gx, gy, m, kind);
   noteCoinSpawn(g2w(gx), g2w(gy), value);   // 回収ボットの待ち伏せ先 (コイン発生ヒートマップ)
@@ -209,7 +209,7 @@ function onBlockBroken(idx){
   if (curFx && curFx.evoU) evoBreak(idx, gx, gy, kind);   // 固有覚醒: 撃破時の発動条件
   if (kind === 2){   // 爆発性ブロック: 5x5 を巻き込んで誘爆 (隣の爆発物にも連鎖する)。危険物取扱で 7x7・威力1.5倍
     const big = sk("c_bomb"), er = big ? 3 : 2;
-    const dmg = blockMaxHP(gx, gy) * 1.5 * (big ? 1.5 : 1);
+    const dmg = blockMaxHP(gx, gy) * 1.5 * skMul("c_bomb", 1.5);   // 範囲はLvで広げない
     addRing({ x:g2w(gx), y:g2w(gy), r:BS * (er + 1), t:performance.now(), color:matColorRGB(m) });
     sndBoom();
     for (let dy = -er; dy <= er; dy++) for (let dx = -er; dx <= er; dx++){
@@ -229,22 +229,22 @@ function onBlockBroken(idx){
 // ---------- 素材ドロップ ----------
 // 壊したブロックの素材が手に入る。基本1個。採掘スキル・触媒装備・宝石細工で増える (端数は確率で繰り上げ)
 let labelT = 0;
+const rndI = x => { const w = Math.floor(x); return w + (Math.random() < x - w ? 1 : 0); };   // 端数を確率で繰り上げて整数にする
 function dropMaterial(gx, gy, m, kind){
   let n = matDropMul() * (curFx && curFx.matBonus ? 1 + curFx.matBonus : 1);
-  if (kind === 1 && sk("c_gem")) n += sk("c_gem2") ? 2 : 1;
-  const whole = Math.floor(n), frac = n - whole;
-  n = whole + (Math.random() < frac ? 1 : 0);
-  // --- 採掘スキル (e系統): ボーナスは整数で上乗せ ---
-  if (sk("e_mine") && Math.random() < 0.15) n += 1;
-  if (sk("e_double") && Math.random() < 0.15) n *= 2;
-  if (sk("e_core") && m.layer >= LAYERS.length - 1) n *= 2;
+  if (kind === 1 && sk("c_gem")) n += skA("c_gem") + skA("c_gem2");
+  n = rndI(n);
+  // --- 採掘スキル (e系統): ボーナスは整数で上乗せ (スキルLvで増えた端数は確率で繰り上げ。抽選の確率そのものは変えない) ---
+  if (sk("e_mine") && Math.random() < 0.15) n += rndI(skA("e_mine"));
+  if (sk("e_double") && Math.random() < 0.15) n = rndI(n * skMul("e_double", 2));
+  if (sk("e_core") && m.layer >= LAYERS.length - 1) n = rndI(n * skMul("e_core", 2));
   const rar = matRarity(m);
-  if (rar >= 2 && sk("e_rare")) n += 1;
+  if (rar >= 2 && sk("e_rare")) n += rndI(skA("e_rare"));
   if (sk("e_vein") || sk("e_vein2")){
     let same = 0;
     for (const [dx, dy] of N8){ const x = gx + dx, y = gy + dy; if (blockExists(x, y) && MATS[materialAt(x, y)].key === m.key) same++; }
-    if (same >= (sk("e_vein2") ? 1 : 2)) n += sk("e_vein3") ? 4 : sk("e_vein2") ? 2 : 1;
-    if (sk("e_vein4") && same >= 4) n *= 2;   // 鉱脈の心臓: 脈の中心は2倍
+    if (same >= (sk("e_vein2") ? 1 : 2)) n += rndI(skA("e_vein") + skA("e_vein2") + 2 * skA("e_vein3"));   // +1 / 極厚 +2 / 惑星鉱脈 +4 (各段の差分を増幅)
+    if (sk("e_vein4") && same >= 4) n = rndI(n * skMul("e_vein4", 2));   // 鉱脈の心臓: 脈の中心は2倍
   }
   n = earlyDropAdj(n, gx, gy, m);   // 序盤スキル (game/skill-early.js)
   if (n <= 0) return;
@@ -363,8 +363,8 @@ function shoot(sx, sy, dmg, weaponKey, fromBot){
   if (!pl) dmg *= earlyCrewShotMul(sx, sy, fromBot);      // 序盤スキル: 編隊飛行 / 信号弾
   let fired = false;
   try {
-    fired = shootRaw(sx, sy, (doom ? dmg * 5 : dmg) * (pl ? evoDmgMul() : 1), weaponKey, fromBot, doom ? 2 : 0);   // 固有覚醒: 威力の加速
-    if (fired && fromBot && sk("d0_double") && Math.random() < 0.12) shootRaw(sx, sy, dmg, weaponKey, fromBot, 0);   // 予備弾倉 (序盤スキル): もう一発
+    fired = shootRaw(sx, sy, (doom ? dmg * 5 * skA("a_doom") * skLvMul("a_doom2") : dmg) * (pl ? evoDmgMul() : 1), weaponKey, fromBot, doom ? 2 : 0);   // 固有覚醒: 威力の加速
+    if (fired && fromBot && sk("d0_double") && Math.random() < 0.12) shootRaw(sx, sy, dmg * skA("d0_double"), weaponKey, fromBot, 0);   // 発数はそのまま、強化でもう一発の威力が増える   // 予備弾倉 (序盤スキル): もう一発
   }
   finally { curPl = false; curBot = false; curCrew = false; }
   if (pl && fired){

@@ -64,7 +64,7 @@ state.destroyed = TARGET_TOTAL - alive;
 
 const isObj = v => v && typeof v === "object" && !Array.isArray(v);
 // 自機の最大HP: レベルで伸びる (アーティファクト等はここに倍率が掛かる)
-const playerMaxHP = () => Math.round((100 + (state.lv - 1) * 30) * (1 + (typeof artVal === "function" ? artVal("hp") : 0)) * (typeof sk === "function" && sk("d0_armor") ? 1.25 : 1));   // 増加装甲 (序盤スキル): +25%
+const playerMaxHP = () => Math.round((100 + (state.lv - 1) * 30) * (1 + (typeof artVal === "function" ? artVal("hp") : 0)) * (typeof skMul === "function" ? skMul("d0_armor", 1.25) : 1));   // 増加装甲 (序盤スキル): +25% (スキルLvで増幅)
 for (const k of ["weaponLv", "cbMod", "inv", "seen", "skills", "skillOff", "off", "weaponsOwned", "artifacts"]) if (!isObj(state[k])) state[k] = {};
 state.botLv |= 0; state.bots |= 0; state.coinBots |= 0; state.crafted |= 0;
 state.lv = Math.max(1, state.lv | 0); state.xp = Math.max(0, +state.xp || 0);

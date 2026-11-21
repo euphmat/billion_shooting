@@ -45,13 +45,31 @@ function fWant(){
     nanites: sk("f_ultimate") ? 6 : 0,
   };
 }
+/* 機数を決めるスキルのLvは、機数ではなく「その機種の威力」に回す (機数 = 毎フレームの処理量なので増やさない)。
+   各スキルが足す機数 × そのスキルの増幅率 の合計 ÷ 機数 = その機種の威力倍率 (全部 Lv1 なら ×1)。
+   例: ハンター 2機 (自律機兵 Lv10) + 2機 (量産ライン Lv1) → (2×3.25 + 2×1) / 4 = ×2.13 */
+const F_UNIT_SK = {
+  hunters: ["f_core", 2, "f_hunter2", 2, "f_hunter3", 2, "f_hunter4", 3, "f_legion", 3],
+  drillers: ["f_driller", 1, "f_drill2", 1, "f_drill4", 1],
+  teslas: ["f_tesla", 1, "f_tesla2", 1],
+  bombers: ["f_bomber", 1, "f_carpet", 1],
+  cannons: ["f_artillery", 1, "f_artillery2", 1],
+  protos: ["f0_proto", 1, "f0_proto2", 1],
+};
+function fUnitMul(kind){
+  const L = F_UNIT_SK[kind];
+  let n = 0, w = 0;
+  for (let i = 0; i < L.length; i += 2){ const a = skA(L[i]); if (a > 0){ n += L[i + 1]; w += L[i + 1] * a; } }
+  return n ? w / n : 1;
+}
 // スキルだけで決まる機数 (ツリーの「習得するとこう変わる」用。子機・分裂ぶんは含めない)
 function fDesiredCount(){ const w = fWant(); return w.hunters + w.drillers + w.spiders + w.teslas + w.bombers + w.cannons + w.titan + w.nanites; }
 // 全機兵の威力倍率 (n = 群体知性で数える機数)
 function fPowWith(n){
   // f0 共有修飾: 設計図 (レベル×1%、最大+60%) と自動戦闘プログラム (無操作30秒で ×1.5) は自律機兵にも効く
-  return masteryMul("f") * (sk("f_legion") ? 1.3 : 1) * (sk("f_overlord") ? 2 : 1) * (sk("f_omega") ? 2.5 : 1) * (sk("f_ultimate") ? 3 : 1)
-    * (sk("f_hivemind") ? 1 + 0.04 * n : 1) * f0BlueprintMul() * f0IdleMul();
+  return masteryMul("f") * skMul("f_legion", 1.3) * skMul("f_overlord", 2) * skMul("f_omega", 2.5) * skMul("f_ultimate", 3)
+    * (sk("f_hivemind") ? 1 + 0.04 * skA("f_hivemind") * n : 1) * f0BlueprintMul() * f0IdleMul()
+    * skRateAsDmg("f_overclock", 1.25) * skRateAsDmg("f_overlord", 1.3);   // 動作速度のスキルは Lv1 の速度のまま、強化分を威力に回す
 }
 const fPow = () => fPowWith(fCount);
 const fPowStatic = () => fPowWith(fDesiredCount());
@@ -104,9 +122,9 @@ function fMarked(idx){
   if (t > nowMs) return true;
   fMarks.delete(idx); return false;
 }
-const fMarkMul = idx => (fMarks.size && fMarked(idx)) ? 1.6 : 1;
+const fMarkMul = idx => (fMarks.size && fMarked(idx)) ? 1 + 0.6 * skLvMul("f_mark") : 1;
 // f0 自動照準較正: 機兵 (プロト・砲台・自律機兵) の攻撃は 10% で会心 (ダメージ2倍)。ダメージチョークポイントで判定する
-const fCalibDmg = dmg => (sk("f0_calib") && Math.random() < 0.1) ? dmg * 2 : dmg;
+const fCalibDmg = dmg => (sk("f0_calib") && Math.random() < skChance("f0_calib", 0.1)) ? dmg * 2 : dmg;   // 会心はダメージが増えるだけなので確率を強化
 // 単体への攻撃 (攻撃そのもの = 全ダメージ倍率・会心が乗る)。オメガの暴走中はHP無視で一撃破壊
 function fHitBlock(idx, dmg){
   if (idx < 0 || isDestroyed(idx)) return;
@@ -204,7 +222,7 @@ function machineOnBreak(idx, gx, gy){
         }
         for (let n = 0; n < 4 && cand.length; n++){
           const j = cand.splice((Math.random() * cand.length) | 0, 1)[0];
-          aftershock(j, blockMaxHP(j % D, (j / D) | 0) * 0.25, SHOCK_NONE);
+          aftershock(j, blockMaxHP(j % D, (j / D) | 0) * 0.25 * skLvMul("f_tesla3"), SHOCK_NONE);
           if (c.g < 3 && fCharged.size < 5000){ const o = fCharged.get(j); if (!o || o.g > c.g + 1) fCharged.set(j, { u: nowMs + 4000, g: c.g + 1 }); }
           addBeam({ x1: x, y1: y, x2: g2w(j % D), y2: g2w((j / D) | 0), w: 1.6, color: "#c9f6ff", zig: true, life: 140 });
         }
@@ -277,7 +295,7 @@ function machineUpdate(dt, now){
       const tp = fDensest(c.x, c.y, 1200, 6);
       if (tp){
         fNukeT = 25;
-        fDrops.push({ x0: c.x, y0: c.y, x1: tp.x, y1: tp.y, t: 0, dur: 1.6, delay: 0, arc: 420, r: 14, dmg: U * 30 * pow, kind: "nuke" });
+        fDrops.push({ x0: c.x, y0: c.y, x1: tp.x, y1: tp.y, t: 0, dur: 1.6, delay: 0, arc: 420, r: 14, dmg: U * 30 * pow * skLvMul("f_nuke"), kind: "nuke" });
         c.recoil = 0.4; c.aim = Math.atan2(tp.y - c.y, tp.x - c.x);
         skillFeed("fnuke", "戦術核砲弾 発射", "☢️", "#8c7dff");
       } else fNukeT = 1;
@@ -319,7 +337,7 @@ function updateHunter(h, dt, U, pow, rate){
   h.fireT -= dt * rate * (h.frenzy > 0 ? 2 : 1);
   if (h.fireT > 0) return;
   h.fireT = 0.45;
-  const dmg = U * 0.2 * 0.45 * pow * (sk("f_hunter4") ? 1.3 : 1);
+  const dmg = U * 0.2 * 0.45 * pow * fUnitMul("hunters") * skMul("f_hunter4", 1.3) * (h.frenzy > 0 ? skLvMul("f_instinct") : 1);   // 狩猟本能は連射 ×2 が本体。強化分は狩猟中の威力に回す
   const mb = tmob && Math.hypot(tmob.x - h.x, tmob.y - h.y) <= F_HUNT_R ? tmob : null;
   if (mb){
     addBeam({ x1: h.x, y1: h.y, x2: mb.x, y2: mb.y, w: 2.2, color: "#b9a8ff", life: 110 });
@@ -343,7 +361,7 @@ function updateHunter(h, dt, U, pow, rate){
       addBeam({ x1: h.x, y1: h.y, x2: ex, y2: ey, w: 7, color: "rgba(140,125,255,.75)", life: 220 });
       addBeam({ x1: h.x, y1: h.y, x2: ex, y2: ey, w: 2.5, color: "#ffffff", life: 220 });
       const line = fRayBlocks(h.x, h.y, a, BS / 2, BS * 25, 80);
-      for (const j of line) fHitBlock(j, dmg * 4);
+      for (const j of line) fHitBlock(j, dmg * 4 * skLvMul("f_railgun"));
       bumpProc("frail", p.x, p.y);
     } else {
       addBeam({ x1: h.x, y1: h.y, x2: p.x, y2: p.y, w: 2.2, color: "#b9a8ff", life: 110 });
@@ -352,11 +370,11 @@ function updateHunter(h, dt, U, pow, rate){
       if (sk("f_pierce")){   // 貫通: 奥のブロック最大3個
         const more = fRayBlocks(h.x, h.y, a, dist + BS * 0.6, dist + BS * 9, 3);
         if (more.length){ const q = blockPos(more[more.length - 1]); addBeam({ x1: p.x, y1: p.y, x2: q.x, y2: q.y, w: 1.4, color: "#dcd4ff", life: 110 }); }
-        for (const j of more) fHitBlock(j, dmg);
+        for (const j of more) fHitBlock(j, dmg * skLvMul("f_pierce"));
       }
       if (sk("f_shrapnel")){   // 炸裂: 周囲8マスへ 50%
         const gx = idx % D, gy = (idx / D) | 0;
-        for (const [dx, dy] of N8) fRawHit(liveAt(gx + dx, gy + dy), dmg * 0.5);
+        for (const [dx, dy] of N8) fRawHit(liveAt(gx + dx, gy + dy), dmg * 0.5 * skA("f_shrapnel"));
         if (Math.random() < 0.3) addRing({ x: p.x, y: p.y, r: BS * 1.5, color: "185,168,255", dur: 200 });
       }
     }
@@ -387,8 +405,8 @@ function updateDriller(d, dt, U, pow, rate){
     d.tickT = 0.15;
     const gx = w2g(d.x), gy = w2g(d.y), inRock = liveAt(gx, gy) >= 0;
     const rCells = 1.5 + (sk("f_drill2") ? 1 : 0) + (sk("f_drill4") ? 1 : 0);
-    let dm = U * 0.2 * 0.15 * pow * (sk("f_drill4") ? 2 : 1);
-    if (sk("f_coredive") && blockExists(gx, gy)) dm *= 1 + 2 * Math.max(0, Math.min(1, blockDepth(gx, gy)));
+    let dm = U * 0.2 * 0.15 * pow * fUnitMul("drillers") * skMul("f_drill4", 2);
+    if (sk("f_coredive") && blockExists(gx, gy)) dm *= 1 + 2 * skA("f_coredive") * Math.max(0, Math.min(1, blockDepth(gx, gy)));
     fRadius(d.x, d.y, rCells * BS, dm);
     d.dig = inRock ? 0.25 : Math.max(0, (d.dig || 0) - 0.15);
   }
@@ -397,12 +415,12 @@ function updateDriller(d, dt, U, pow, rate){
     if (d.magT <= 0){
       d.magT = 8;
       const gx = w2g(d.x), gy = w2g(d.y);
-      fRadius(d.x, d.y, BS * 4, U * 4 * pow);
+      fRadius(d.x, d.y, BS * 4, U * 4 * pow * skA("f_magma"));
       let n = 0;
       for (let dy = -4; dy <= 4 && n < 40; dy++) for (let dx = -4; dx <= 4 && n < 40; dx++){
         if (dx * dx + dy * dy > 16) continue;
         const j = liveAt(gx + dx, gy + dy);
-        if (j >= 0 && (burns.size < 800 || burns.has(j))){ burns.set(j, { d: U * 0.3 * pow * burnSetMul(), t: 3, k: "burn", g: 0 }); n++; }
+        if (j >= 0 && (burns.size < 800 || burns.has(j))){ burns.set(j, { d: U * 0.3 * pow * burnSetMul() * skA("f_magma"), t: 3, k: "burn", g: 0 }); n++; }
       }
       addRing({ x: d.x, y: d.y, r: BS * 4.6, color: "255,120,40", dur: 520 });
       if (onScreen(d.x, d.y, 100)) dimFx.push({ x: d.x, y: d.y, t: 0, kind: "burn", dur: 0.5 });
@@ -481,7 +499,7 @@ function updateTesla(t, dt, U, pow, rate){
   t.zapT -= dt * rate;
   if (t.zapT > 0) return;
   t.zapT = 1;
-  const dmg = U * 0.8 * pow;
+  const dmg = U * 0.8 * pow * fUnitMul("teslas");
   let px = t.x, py = t.y;
   const mb = nearestMob(t.x, t.y, 320);
   if (mb){ addBeam({ x1: px, y1: py, x2: mb.x, y2: mb.y, w: 2.4, color: "#9ff0ff", zig: true, life: 160 }); damageMob(mb, fOmega > 0 ? dmg * 10 : fCalibDmg(dmg * gMul), null); px = mb.x; py = mb.y; }
@@ -518,7 +536,7 @@ function updateBomber(b, dt, U, pow, rate){
   const n = sk("f_carpet") ? 3 : 1, h = b.head || 0;
   for (let k = 0; k < n; k++){
     const off = (k - (n - 1) / 2) * BS * 3.2;
-    fDrops.push({ x0: b.x, y0: b.y, x1: tp.x + Math.cos(h) * off, y1: tp.y + Math.sin(h) * off, t: 0, dur: 0.75, delay: k * 0.12, arc: 0, r: 3, dmg: U * 3 * pow, kind: "bomb" });
+    fDrops.push({ x0: b.x, y0: b.y, x1: tp.x + Math.cos(h) * off, y1: tp.y + Math.sin(h) * off, t: 0, dur: 0.75, delay: k * 0.12, arc: 0, r: 3, dmg: U * 3 * pow * fUnitMul("bombers"), kind: "bomb" });
   }
 }
 
@@ -548,7 +566,7 @@ function updateCannon(c, dt, U, pow, rate){
   const n = sk("f_artillery2") ? 3 : 1;
   for (let k = 0; k < n; k++){
     const jx = k ? (Math.random() - 0.5) * BS * 5 : 0, jy = k ? (Math.random() - 0.5) * BS * 5 : 0;
-    fDrops.push({ x0: c.x, y0: c.y, x1: tp.x + jx, y1: tp.y + jy, t: 0, dur: 0.9, delay: k * 0.28, arc: 260, r: 5, dmg: U * 5 * pow, kind: "shell" });
+    fDrops.push({ x0: c.x, y0: c.y, x1: tp.x + jx, y1: tp.y + jy, t: 0, dur: 0.9, delay: k * 0.28, arc: 260, r: 5, dmg: U * 5 * pow * fUnitMul("cannons"), kind: "shell" });
   }
   if (onScreen(c.x, c.y, 0)) tone(90, .18, "triangle", .07, 55);
 }
@@ -570,7 +588,7 @@ function updateTitan(T, dt, U, pow, rate){
   if (T.stompT <= 0){   // 踏みつけ: 足元 半径3を消し飛ばし、半径7へ 1500%
     T.stompT = 2; T.stomp = 0.3;
     queueDestroyCircle(w2g(T.x), w2g(T.y), 3);
-    fRadius(T.x, T.y, BS * 7, U * 15 * pow);
+    fRadius(T.x, T.y, BS * 7, U * 15 * pow * skA("f_titan"));
     addRing({ x: T.x, y: T.y, r: BS * 7.5, color: "140,125,255", dur: 520 });
     addRing({ x: T.x, y: T.y, r: BS * 3.5, color: "255,255,255", dur: 380 });
     if (onScreen(T.x, T.y, 200)){ dimFx.push({ x: T.x, y: T.y, t: 0, kind: "fstomp", dur: 0.5, size: 330 }); sndBoom(); }
@@ -584,7 +602,7 @@ function updateTitan(T, dt, U, pow, rate){
     for (let k = 0; k < 16; k++){
       const j = pool[(Math.random() * pool.length) | 0], p = blockPos(j), side = k & 1 ? 1 : -1;
       const sx = T.x + Math.cos(T.ang + Math.PI / 2 * side) * 26, sy = T.y + Math.sin(T.ang + Math.PI / 2 * side) * 26;
-      fDrops.push({ x0: sx, y0: sy, x1: p.x, y1: p.y, t: 0, dur: 0.55 + Math.random() * 0.4, delay: k * 0.06, arc: 140 + Math.random() * 120, r: 2, dmg: U * 4 * pow, kind: "missile", side });
+      fDrops.push({ x0: sx, y0: sy, x1: p.x, y1: p.y, t: 0, dur: 0.55 + Math.random() * 0.4, delay: k * 0.06, arc: 140 + Math.random() * 120, r: 2, dmg: U * 4 * pow * skA("f_titan"), kind: "missile", side });
     }
     bumpProc("fsalvo", T.x, T.y);
   }
@@ -689,7 +707,7 @@ function updateLinks(dt, U, pow){
     seen.add(key); links.push([u, all[best]]);
   }
   fLinks = links;
-  const dmg = U * 1.0 * 0.5 * pow;
+  const dmg = U * 1.0 * 0.5 * pow * skA("f_hivemind");
   for (const [a, b] of links){
     const d = Math.hypot(b.x - a.x, b.y - a.y);
     for (const j of fRayBlocks(a.x, a.y, Math.atan2(b.y - a.y, b.x - a.x), 0, d, 60)) fRawHit(j, dmg);
@@ -697,62 +715,7 @@ function updateLinks(dt, U, pow){
 }
 
 // ---------- 描画 ----------
-const hunterSpr = makeSprite(48, (g, S) => {
-  const cx = S / 2, cy = S / 2;
-  const eng = g.createRadialGradient(cx - 13, cy, 0, cx - 13, cy, 10);
-  eng.addColorStop(0, "rgba(200,190,255,.9)"); eng.addColorStop(1, "rgba(140,125,255,0)");
-  g.fillStyle = eng; g.beginPath(); g.arc(cx - 13, cy, 10, 0, 7); g.fill();
-  const body = g.createLinearGradient(0, cy - 12, 0, cy + 12);
-  body.addColorStop(0, "#1c1640"); body.addColorStop(0.5, "#5b4bd6"); body.addColorStop(1, "#140f30");
-  g.fillStyle = body; g.strokeStyle = "#cfc4ff"; g.lineWidth = 1.5;
-  g.beginPath(); g.moveTo(cx + 19, cy); g.lineTo(cx - 4, cy - 13); g.lineTo(cx - 14, cy - 10); g.lineTo(cx - 8, cy); g.lineTo(cx - 14, cy + 10); g.lineTo(cx - 4, cy + 13); g.closePath(); g.fill(); g.stroke();
-  g.strokeStyle = "#8c7dff"; g.lineWidth = 1.2; g.beginPath(); g.moveTo(cx - 2, cy - 9); g.lineTo(cx + 10, cy - 2); g.moveTo(cx - 2, cy + 9); g.lineTo(cx + 10, cy + 2); g.stroke();
-  const eye = g.createRadialGradient(cx + 5, cy, 0, cx + 5, cy, 6);
-  eye.addColorStop(0, "#ffffff"); eye.addColorStop(0.4, "#ff6fa8"); eye.addColorStop(1, "rgba(255,80,150,0)");
-  g.fillStyle = eye; g.beginPath(); g.arc(cx + 5, cy, 6, 0, 7); g.fill();
-});
-const drillerSpr = makeSprite(60, (g, S) => {
-  const cx = S / 2, cy = S / 2;
-  g.fillStyle = "#2a2340"; g.strokeStyle = "#8c7dff"; g.lineWidth = 1.4;
-  g.fillRect(cx - 20, cy - 13, 22, 4); g.fillRect(cx - 20, cy + 9, 22, 4);   // 履帯
-  g.fillStyle = "#3e3466"; g.beginPath(); g.rect(cx - 18, cy - 10, 20, 20); g.fill(); g.stroke();
-  const cone = g.createLinearGradient(cx + 2, 0, cx + 27, 0);
-  cone.addColorStop(0, "#c9c2e8"); cone.addColorStop(1, "#6f6890");
-  g.fillStyle = cone; g.strokeStyle = "#ece8ff";
-  g.beginPath(); g.moveTo(cx + 2, cy - 11); g.lineTo(cx + 27, cy); g.lineTo(cx + 2, cy + 11); g.closePath(); g.fill(); g.stroke();
-  const core = g.createRadialGradient(cx - 8, cy, 0, cx - 8, cy, 7);
-  core.addColorStop(0, "#fff"); core.addColorStop(0.5, "#8c7dff"); core.addColorStop(1, "rgba(140,125,255,0)");
-  g.fillStyle = core; g.beginPath(); g.arc(cx - 8, cy, 7, 0, 7); g.fill();
-});
-const teslaSpr = makeSprite(52, (g, S) => {
-  const cx = S / 2, cy = S / 2;
-  g.strokeStyle = "#3d5a76"; g.lineWidth = 5; g.beginPath(); g.arc(cx, cy, 17, 0, 7); g.stroke();
-  g.strokeStyle = "#9ff0ff"; g.lineWidth = 1.5; g.beginPath(); g.arc(cx, cy, 21, 0, 7); g.stroke();
-  g.fillStyle = "#c9f6ff";
-  for (let k = 0; k < 3; k++){ const a = k * Math.PI * 2 / 3 - Math.PI / 2; g.save(); g.translate(cx + Math.cos(a) * 17, cy + Math.sin(a) * 17); g.rotate(a); g.fillRect(-2, -4, 9, 8); g.restore(); }
-  const core = g.createRadialGradient(cx, cy, 0, cx, cy, 12);
-  core.addColorStop(0, "#ffffff"); core.addColorStop(0.4, "#7df9ff"); core.addColorStop(1, "rgba(125,249,255,0)");
-  g.fillStyle = core; g.beginPath(); g.arc(cx, cy, 12, 0, 7); g.fill();
-});
-const bomberSpr = makeSprite(76, (g, S) => {
-  const cx = S / 2, cy = S / 2;
-  const body = g.createLinearGradient(0, cy - 30, 0, cy + 30);
-  body.addColorStop(0, "#151129"); body.addColorStop(0.5, "#4a3e9e"); body.addColorStop(1, "#110d22");
-  g.fillStyle = body; g.strokeStyle = "#b9a8ff"; g.lineWidth = 1.6;
-  g.beginPath(); g.moveTo(cx + 24, cy); g.lineTo(cx - 8, cy - 32); g.lineTo(cx - 18, cy - 30); g.lineTo(cx - 10, cy - 8); g.lineTo(cx - 20, cy);
-  g.lineTo(cx - 10, cy + 8); g.lineTo(cx - 18, cy + 30); g.lineTo(cx - 8, cy + 32); g.closePath(); g.fill(); g.stroke();
-  g.strokeStyle = "rgba(255,170,90,.8)"; g.lineWidth = 1.2;
-  g.beginPath(); g.moveTo(cx - 4, cy - 20); g.lineTo(cx + 12, cy - 4); g.moveTo(cx - 4, cy + 20); g.lineTo(cx + 12, cy + 4); g.stroke();
-  for (const sy of [-24, 24]){ const e = g.createRadialGradient(cx - 17, cy + sy, 0, cx - 17, cy + sy, 7); e.addColorStop(0, "rgba(255,190,120,.95)"); e.addColorStop(1, "rgba(255,150,60,0)"); g.fillStyle = e; g.beginPath(); g.arc(cx - 17, cy + sy, 7, 0, 7); g.fill(); }
-  g.fillStyle = "#dcd4ff"; g.beginPath(); g.ellipse(cx + 8, cy, 6, 3.5, 0, 0, 7); g.fill();
-});
-const cannonSpr = makeSprite(56, (g, S) => {
-  const cx = S / 2, cy = S / 2;
-  g.fillStyle = "#231d3d"; g.strokeStyle = "#8c7dff"; g.lineWidth = 1.6;
-  g.beginPath(); for (let k = 0; k < 8; k++){ const a = k * Math.PI / 4 + Math.PI / 8; g.lineTo(cx + Math.cos(a) * 22, cy + Math.sin(a) * 22); } g.closePath(); g.fill(); g.stroke();
-  g.fillStyle = "#3e3466"; g.beginPath(); g.arc(cx, cy, 13, 0, 7); g.fill(); g.stroke();
-  for (let k = 0; k < 4; k++){ const a = k * Math.PI / 2 + Math.PI / 4; g.fillStyle = "#5b4bd6"; g.fillRect(cx + Math.cos(a) * 20 - 3, cy + Math.sin(a) * 20 - 3, 6, 6); }
-});
+// 機兵の機体は render/unit-art.js の SVG アート (UA.hunter / UA.driller / UA.spider / UA.teslaRing / UA.bomber / UA.cannonBase / UA.titanBody / UA.nanite …)
 burstSprs.fbomb = burstSprite("rgba(255,170,90,.92)", "rgba(185,140,255,.75)");
 burstSprs.fstomp = burstSprite("rgba(185,168,255,.95)", "rgba(140,125,255,.8)");
 burstSprs.fnuke = burstSprite("rgba(200,255,170,.98)", "rgba(255,250,210,.92)");
@@ -774,15 +737,14 @@ function machineDraw(now, toScreen){
     }
     ctx.lineWidth = 1;
   }
-  // ドリラー: 岩の中では半透明 + 掘削の火花
+  // 以下の機体は SVG アート (render/unit-art.js) を重ねて描く。1機あたり setTransform + drawImage 数回だけ
+  // ドリラー: ドリルの溝と履帯が回る4コマ / 岩の中では半透明 + 掘削の火花
   for (const d of MCH.drillers){
     if (!onScreen(d.x, d.y, 60)) continue;
-    const [sx, sy] = toScreen(d.x, d.y), size = 40 * zoom;
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(d.ang); ctx.globalAlpha = d.dig > 0 ? 0.8 : 1;
-    ctx.drawImage(drillerSpr, -size / 2, -size / 2, size, size);
-    ctx.strokeStyle = "rgba(255,255,255,.7)"; ctx.lineWidth = 1;   // 回るドリルの溝
-    for (let k = 0; k < 3; k++){ const f = ((d.spin + k / 3) % 1), x = (3 + f * 22) / 60 * size; ctx.beginPath(); ctx.moveTo(x, -(1 - f) * 0.17 * size); ctx.lineTo(x + 2, (1 - f) * 0.17 * size); ctx.stroke(); }
-    ctx.restore();
+    const [sx, sy] = toScreen(d.x, d.y);
+    ctx.globalAlpha = d.dig > 0 ? 0.8 : 1;
+    uaXf(sx, sy, d.ang); uaImg(UA.driller[(((d.spin * 3) % 1) * 4) | 0], 0, 0, 40 / 60 * zoom);
+    uaEnd(); ctx.globalAlpha = 1;
     if (d.dig > 0 && !low){
       const nx = d.x + Math.cos(d.ang) * 18, ny = d.y + Math.sin(d.ang) * 18, [fx, fy] = toScreen(nx, ny);
       ctx.fillStyle = "#ffd9a0";
@@ -790,89 +752,77 @@ function machineDraw(now, toScreen){
     }
     if (om) fOmegaHalo(sx, sy, 22 * zoom, now);
   }
-  // スパイダー (子機は小さく半透明)
+  // スパイダー: 8本脚の歩行6コマ + 噛みつきの大顎 (子機は小さく半透明)
   const spider = s => {
     if (!onScreen(s.x, s.y, 40)) return;
     const [sx, sy] = toScreen(s.x, s.y), k = (s.kid ? 0.7 : 1) * zoom;
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(s.ang);
     if (s.kid) ctx.globalAlpha = 0.55 + 0.45 * Math.min(1, s.life / 5);
-    ctx.strokeStyle = "#b9a8ff"; ctx.lineWidth = Math.max(1, 1.6 * k);
-    for (let i = 0; i < 4; i++){
-      const ph = Math.sin(s.walk + i * 1.6) * 0.35, ax = (-5 + i * 3.4) * k;
-      for (const sg of [-1, 1]){
-        ctx.beginPath(); ctx.moveTo(ax, 0); ctx.lineTo(ax + (2 + ph * 6) * k, sg * 8 * k); ctx.lineTo(ax + (4 + ph * 9) * k, sg * 13 * k); ctx.stroke();
-      }
-    }
-    ctx.fillStyle = "#2a2346"; ctx.beginPath(); ctx.ellipse(0, 0, 8 * k, 6 * k, 0, 0, 7); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = s.bite > 0 ? "#ffffff" : "#ff6fa8";
-    ctx.beginPath(); ctx.arc(6 * k, -2 * k, 1.6 * k, 0, 7); ctx.arc(6 * k, 2 * k, 1.6 * k, 0, 7); ctx.fill();
-    if (s.bite > 0){ ctx.strokeStyle = "#ffffff"; ctx.beginPath(); ctx.moveTo(8 * k, -4 * k); ctx.lineTo(13 * k, 0); ctx.lineTo(8 * k, 4 * k); ctx.stroke(); }
-    ctx.restore();
+    const fi = ((((s.walk / (Math.PI * 2)) * 6) % 6 + 6) % 6) | 0;
+    uaXf(sx, sy, s.ang); uaImg(UA.spider[fi], 0, 0, k);
+    if (s.bite > 0) uaImg(UA.spiderBite, 0, 0, k);
+    uaEnd(); ctx.globalAlpha = 1;
     if (om) fOmegaHalo(sx, sy, 12 * k, now);
   };
   for (const s of MCH.spiders) spider(s);
   for (const s of MCH.kids) spider(s);
-  // キャノン: 台座 + 砲身 (発射で反動)
+  // キャノン: 要塞の台座 + 旋回砲塔 (発射で後退 + マズルフラッシュ)
   for (const c of MCH.cannons){
     if (!onScreen(c.x, c.y, 60)) continue;
-    const [sx, sy] = toScreen(c.x, c.y), size = 40 * zoom;
-    ctx.drawImage(cannonSpr, sx - size / 2, sy - size / 2, size, size);
-    const rec = Math.max(0, c.recoil) * 20 * zoom;
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(c.aim);
-    ctx.fillStyle = "#5b4bd6"; ctx.strokeStyle = "#dcd4ff"; ctx.lineWidth = 1.2;
-    ctx.fillRect(4 * zoom - rec, -3.5 * zoom, 22 * zoom, 7 * zoom); ctx.strokeRect(4 * zoom - rec, -3.5 * zoom, 22 * zoom, 7 * zoom);
-    if (c.recoil > 0.12){ const fs = 22 * zoom; ctx.globalCompositeOperation = "lighter"; ctx.drawImage(flashSpr, 26 * zoom - rec - fs / 2, -fs / 2, fs, fs); }
-    ctx.restore();
+    const [sx, sy] = toScreen(c.x, c.y), rec = Math.max(0, c.recoil) * 20 * zoom;
+    uaXf(sx, sy, 0); uaImg(UA.cannonBase, 0, 0, 40 / 56 * zoom);
+    uaXf(sx, sy, c.aim); uaImg(UA.cannonGun, -rec, 0, zoom);
+    if (c.recoil > 0.12){ const fs = 22 * zoom; ctx.globalCompositeOperation = "lighter"; ctx.drawImage(flashSpr, 28 * zoom - rec - fs / 2, -fs / 2, fs, fs); ctx.globalCompositeOperation = "source-over"; }
+    uaEnd();
     if (c.mode === "fly" && !low){ ctx.strokeStyle = "rgba(185,168,255,.5)"; ctx.setLineDash([4, 4]); const [tx, ty] = toScreen(c.sx, c.sy); ctx.beginPath(); ctx.arc(tx, ty, 14 * zoom, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
     if (om) fOmegaHalo(sx, sy, 22 * zoom, now);
   }
-  // ハンター
+  // ハンター: 噴射炎 (揺らぐ。狩猟本能中は強く) + 機体 + 射撃の閃光
   for (const h of MCH.hunters){
     if (!onScreen(h.x, h.y, 40)) continue;
-    const [sx, sy] = toScreen(h.x, h.y), size = 30 * zoom;
+    const [sx, sy] = toScreen(h.x, h.y), S = 30 / 48 * zoom;
     if (h.frenzy > 0 && !low){ ctx.fillStyle = "rgba(255,111,168,.22)"; ctx.beginPath(); ctx.arc(sx, sy, 15 * zoom, 0, 7); ctx.fill(); }
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(h.ang); ctx.drawImage(hunterSpr, -size / 2, -size / 2, size, size);
-    if (h.flash > 0){ const fs = 16 * zoom; ctx.globalCompositeOperation = "lighter"; ctx.drawImage(flashSpr, 12 * zoom - fs / 2, -fs / 2, fs, fs); }
-    ctx.restore();
+    uaXf(sx, sy, h.ang);
+    const fl = (h.frenzy > 0 ? 0.85 : 0.6) + 0.15 * Math.sin(now / 27 + h.ha * 7);
+    uaImg(UA_FLAME_VIOLET, -15.4 * S, -5.9 * S, S * fl, S * 0.5);
+    uaImg(UA_FLAME_VIOLET, -15.4 * S, 5.9 * S, S * fl, S * 0.5);
+    uaImg(UA.hunter, 0, 0, S);
+    if (h.flash > 0){ const fs = 16 * zoom; ctx.globalCompositeOperation = "lighter"; ctx.drawImage(flashSpr, 13 * zoom - fs / 2, -fs / 2, fs, fs); ctx.globalCompositeOperation = "source-over"; }
+    uaEnd();
     if (om) fOmegaHalo(sx, sy, 16 * zoom, now);
   }
-  // テスラ
+  // テスラ: 銅コイルの輪が回り、中心の光球が脈動する (放電の瞬間は膨らむ)
   for (const t of MCH.teslas){
     if (!onScreen(t.x, t.y, 50)) continue;
-    const [sx, sy] = toScreen(t.x, t.y), size = 36 * zoom * (1 + (t.flash > 0 ? 0.12 : 0));
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(now / 500 + t.ha); ctx.drawImage(teslaSpr, -size / 2, -size / 2, size, size); ctx.restore();
+    const [sx, sy] = toScreen(t.x, t.y), S = 36 / 52 * zoom * (1 + (t.flash > 0 ? 0.12 : 0));
+    uaXf(sx, sy, now / 500 + t.ha); uaImg(UA.teslaRing, 0, 0, S);
+    uaXf(sx, sy, -now / 260); uaImg(UA.teslaCore, 0, 0, S * (1 + 0.12 * Math.sin(now / 110 + t.ha * 3) + (t.flash > 0 ? 0.35 : 0)));
+    uaEnd();
     if (!low && Math.random() < 0.3){ ctx.strokeStyle = "rgba(159,240,255,.7)"; ctx.lineWidth = 1; const a = Math.random() * 6.3; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + Math.cos(a) * 20 * zoom, sy + Math.sin(a) * 20 * zoom); ctx.stroke(); }
     if (om) fOmegaHalo(sx, sy, 20 * zoom, now);
   }
-  // タイタン: 2本の脚 (歩行で交互に前後) + 胴体 + 肩の砲塔
+  // タイタン: 影 → 2本の脚 (歩行で交互に前後) → 胴体 → 目の光 (脈動。暴走中は赤)
   if (MCH.titan && onScreen(MCH.titan.x, MCH.titan.y, 120)){
     const T = MCH.titan, [sx, sy] = toScreen(T.x, T.y), k = zoom * (1 + (T.stomp > 0 ? 0.06 * Math.sin(T.stomp * 30) : 0));
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(T.ang);
-    ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(-4 * k, 6 * k, 44 * k, 34 * k, 0, 0, 7); ctx.fill();
-    for (const sg of [-1, 1]){   // 脚
-      const sw = Math.sin(T.step + (sg > 0 ? Math.PI : 0)) * 14 * k;
-      ctx.fillStyle = "#2a2346"; ctx.strokeStyle = "#8c7dff"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.rect(-10 * k + sw, sg * 20 * k - 7 * k, 30 * k, 14 * k); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#4a3e9e"; ctx.beginPath(); ctx.rect(14 * k + sw, sg * 20 * k - 9 * k, 12 * k, 18 * k); ctx.fill(); ctx.stroke();
-    }
-    const hull = ctx.createLinearGradient(0, -28 * k, 0, 28 * k);
-    hull.addColorStop(0, "#151129"); hull.addColorStop(0.5, "#5b4bd6"); hull.addColorStop(1, "#110d22");
-    ctx.fillStyle = hull; ctx.strokeStyle = "#dcd4ff"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(26 * k, 0); ctx.lineTo(12 * k, -24 * k); ctx.lineTo(-20 * k, -28 * k); ctx.lineTo(-28 * k, 0); ctx.lineTo(-20 * k, 28 * k); ctx.lineTo(12 * k, 24 * k); ctx.closePath(); ctx.fill(); ctx.stroke();
-    for (const sg of [-1, 1]){ ctx.fillStyle = "#3e3466"; ctx.fillRect(-14 * k, sg * 26 * k - 7 * k, 20 * k, 14 * k); ctx.strokeRect(-14 * k, sg * 26 * k - 7 * k, 20 * k, 14 * k);
-      ctx.fillStyle = "#ffb070"; for (let q = 0; q < 3; q++) ctx.fillRect(-10 * k + q * 6 * k, sg * 26 * k - 2 * k, 3 * k, 4 * k); }
-    const eye = ctx.createRadialGradient(10 * k, 0, 0, 10 * k, 0, 12 * k);
-    eye.addColorStop(0, "#ffffff"); eye.addColorStop(0.35, om ? "#ff4d6d" : "#ff6fa8"); eye.addColorStop(1, "rgba(255,80,150,0)");
-    ctx.fillStyle = eye; ctx.beginPath(); ctx.arc(10 * k, 0, 12 * k, 0, 7); ctx.fill();
-    ctx.restore();
+    uaXf(sx, sy, T.ang);
+    ctx.globalAlpha = 0.45; uaImg(UA.titanShadow, 0, 0, k); ctx.globalAlpha = 1;
+    for (const sg of [-1, 1]) uaImg(UA.titanLeg, Math.sin(T.step + (sg > 0 ? Math.PI : 0)) * 14 * k, sg * 20 * k, k);
+    uaImg(UA.titanBody, 0, 0, k);
+    ctx.globalAlpha = 0.8 + 0.2 * Math.sin(now / 150);
+    uaImg(uaGlow(om ? "#ff4d6d" : "#ff6fa8"), 10 * k, 0, k * 1.5);
+    ctx.globalAlpha = 1; uaEnd();
     if (om) fOmegaHalo(sx, sy, 50 * zoom, now);
   }
-  // ボマー (上空: 影を地表にずらして描く)
+  // ボマー (上空: 焼いた影を地表にずらして描く。ctx.filter は使わない) + 2基のエンジン炎
   for (const b of MCH.bombers){
     if (!onScreen(b.x, b.y, 80)) continue;
-    const [sx, sy] = toScreen(b.x, b.y), size = 54 * zoom, h = b.head || 0;
-    ctx.save(); ctx.translate(sx + 16 * zoom, sy + 22 * zoom); ctx.rotate(h); ctx.globalAlpha = 0.25; ctx.filter = "brightness(0)"; ctx.drawImage(bomberSpr, -size / 2, -size / 2, size, size); ctx.restore();
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(h); ctx.drawImage(bomberSpr, -size / 2, -size / 2, size, size); ctx.restore();
+    const [sx, sy] = toScreen(b.x, b.y), S = 54 / 76 * zoom, h = b.head || 0;
+    ctx.globalAlpha = 0.28; uaXf(sx + 16 * zoom, sy + 22 * zoom, h); uaImg(UA.bomberShadow, 0, 0, S); ctx.globalAlpha = 1;
+    uaXf(sx, sy, h);
+    const fl = 0.8 + 0.18 * Math.sin(now / 31) + 0.08 * Math.sin(now / 12.7);
+    uaImg(UA_FLAME_ORANGE, -20.5 * S, -24 * S, S * fl, S * 0.8);
+    uaImg(UA_FLAME_ORANGE, -20.5 * S, 24 * S, S * fl, S * 0.8);
+    uaImg(UA.bomber, 0, 0, S);
+    uaEnd();
     if (om) fOmegaHalo(sx, sy, 28 * zoom, now);
   }
   // 落下物 / 砲弾 / ミサイル (着弾点の予告輪 + 弧を描く本体)
@@ -902,18 +852,14 @@ function machineDraw(now, toScreen){
       ctx.lineWidth = 1;
     }
   }
-  // ナノマシン: 銀紫の六角の群れ
+  // ナノマシン: 銀紫の六角の群れ (1機1枚。光の輪と公転する粒は焼き込み済み)
+  const nA = om ? UA.naniteOm : UA.nanite;
   for (const n of MCH.nanites){
     if (!onScreen(n.x, n.y, 30)) continue;
-    const [sx, sy] = toScreen(n.x, n.y), r = 6 * zoom;
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(n.spin);
-    ctx.fillStyle = om ? "rgba(255,77,109,.25)" : "rgba(185,168,255,.22)"; ctx.beginPath(); ctx.arc(0, 0, r * 2.4, 0, 7); ctx.fill();
-    ctx.fillStyle = "#d8d4ea"; ctx.strokeStyle = "#8c7dff"; ctx.lineWidth = 1.2;
-    ctx.beginPath(); for (let k = 0; k < 6; k++){ const a = k * Math.PI / 3; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = "#ff6fa8"; ctx.beginPath(); ctx.arc(0, 0, r * 0.32, 0, 7); ctx.fill();
-    if (!low) for (let k = 0; k < 3; k++){ const a = n.spin * 2 + k * 2.1; ctx.fillStyle = "#e6e0ff"; ctx.fillRect(Math.cos(a) * r * 1.8 - 1, Math.sin(a) * r * 1.8 - 1, 2, 2); }
-    ctx.restore();
+    const [sx, sy] = toScreen(n.x, n.y);
+    uaXf(sx, sy, n.spin); uaImg(nA, 0, 0, zoom);
   }
+  uaEnd();
 }
 const fLowFx = () => !!state.fxLow;
 function fOmegaHalo(sx, sy, r, now){
@@ -966,8 +912,8 @@ let f0RebuildT = 0;               // 突撃で失ったプロトの再構築時�
 let f0Active = false;
 
 // --- 共有倍率 (自律機兵側は fPowWith / fRate に組み込み済み) ---
-function f0BlueprintMul(){ return sk("f0_blueprint") ? 1 + Math.min(0.6, state.lv * 0.01) : 1; }   // 設計図: レベル×1%、最大+60%
-function f0IdleMul(){ return (sk("f0_idle") && idleT >= 30) ? 1.5 : 1; }                              // 自動戦闘プログラム: 無操作30秒で ×1.5 (タイマーは skill-fx.js の autopilot と共用)
+function f0BlueprintMul(){ return sk("f0_blueprint") ? 1 + Math.min(0.6, state.lv * 0.01) * skA("f0_blueprint") : 1; }   // 設計図: レベル×1%、最大+60%
+function f0IdleMul(){ return idleT >= 30 ? skMul("f0_idle", 1.5) : 1; }                              // 自動戦闘プログラム: 無操作30秒で ×1.5 (タイマーは skill-fx.js の autopilot と共用)
 const f0Pow = () => f0BlueprintMul() * f0IdleMul();        // f0 ユニット (プロト・砲台・ドローン・地雷) の威力倍率
 const f0RateMul = () => (f0ChargeT > 0 ? 2 : 1);           // 急速充電中の動作速度
 
@@ -1004,10 +950,10 @@ function f0OnLevelUp(){ if (sk("f0_charge")) f0ChargeT = 20; }   // 急速充電
 function f0OnPlayerHit(d){                                        // mobs.js の damagePlayer から (HPを引く直前)
   if (sk("f0_decoy")){                                            // 囮装甲: プロトが約5ブロック以内にいる間、被ダメージ -15%
     const R2 = (BS * 5) * (BS * 5);
-    for (const p of F0.protos){ const dx = p.x - player.x, dy = p.y - player.y; if (dx * dx + dy * dy <= R2){ d *= 0.85; break; } }
+    for (const p of F0.protos){ const dx = p.x - player.x, dy = p.y - player.y; if (dx * dx + dy * dy <= R2){ d *= skMul("f0_decoy", 0.85); break; } }
   }
   if (sk("f0_repair") && F0.protos.length && state.hp - d > 0){   // 修理プロトコル: 受けたダメージの40%を5秒かけて回復
-    const amt = d * 0.4;
+    const amt = d * Math.min(1, 0.4 * skA("f0_repair"));
     if (amt > 0){
       if (f0Heals.length >= 8){ let s = amt; for (const h of f0Heals) s += h.left; f0Heals = [{ left: s, rate: s / 5 }]; }
       else f0Heals.push({ left: amt, rate: amt / 5 });
@@ -1055,7 +1001,7 @@ function syncProtos(){
   if (!sk("f0_salvage")) for (let i = F0.protos.length - 1; i >= 0; i--) if (F0.protos[i].temp) F0.protos.splice(i, 1);
 }
 function protoFire(p, U, pow){
-  const base = U * 0.10 * 0.5 * pow;   // 0.5秒間隔: 1発 = DPS×10% ÷ 毎秒2発
+  const base = U * 0.10 * 0.5 * pow * fUnitMul("protos");   // 0.5秒間隔: 1発 = DPS×10% ÷ 毎秒2発
   const range = BS * 10, mobRange = sk("f0_intercept") ? BS * 17 : range;
   const shots = [];
   const mb = p.tm ? mobById(p.tm) : null;
@@ -1071,16 +1017,16 @@ function protoFire(p, U, pow){
     }
   }
   shots.forEach((s, n) => {
-    let mult = n === 0 ? 1 : 0.7;
+    let mult = n === 0 ? 1 : 0.7 * skA("f0_split");
     if (n === 0){   // 収束レンズ: 同じ目標を撃ち続けるほど +20%/発 (最大×2)
       const key = s.mob ? "m" + s.mob.id : "b" + s.idx;
-      if (sk("f0_lens")){ if (p.lensKey === key) p.lensN++; else { p.lensKey = key; p.lensN = 0; } mult = Math.min(2, 1 + 0.2 * p.lensN); }
+      if (sk("f0_lens")){ if (p.lensKey === key) p.lensN++; else { p.lensKey = key; p.lensN = 0; } mult = Math.min(1 + skA("f0_lens"), 1 + 0.2 * skA("f0_lens") * p.lensN); }
       else { p.lensKey = key; p.lensN = 0; }
     }
     let dmg = base * mult;
     const bp = s.mob ? null : blockPos(s.idx), tx = s.mob ? s.mob.x : bp.x, ty = s.mob ? s.mob.y : bp.y;
     addBeam({ x1: p.x, y1: p.y, x2: tx, y2: ty, w: 1.6, color: "#7df9ff", life: 110 });
-    if (s.mob){ if (sk("f0_intercept")) dmg *= 2; f0HitMob(s.mob, dmg); }   // 迎撃プログラム: モンスターへのダメージ×2
+    if (s.mob){ dmg *= skMul("f0_intercept", 2); f0HitMob(s.mob, dmg); }   // 迎撃プログラム: モンスターへのダメージ×2
     else f0HitBlock(s.idx, dmg);
   });
   p.flash = 0.06;
@@ -1126,7 +1072,7 @@ function updateProto(p, dt, U, pow){
     if (d <= 34 || p.dive.t <= 0){
       bumpProc("f0kami", p.x, p.y);
       addRing({ x: p.x, y: p.y, r: BS * 2.8, color: "255,170,90", dur: 420 });
-      f0Radius(p.x, p.y, BS * 2.5, U * 4 * pow);
+      f0Radius(p.x, p.y, BS * 2.5, U * 4 * pow * skA("f0_kamikaze"));
       if (onScreen(p.x, p.y, 60)) sndBoom();
       if (!p.temp) f0RebuildT = 3;   // その場で組み直し: 少し置いて自機そばに復帰
       return false;
@@ -1182,7 +1128,7 @@ function packTurret(T, explode){
   if (explode && sk("f0_pack")){   // 撤収爆破: 畳むとき、その場で爆発
     bumpProc("f0pack", T.x, T.y);
     addRing({ x: T.x, y: T.y, r: BS * 3.4, color: "255,170,90", dur: 420 });
-    f0Radius(T.x, T.y, BS * 3, playerDamage() * 2 * f0Pow());
+    f0Radius(T.x, T.y, BS * 3, playerDamage() * 2 * f0Pow() * skA("f0_pack"));
     if (onScreen(T.x, T.y, 60)) sndBoom();
   }
 }
@@ -1233,7 +1179,7 @@ function turretFire(T, dt, U, pow){
   T.fireT -= dt * f0RateMul();
   if (T.fireT > 0) return;
   T.fireT = 0.5;
-  const per = (sk("f0_range") ? 0.50 : 0.35) * 0.5;   // 0.5秒間隔: 1発 = DPS×35% (測距儀で50%) ÷ 毎秒2発
+  const per = (0.35 * skA("f0_turret") + skAdd("f0_range", 0.15)) * 0.5 * skLvMul("f0_turret2");   // 0.5秒間隔: 1発 = DPS×35% (測距儀で50%) ÷ 毎秒2発
   const shots = sk("f0_turret2") ? 2 : 1;              // 連装砲台: 1回に2発
   for (let s = 0; s < shots; s++){
     const mb = T.tm ? mobById(T.tm) : null;
@@ -1265,7 +1211,7 @@ function updateScrapDrone(d, dt, U, pow){
   if (dist <= 30 || d.t > 2.5){
     bumpProc("f0drone", d.x, d.y);
     addRing({ x: d.x, y: d.y, r: BS * 3.4, color: "255,170,90", dur: 420 });
-    f0Radius(d.x, d.y, BS * 3, U * 3 * pow);
+    f0Radius(d.x, d.y, BS * 3, U * 3 * pow * skA("f0_scrap") * skLvMul("f0_scrap2"));
     if (onScreen(d.x, d.y, 60)) sndBoom();
     return false;
   }
@@ -1302,66 +1248,58 @@ function f0Update(dt, now){
       F0.mines.splice(i, 1);
       bumpProc("f0mine", mn.x, mn.y);
       addRing({ x: mn.x, y: mn.y, r: BS * 1.8, color: "255,120,60", dur: 380 });
-      f0Radius(mn.x, mn.y, BS * 1.5, U * 2 * pow);   // 半径1.5ブロック = 3x3を巻き込む
+      f0Radius(mn.x, mn.y, BS * 1.5, U * 2 * pow * skA("f0_mines"));   // 半径1.5ブロック = 3x3を巻き込む
     }
   }
 }
 
 // --- f0 の描画 (machineDraw から) ---
-const protoSpr = makeSprite(36, (g, S) => {
-  const cx = S / 2, cy = S / 2;
-  g.fillStyle = "#12333d"; g.strokeStyle = "#7df9ff"; g.lineWidth = 1.6;
-  g.beginPath(); g.arc(cx, cy, 10, 0, 7); g.fill(); g.stroke();
-  g.fillStyle = "#2a5a68"; g.fillRect(cx - 13, cy - 3, 6, 6); g.fillRect(cx + 7, cy - 3, 6, 6);
-  g.fillStyle = "#d8fbff"; g.beginPath(); g.arc(cx, cy, 4.2, 0, 7); g.fill();
-});
 function f0Draw(now, toScreen){
   const low = fLowFx();
-  // 地雷: 点滅する小さな信管
+  // 地雷: 点滅する信管 (点灯 / 消灯の2コマ) + 小さく脈動
   for (const mn of F0.mines){
     if (!onScreen(mn.x, mn.y, 30)) continue;
     const [sx, sy] = toScreen(mn.x, mn.y);
-    const blink = (now / 200 + mn.idx) % 2 < 1;
-    ctx.fillStyle = blink ? "#ff5340" : "#7a1f16";
-    ctx.beginPath(); ctx.arc(sx, sy, 3.4 * zoom, 0, 7); ctx.fill();
-    ctx.strokeStyle = "rgba(255,83,64,.6)"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(sx, sy, (5 + 2 * Math.sin(now / 150)) * zoom, 0, 7); ctx.stroke();
+    uaXf(sx, sy, 0); uaImg((now / 200 + mn.idx) % 2 < 1 ? UA.mineOn : UA.mineOff, 0, 0, zoom * (1 + 0.08 * Math.sin(now / 150)));
   }
-  // 簡易砲台: 台座 + 砲身 (組み立て直後は上から落ちてくる・撤収爆破の直前は点滅)
+  uaEnd();
+  // 簡易砲台: 三脚の台座 + 旋回砲 (連装砲台で2連)。組み立て直後は上から落ちてくる (地表に影) ・撤収爆破の直前は点滅
   for (const T of F0.turrets){
-    if (onScreen(T.x, T.y, 60)){
-      const [sx0, sy0] = toScreen(T.x, T.y), sx = sx0, sy = sy0 - Math.max(0, T.drop) * 160 * zoom;
-      ctx.save();
-      if (T.life < 1.2 && sk("f0_pack")) ctx.globalAlpha = 0.45 + 0.45 * Math.abs(Math.sin(now / 90));
-      ctx.translate(sx, sy);
-      ctx.fillStyle = "#1c2f38"; ctx.strokeStyle = "#7df9ff"; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.moveTo(-13 * zoom, 9 * zoom); ctx.lineTo(13 * zoom, 9 * zoom); ctx.lineTo(8 * zoom, -4 * zoom); ctx.lineTo(-8 * zoom, -4 * zoom); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.rotate(T.ang);
-      ctx.fillStyle = T.flash > 0 ? "#eafcff" : "#9adfe8";
-      ctx.fillRect(0, -2.4 * zoom, 17 * zoom, 4.8 * zoom);
-      ctx.restore();
-      ctx.fillStyle = "#7df9ff"; ctx.beginPath(); ctx.arc(sx, sy - 4 * zoom, 3 * zoom, 0, 7); ctx.fill();
-    }
+    if (!onScreen(T.x, T.y, 60)) continue;
+    const [sx, sy0] = toScreen(T.x, T.y), drop = Math.max(0, T.drop), sy = sy0 - drop * 160 * zoom, S = 0.9 * zoom;
+    const a0 = T.life < 1.2 && sk("f0_pack") ? 0.45 + 0.45 * Math.abs(Math.sin(now / 90)) : 1;
+    if (!low){ ctx.globalAlpha = 0.35 * a0 * (1 - Math.min(1, drop)); uaXf(sx + 2 * zoom, sy0 + 3 * zoom, 0); uaImg(UA.blob, 0, 0, S * 1.4); }
+    ctx.globalAlpha = a0;
+    uaXf(sx, sy, 0); uaImg(UA.turBase, 0, 0, S);
+    const rec = T.flash > 0 ? 2.4 * zoom : 0;
+    uaXf(sx, sy, T.ang); uaImg(sk("f0_turret2") ? UA.turGun2 : UA.turGun, -rec, 0, S);
+    if (T.flash > 0){ const fs = 14 * zoom; ctx.globalCompositeOperation = "lighter"; ctx.drawImage(flashSpr, 21 * S - rec - fs / 2, -fs / 2, fs, fs); ctx.globalCompositeOperation = "source-over"; }
+    uaEnd(); ctx.globalAlpha = 1;
   }
-  // 自爆ドローン: オレンジの小型機
+  // 自爆ドローン: オレンジのダート + 噴射炎
   for (const d of F0.drones){
     if (!onScreen(d.x, d.y, 40)) continue;
     const [sx, sy] = toScreen(d.x, d.y);
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(d.ang);
-    ctx.fillStyle = "#ff9a3c"; ctx.strokeStyle = "#ffd9a0"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(8 * zoom, 0); ctx.lineTo(-6 * zoom, 5 * zoom); ctx.lineTo(-6 * zoom, -5 * zoom); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.restore();
+    uaXf(sx, sy, d.ang);
+    uaImg(UA_FLAME_ORANGE, -4.5 * zoom, 0, zoom * (0.5 + 0.12 * Math.sin(now / 23 + d.x)), zoom * 0.55);
+    uaImg(UA.kami, 0, 0, zoom);
   }
-  // プロト: 小さなドローン (丸い機体+発光コア)。臨時機 (部品取り) は半透明で、消滅が近いと点滅
+  uaEnd();
+  // プロト: 小型ドローン (両脇のスラスタ炎 + 脈動するコア)。臨時機 (部品取り) は半透明で、消滅が近いと点滅
   for (const p of F0.protos){
     if (!onScreen(p.x, p.y, 50)) continue;
-    const [sx, sy] = toScreen(p.x, p.y), size = 36 * zoom;
-    ctx.save();
-    if (p.temp) ctx.globalAlpha = p.temp < 3 ? (0.35 + 0.4 * Math.abs(Math.sin(now / 120))) : 0.75;
-    ctx.translate(sx, sy); ctx.rotate(p.ang);
-    ctx.drawImage(protoSpr, -size / 2, -size / 2, size, size);
-    ctx.restore();
-    if (p.flash > 0){ ctx.fillStyle = "rgba(216,251,255,.85)"; ctx.beginPath(); ctx.arc(sx + Math.cos(p.ang) * 12 * zoom, sy + Math.sin(p.ang) * 12 * zoom, 3 * zoom, 0, 7); ctx.fill(); }
+    const [sx, sy] = toScreen(p.x, p.y);
+    const a0 = p.temp ? (p.temp < 3 ? (0.35 + 0.4 * Math.abs(Math.sin(now / 120))) : 0.75) : 1;
+    ctx.globalAlpha = a0;
+    uaXf(sx, sy, p.ang);
+    const fl = 0.38 + 0.08 * Math.sin(now / 25 + p.x * 0.1);
+    uaImg(UA_FLAME_CYAN, -5 * zoom, -11.5 * zoom, zoom * fl, zoom * 0.45);
+    uaImg(UA_FLAME_CYAN, -5 * zoom, 11.5 * zoom, zoom * fl, zoom * 0.45);
+    uaImg(UA.proto, 0, 0, zoom);
+    ctx.globalAlpha = a0 * (0.7 + 0.3 * Math.sin(now / 200 + p.y * 0.1));
+    uaImg(uaGlow("#7df9ff"), 0, 0, zoom * 0.7);
+    uaEnd(); ctx.globalAlpha = 1;
+    if (p.flash > 0){ ctx.fillStyle = "rgba(216,251,255,.85)"; ctx.beginPath(); ctx.arc(sx + Math.cos(p.ang) * 14 * zoom, sy + Math.sin(p.ang) * 14 * zoom, 3 * zoom, 0, 7); ctx.fill(); }
     if (!low && p.dive){ ctx.strokeStyle = "rgba(255,120,60,.7)"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(sx, sy, 13 * zoom, 0, 7); ctx.stroke(); ctx.lineWidth = 1; }
   }
 }

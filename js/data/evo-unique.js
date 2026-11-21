@@ -643,13 +643,11 @@ function drawEvoUniques(now, toScreen){
   }
   for (const t of evoTurrets){
     const [sx, sy] = toScreen(t.x, t.y), f = Math.min(1, (t.until - now) / 600);
+    // SVG アート (render/unit-art.js): 武器色の六角台座がゆっくり回り、砲身が狙いを向く
     ctx.globalAlpha = Math.max(0.2, f);
-    ctx.fillStyle = hexA(t.w.accent, 0.25); ctx.beginPath(); ctx.arc(sx, sy, 11, 0, 7); ctx.fill();
-    ctx.strokeStyle = t.w.accent; ctx.lineWidth = 2; ctx.beginPath();
-    for (let k = 0; k < 6; k++){ const a = k * Math.PI / 3 + now / 900; ctx.lineTo(sx + Math.cos(a) * 8, sy + Math.sin(a) * 8); }
-    ctx.closePath(); ctx.stroke();
-    ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + Math.cos(t.a) * 13, sy + Math.sin(t.a) * 13); ctx.stroke();
-    ctx.globalAlpha = 1; ctx.lineWidth = 1;
+    uaXf(sx, sy, now / 900); uaImg(uaTint("evoBase", t.w.accent), 0, 0, 1);
+    uaXf(sx, sy, t.a); uaImg(uaTint("evoGun", t.w.accent), 0, 0, 1);
+    uaEnd(); ctx.globalAlpha = 1;
   }
   for (const o of evoOrbs){
     const [sx, sy] = toScreen(player.x + Math.cos(o.a) * 64, player.y + Math.sin(o.a) * 64);

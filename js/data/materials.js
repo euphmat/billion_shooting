@@ -281,7 +281,7 @@ function invAdd(k, n){
     const cap = sk("e_sell3") ? 9999 : sk("e_sell2") ? 2999 : 999;
     if (state.inv[k] > cap){
       const ex = state.inv[k] - cap; state.inv[k] = cap;
-      if (typeof addCoins === "function") addCoins(ex * Math.max(1, Math.round(MAT[k].coin * 10)) * (sk("e_sell2") ? 2 : 1) * (sk("e_sell3") ? 2 : 1) * (1 + (typeof artVal === "function" ? artVal("sell") : 0)));
+      if (typeof addCoins === "function") addCoins(Math.round(ex * Math.max(1, Math.round(MAT[k].coin * 10)) * skA("e_sell") * skMul("e_sell2", 2) * skMul("e_sell3", 2) * (1 + (typeof artVal === "function" ? artVal("sell") : 0))));
     }
   }
 }

@@ -14,7 +14,7 @@ const playerDamage = () => weaponAtkMul(state.weapon);
 const shotDamage   = (k = state.weapon) => WEAPONS[k].dmg * weaponPowerMul(k);
 const weaponYield  = () => WEAPONS[state.weapon].yield;   // 採掘ボーナス (コイン倍率)
 const playerSpeed  = () => 270 * (sk("d_boost") ? 1.15 : 1) * (1 + (typeof artVal === "function" ? artVal("spd") : 0)) * (1 + MASTERY.d.spd[masteryRank("d")]) * (typeof earlySpeedMul === "function" ? earlySpeedMul() : 1);   // 艦隊マスタリー: 移動速度 / 序盤スキル (game/skill-early.js)
-const magnetRange  = () => 90 * (1 + (typeof artVal === "function" ? artVal("magnet") : 0)) * (sk("c_philosopher") ? 3 : 1) * (sk("c0_magnet") ? 1.25 : 1);   // 無限財宝 (奥義): コイン吸引範囲 ×3 / 小銭拾い: +25%
+const magnetRange  = () => 90 * (1 + (typeof artVal === "function" ? artVal("magnet") : 0)) * (sk("c_philosopher") ? 3 : 1) * (sk("c0_magnet") ? 1.25 : 1);   // 吸引範囲は「範囲」なのでスキルLvでは広げない   // 無限財宝 (奥義): コイン吸引範囲 ×3 / 小銭拾い: +25%
 const weaponDPS = w => 5 * w.power;   // 基礎ダメージ1あたりの実効DPS
 const playerDPS    = () => weaponDPS(WEAPONS[state.weapon]) * weaponPowerMul(state.weapon);
 // ---------- 攻撃ボットの装備 ----------

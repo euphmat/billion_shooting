@@ -393,16 +393,13 @@ const DICE_PIPS = { 1:[[0,0]], 2:[[-.45,-.45],[.45,.45]], 3:[[-.45,-.45],[0,0],[
 function drawArtifactsFx(now, toScreen){
   const [px, py] = toScreen(player.x, player.y);
   if (artHas("lg_gear") && playerTrail.length > 2){   // 時空の歯車: 残像 (薄い矢じり)
-    ctx.strokeStyle = "#7df0ff"; ctx.lineWidth = 1.2;
-    for (let i = playerTrail.length - 1; i >= 2; i -= 2){
+    for (let i = playerTrail.length - 1; i >= 2; i -= 2){   // 自機と同じシルエットの発光輪郭 (render/unit-art.js)
       const p = playerTrail[i], [sx, sy] = toScreen(p.x, p.y);
       if (sx < -30 || sy < -30 || sx > CW + 30 || sy > CH + 30) continue;
-      ctx.save(); ctx.translate(sx, sy); ctx.rotate(p.angle);
-      ctx.globalAlpha = 0.30 * (1 - i / playerTrail.length);
-      ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-9, -8); ctx.lineTo(-5, 0); ctx.lineTo(-9, 8); ctx.closePath(); ctx.stroke();
-      ctx.restore();
+      ctx.globalAlpha = 0.38 * (1 - i / playerTrail.length);
+      uaXf(sx, sy, p.angle); uaImg(UA_GHOST_CYAN, 0, 0, SHIP_S);
     }
-    ctx.globalAlpha = 1; ctx.lineWidth = 1;
+    uaEnd(); ctx.globalAlpha = 1;
   }
   if (artHas("lg_crown")){   // 元素の王冠: プリズムオーラ (周回する3色の光点 + 虹色の弧)
     for (let k = 0; k < 3; k++){

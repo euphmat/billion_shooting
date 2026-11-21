@@ -109,7 +109,8 @@ function markDestroyed(idx){
   if (S.chunks) for (const c of S.chunks) if (c && c.d) destroyedBits.set(c.d, c.i * CHUNK_BYTES);
   const w = S.world;
   if (!w) return;
-  if (typeof w.alive === "number") alive = Math.max(0, Math.min(TARGET_TOTAL, w.alive));
+  // alive は衛星などの破壊でも減るので負になりうる (下限は WORLD_TOTAL が決まった後で掛ける)
+  if (typeof w.alive === "number") alive = Math.min(TARGET_TOTAL, w.alive);
   if (typeof w.mainAlive === "number") mainAlive = Math.max(0, Math.min(TARGET_TOTAL, w.mainAlive));
   else if (S.chunks){
     // mainAlive の無い旧セーブ: 破壊ビットマップから主惑星の破壊数を1回だけ数え直す
@@ -363,6 +364,16 @@ const DUNGEON_FX = [
   { name:"虚空の飢餓",   desc:"【最難関】与ダメ -50%・被ダメ 5倍。金塊 15%、コイン 15倍・経験値 12倍、ドロップ 4倍",         dmg:.5, coin:15, xp:12, hurt:5,   drop:4, gold:.15, ultra:1 },
 ];
 SATS.forEach((S, i) => { S.fx = DUNGEON_FX[i] || null; });
+
+/* 全天体の総ブロック数 (惑星破壊率の分母)。主惑星 1億 + 主惑星の外に浮かぶ円形の天体 (衛星・小惑星・最難関)。
+   内部ダンジョンは主惑星のブロックを置き換えるだけなので数えない。天体どうしは重ならないので、
+   行ごとの円の幅を足すだけで bodyAt と同じ数になる */
+const WORLD_TOTAL = SATS.reduce((sum, S) => {
+  if (S.cave) return sum;
+  for (let dy = -S.r; dy <= S.r; dy++) sum += 2 * Math.floor(Math.sqrt(S.r2 - dy * dy)) + 1;
+  return sum;
+}, TARGET_TOTAL);
+alive = Math.max(TARGET_TOTAL - WORLD_TOTAL, alive);
 // 座標のダンジョン効果 (メイン惑星・宇宙なら null)
 function dungeonFxAt(gx, gy){ const b = bodyAt(gx, gy); return b > 0 ? SATS[b - 1].fx : null; }
 

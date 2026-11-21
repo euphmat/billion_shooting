@@ -6,11 +6,12 @@
 // ---------- canvas / camera / input ----------
 const cv = $("game"), ctx = cv.getContext("2d");
 const mm = $("minimap").getContext("2d");
+let DPR = 1;   // いまのキャンバスの拡大率 (render/unit-art.js が変換を組むのに使う)
 let CW = 0, CH = 0, zoom = SW && isFinite(SW.zoom) ? Math.max(0.004, Math.min(2.5, SW.zoom)) : 0.55;
 function resize(){
   const r = $("main").getBoundingClientRect(), dpr = Math.min(dprCap, window.devicePixelRatio || 1);
   CW = r.width; CH = r.height;
-  cv.width = CW * dpr; cv.height = CH * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cv.width = CW * dpr; cv.height = CH * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); DPR = dpr;
 }
 window.addEventListener("resize", resize);
 window.addEventListener("orientationchange", () => setTimeout(resize, 220));
