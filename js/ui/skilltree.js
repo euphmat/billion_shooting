@@ -235,6 +235,7 @@ const SKILL_PROC = {
   f_ultimate: [["fnano", "分解"], ["fsplit", "分裂"]],
   f0_scrap: [["f0drone", "自爆ドローン"]], f0_scrap2: [["f0drone", "自爆ドローン"]],
   a0_steady: [["mark", "刻印の炸裂"]], d_cruise: [["broadside", "舷側斉射"]],
+  d_auto: [["warpout", "ワープアウト"]], d_auto2: [["warpout", "ワープアウト"]],
   f0_mines: [["f0mine", "地雷"]], f0_kamikaze: [["f0kami", "突撃"]], f0_pack: [["f0pack", "撤収爆破"]],
 };
 function skillProcLines(n){

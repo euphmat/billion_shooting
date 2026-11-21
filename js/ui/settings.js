@@ -14,6 +14,24 @@ $("soundToggle").addEventListener("change", e => { state.muted = !e.target.check
 $("fxLowToggle").addEventListener("change", e => { state.fxLow = !!e.target.checked; save(); });
 $("powerSaveToggle").addEventListener("change", e => { state.powerSave = !!e.target.checked; save(); if (typeof applyPowerSave === "function") applyPowerSave(); });
 $("atkSndToggle").addEventListener("change", e => { state.atkMuted = !e.target.checked; save(); if (!state.atkMuted) sndBuy(); });
+/* ---------- 放置モード (HUD のボタン / F キー)。最初から使える ON/OFF トグル。本体は game/skill-fx.js の autopilot ---------- */
+function syncAutoBtn(){
+  const b = $("autoBtn");
+  if (!b) return;
+  b.classList.toggle("on", !!state.autoMode);
+  b.setAttribute("aria-pressed", state.autoMode ? "true" : "false");
+}
+$("autoBtn").addEventListener("click", () => {
+  setAutoMode(!state.autoMode);
+  toast(state.autoMode ? "放置モード ON: 操作しない間、主惑星のブロックを弱い順に自動で壊しに行く" : "放置モード OFF", state.autoMode ? "good" : undefined);
+});
+window.addEventListener("keydown", e => {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.code !== "KeyF") return;
+  const tag = e.target && e.target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  if (started && !treeOpen && !artOpen && !mapOpen && !updOpen && !botEqOpen) $("autoBtn").click();
+});
+syncAutoBtn();
 $("resetBtn").addEventListener("click", () => {
   if (confirm("セーブを削除して最初からにしますか？")) wipeSave().then(() => location.reload());
 });
@@ -22,6 +40,7 @@ $("resetBtn").addEventListener("click", () => {
 let updOpen = false;
 // 新しい順。行を足すときは先頭に追加し、js/manifest.js の APP_VERSION を上げる
 const UPDATE_HISTORY = [
+  { v:105, text:"「放置モード」を追加: 画面左上の「放置モード」ボタン (PC は F キー) で最初から ON / OFF できる。ON の間は、操作をやめると自機が主惑星のブロックを弱い順 (外側の層から一皮ずつ) に自動で壊しに行き、惑星の裏側へは外周を回って向かう。これに伴い、艦隊のスキル「オートパイロット」「完全自動操縦」を全く別のスキルに作り替え: 「ワープアウト」= ブーストを1秒以上続けてから止めると、その地点の空間が弾けて周囲 半径約4ブロックへ攻撃の400% / 「空間断裂」= ワープアウトが0.5秒のブーストで発動し、半径約7ブロック・攻撃の1000% に" },
   { v:104, text:"機兵の序盤「砲台投下」を「簡易砲台」に作り直し: 簡易砲台が常に1基展開して自機の斜め後ろについて回り、自機DPSの35%で撃ち続ける (砲台の測距儀で50%)。撤収爆破は、砲台が7秒ごとに畳んで組み直すときに爆発するように / 攻撃ボット・コイン回収ボットが「追従」モードのとき、自機がブーストすると作業を中断し、自機の通った跡を一列になって高速で付いてくるように (ブーストで置いてけぼりにならない。ブーストをやめると元の作業に戻る)" },
   { v:103, text:"機兵の序盤「簡易砲台」(2秒以上止まっていると展開) を、全く別のスキル「砲台投下」に作り替え: 移動しながら約25ブロック進むごとに、その場へ簡易砲台を投下する (最短2秒おき・7秒間・自機DPSの25%・同時に最大3基)。駆け抜けた跡が砲台の列になり、撤収爆破は砲台が畳まれるたび (時間切れ・入れ替わり) 爆発するように。砲台の測距儀は 威力 25% → 35%" },
   { v:102, text:"正反対だった2つのスキルを、全く別のスキルに作り替え: 破壊の序盤「据え撃ち」(止まっている間 +12%) → 「刻印弾」: 8秒ごとに近くでいちばん硬いブロックへ赤い刻印を撃ち込み、壊れると炸裂して周囲 半径2ブロックへ最大HPの50%・コイン ×5 / 艦隊「巡航モード」(移動中 +12%) → 「舷側斉射」: 10秒ごとに左右の舷側から砲弾が6発ずつ真横へ一斉に撃ち出され、ブロックを最大5個まで貫く (攻撃の200%)" },

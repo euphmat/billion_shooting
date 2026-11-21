@@ -31,7 +31,7 @@ function frame(now){
   if (keys["w"]) ay -= 1; if (keys["s"]) ay += 1; if (keys["a"]) ax -= 1; if (keys["d"]) ax += 1;
   if (ax || ay) manual = true;
   if (!ax && !ay && touchAxis.on && touchAxis.mag > 0){ ax = touchAxis.x; ay = touchAxis.y; amp = touchAxis.mag; manual = true; }   // スマホのスティック (傾けた分だけ速い)
-  if (ax || ay) idleT = 0; else { [ax, ay] = autopilot(dt); amp = 1; }   // オートパイロット (スキル)
+  if (ax || ay) idleT = 0; else { [ax, ay] = autopilot(dt); amp = 1; }   // 放置モード (ON の間、主惑星のブロックを弱い順に壊しに行く)
   player.moving = !!(ax || ay);
   boostOn = manual && (boostKey || boostTouchOn);   // ブーストは手動入力の間だけ (放置の自動移動は速くしない)
   const al = Math.hypot(ax, ay) || 1, sp = playerSpeed() * amp * (boostOn ? BOOST_MUL * earlyBoostMul() : 1);   // アフターバーナー (序盤スキル)

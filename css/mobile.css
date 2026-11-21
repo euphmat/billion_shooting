@@ -100,8 +100,8 @@ body.pwa-ios-mode .pwa-ios { display:block; }
   .lv-mid { flex:1; width:auto; min-width:0; }
   .xp-track { height:6px; }
   .xp-text { font-size:9px; margin-top:2px; }
-  #treeBtn, #artBtn { flex:none; padding:7px 9px; font-size:11px; letter-spacing:.06em; border-radius:7px; }
-  #treeBtn kbd { display:none; }
+  #treeBtn, #artBtn, #autoBtn { flex:none; padding:7px 9px; font-size:11px; letter-spacing:.06em; border-radius:7px; }
+  #treeBtn kbd, #autoBtn kbd { display:none; }
 
   /* ---- HP とバフ ---- */
   #hpHud { top:calc(50px + env(safe-area-inset-top)); left:calc(7px + env(safe-area-inset-left)); padding:3px 7px; gap:5px; }
@@ -313,7 +313,7 @@ body.pwa-ios-mode .pwa-ios { display:block; }
   .eq-shelf { grid-template-columns:1fr; }
   .sh-stat b, .fl-stat b, .kpi b { font-size:12px; }
   .ar-foot, .arow .buy-reason, .arow .matsub-line { padding-left:0; }
-  #treeBtn, #artBtn { padding:7px 7px; font-size:10px; }
+  #treeBtn, #artBtn, #autoBtn { padding:7px 7px; font-size:10px; }
   #stickZone { width:118px; height:118px; }
 }
 

@@ -53,6 +53,7 @@ function noteRemove(rec, now){
 // ---------- 2. 発動タグ ----------
 // bumpProc(key, x, y) から呼ばれる。状態異常 (燃焼・氷結など) は数が多すぎるので対象外 (ブロック上のスプライトで分かる)
 const PROC_TAG = {
+  warpout:       ["ワープアウト", "#78beff"],
   thermo:        ["熱衝撃",     "#ff9650"],
   bolt:          ["落雷",       "#ffe14d"],
   firestorm:     ["火炎嵐",     "#ff7a3a"],

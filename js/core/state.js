@@ -25,6 +25,7 @@ const state = {
   powerSave: null,   // 省電力モード (30fps・描画解像度を抑える)。null = 未設定 (タッチ端末では ON から始める: ui/settings.js)
   treeHelpOff: null, // スキルツリーの説明パネルを閉じたか (null = 未設定: 習得済みスキルがあれば最初から閉じておく)
   treeStatsOn: false,// スキルツリー上部の「発動状況」バーを出すか
+  autoMode: false,  // 放置モード (操作が無いとき、主惑星のブロックを弱い順に自動で壊しに行く)。HUD のボタン / F キーで切り替え
   artifacts: {},   // 所持アーティファクト {id: 1}
   botCore: 0, botArmor: 0,   // 衛星テクノロジー (攻撃ボット兵装コア / 自機の衛星装甲)
   hp: 100,   // 自機HP (最大値はレベルで伸びる: playerMaxHP)
@@ -37,7 +38,7 @@ const state = {
 };
 const SAVE_FIELDS = ["coins", "totalCoins", "destroyed", "weapon", "weaponsOwned", "weaponLv", "bots", "coinBots", "botLv",
   "botLoadout", "cbMod", "inv", "seen", "crafted", "muted", "atkMuted", "fxLow", "xp", "lv", "skills", "off", "hp", "artifacts", "botCore", "botArmor", "botMode", "cbMode", "visitedBodies", "lastSeenUpdate", "endingSeen", "playTime", "deepRec",
-  "skillOff", "powerSave", "treeHelpOff", "treeStatsOn"];
+  "skillOff", "powerSave", "treeHelpOff", "treeStatsOn", "autoMode"];
 let migrated = false;
 try {
   // 本番の置き場所は IndexedDB (store.js が起動時に読み終えている)。
