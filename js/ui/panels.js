@@ -345,24 +345,23 @@ function loadoutClick(e){
     if (i < 0){   // スロット未選択: 空きスロット → 最も弱いスロット
       const total = botCount(); i = -1;
       for (let j = 0; j < total; j++) if (!botWeaponAt(j)){ i = j; break; }
-      if (i < 0){ let worst = Infinity; for (let j = 0; j < total; j++){ const d = botSlotDPS(j); if (d < worst){ worst = d; i = j; } } }
+      if (i < 0){ let worst = Infinity; for (let j = 0; j < total; j++){ const d = botSlotRank(j); if (d < worst){ worst = d; i = j; } } }
     }
     if (i >= 0) assignBot(i, k);
     return;
   }
   if (e.target.closest("[data-bauto]")){
-    // おまかせ編成: 余り武器の中で強いものから、一番弱いスロット (デフォルト砲のスロット含む) へ差していく。
-    // 装備中の武器を外すことは絶対にしない。旧実装は「デフォルト砲より強い武器」だけで全スロットを
-    // 埋め直していたため、候補に入らない武器が全部外れた。しかもデフォルト砲DPSは自機武器のLvで
-    // 膨らむので、自機を鍛えるほど候補が減り、最悪の場合は全員の装備が外れていた。
-    const held = new Set();
-    for (let i = 0; i < botCount(); i++){ const k = botWeaponAt(i); if (k) held.add(k); }
+    // おまかせ編成: 余り武器を強い順に、まず空きスロット (デフォルト砲) へ全部差し、まだ余れば一番弱い装備と入れ替える。
+    // 装備中の武器を空きに戻すことは絶対にしない (v99)。装備ボットは最低でもデフォルト砲の威力で撃つので
+    // (core/stats.js の botWeaponFloorMul)、空きを埋めて損をすることはない
+    const total = botCount(), held = new Set();
+    for (let i = 0; i < total; i++){ const k = botWeaponAt(i); if (k) held.add(k); }
     const spare = WEAPON_KEYS.filter(k => state.weaponsOwned[k] && k !== state.weapon && !held.has(k))
-                             .sort((a, b) => botWeaponDPS(b) - botWeaponDPS(a));
+                             .sort((a, b) => botWeaponRawDPS(b) - botWeaponRawDPS(a));
     for (const k of spare){
       let worst = -1, worstD = Infinity;
-      for (let i = 0; i < botCount(); i++){ const d = botSlotDPS(i); if (d < worstD){ worstD = d; worst = i; } }
-      if (worst < 0 || botWeaponDPS(k) <= worstD) break;
+      for (let i = 0; i < total; i++){ const d = botSlotRank(i); if (d < worstD){ worstD = d; worst = i; } }
+      if (worst < 0 || botWeaponRawDPS(k) <= worstD) break;
       setBotWeapon(worst, k);
     }
     botSlotSel = -1; sndBuy(); save(); refreshBotViews(); updateHUD(); return;

@@ -122,18 +122,18 @@ function botEqHTML(){
   const slots = Array.from({ length: total }, (_, i) => botTileHTML(i, maxDps)).join("");
   let spare = WEAPON_KEYS.filter(k => state.weaponsOwned[k] && k !== state.weapon);
   const def = botDefaultDPS();
-  // おまかせが実際に何か変える時だけ押せるように: 余り武器が一番弱いスロットより強いこと
-  let minSlotDps = Infinity;
-  for (let i = 0; i < total; i++) minSlotDps = Math.min(minSlotDps, botSlotDPS(i));
-  const canAuto = spare.some(k => shelfHolder(k) < 0 && botWeaponDPS(k) > minSlotDps);
+  // おまかせが実際に何か変える時だけ押せるように: 空きスロットがあるか、余り武器が一番弱い装備より強いこと
+  let minSlotRank = Infinity;
+  for (let i = 0; i < total; i++) minSlotRank = Math.min(minSlotRank, botSlotRank(i));
+  const canAuto = spare.some(k => shelfHolder(k) < 0 && botWeaponRawDPS(k) > minSlotRank);
   const sel = botSlotSel >= 0 && botSlotSel < total ? botSlotSel : -1;
   const base = sel >= 0 ? botSlotDPS(sel) : def;
   const baseLabel = sel >= 0 ? `ボット${sel + 1}の現在比` : "デフォルト砲比";
   const allSpare = spare.length;
   if (shelfFreeOnly) spare = spare.filter(k => shelfHolder(k) < 0);
-  if (shelfSort === "dps") spare.sort((a, b) => botWeaponDPS(b) - botWeaponDPS(a));
+  if (shelfSort === "dps") spare.sort((a, b) => botWeaponRawDPS(b) - botWeaponRawDPS(a));
   else if (shelfSort === "name") spare.sort((a, b) => WEAPONS[a].name.localeCompare(WEAPONS[b].name, "ja") || WEAPONS[a].no - WEAPONS[b].no);
-  else spare.sort((a, b) => (shelfHolder(a) >= 0) - (shelfHolder(b) >= 0) || botWeaponDPS(b) - botWeaponDPS(a));
+  else spare.sort((a, b) => (shelfHolder(a) >= 0) - (shelfHolder(b) >= 0) || botWeaponRawDPS(b) - botWeaponRawDPS(a));
   const guide = eqFlash ? `<div class="eq-guide done">ボット${eqFlash.i + 1} に「${WEAPONS[eqFlash.k].name}」を装備した</div>`
     : sel >= 0 ? `<div class="eq-guide">ボット${sel + 1} を選択中 — 下の武器を${TAP}すると装備する。もう一度ボットを${TAP}すると選択解除</div>`
     : `<div class="eq-guide">ボットを${TAP}で選んで、武器を${TAP}で装備。選ばずに武器を${TAP}すると、空きスロット → 一番弱いボットの順で自動で入る</div>`;

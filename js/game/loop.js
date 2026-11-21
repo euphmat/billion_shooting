@@ -127,7 +127,7 @@ function frame(now){
     }
     b.fireT -= bdt;
     if (b.fireT <= 0){
-      if (bw) b.fireT = fireDelay(bw, b, shoot(b.x, b.y, shotDamage(wk) * 0.6 * botMul(), wk, true));
+      if (bw) b.fireT = fireDelay(bw, b, shoot(b.x, b.y, shotDamage(wk) * 0.6 * botMul() * botWeaponFloorMul(wk), wk, true));
       else if (shoot(b.x, b.y, playerDamage() * 0.6 * botMul(), null, true)) b.fireT = 1 / 3;
       else b.fireT = 0.15;
     }

@@ -24,9 +24,17 @@ const botWeaponAt = i => {
   for (let j = 0; j < i; j++) if (state.botLoadout[j] === k) return null;
   return k;
 };
-const botWeaponDPS  = k => weaponDPS(WEAPONS[k]) * weaponPowerMul(k) * 0.6 * botMul();
+// 装備そのものの火力 (おまかせ編成・棚の並び順はこちらで比べる)
+const botWeaponRawDPS = k => weaponDPS(WEAPONS[k]) * weaponPowerMul(k) * 0.6 * botMul();
 const botDefaultDPS = () => playerDamage() * 0.6 * botMul() * 3;
+// 装備ボットの火力の下限 = デフォルト砲。デフォルト砲は自機の攻撃力 (√power) で伸びるので、自機が最難関の
+// 武器を持つと通常武器が全部デフォルト砲を下回り、おまかせ編成が最難関の残り4本しか配らなかった。
+// 装備すると弱くなる、を無くし、どの武器を持たせても「その武器の撃ち方 + 少なくともデフォルト砲の威力」で撃つ
+const botWeaponFloorMul = k => Math.max(1, botDefaultDPS() / botWeaponRawDPS(k));
+const botWeaponDPS  = k => Math.max(botWeaponRawDPS(k), botDefaultDPS());
 const botSlotDPS    = i => { const k = botWeaponAt(i); return k ? botWeaponDPS(k) : botDefaultDPS(); };
+// 編成の比較用: 空きスロット (デフォルト砲) は -1 で必ず一番弱い扱い、装備中は装備そのものの火力
+const botSlotRank   = i => { const k = botWeaponAt(i); return k ? botWeaponRawDPS(k) : -1; };
 const botsTotalDPS  = () => { let s = 0; const n = act("bots"); for (let i = 0; i < n; i++) s += botSlotDPS(i); return s; };
 const setBotWeapon  = (i, k) => {
   if (k) for (let j = 0; j < state.botLoadout.length; j++) if (j !== i && state.botLoadout[j] === k) state.botLoadout[j] = null;
