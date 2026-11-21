@@ -956,9 +956,7 @@ function machineStatusText(){
 // 自律機兵 (f_*) と同じ原則: 実行時状態はセーブせず、スキルから毎フレーム機数を合わせ直す。
 // 発生源フラグは curProto (skill-hooks.js)。自律機兵側は curMach を立て、素材+1 (f0_minemod) は付かない。
 // =========================================================
-const F0 = { protos: [], drones: [], mines: [], turrets: [] };   // turrets: 投下済みの簡易砲台 {x, y, ang, fireT, retT, ti, tm, flash, life, drop}
-let f0TravelD = 0, f0LastPX = 0, f0LastPY = 0, f0TravelInit = false;   // 砲台投下: 前回の投下からの移動距離 (実移動量ベース)
-let f0TurretCD = 0;               // 砲台投下: 次に投下できるまでの最短間隔
+const F0 = { protos: [], drones: [], mines: [], turrets: [] };   // turrets: 簡易砲台 (常に0か1基) {x, y, ang, fireT, retT, ti, tm, flash, life, drop}
 let f0ScrapN = 0;                 // スクラップ工房: 前回の組み立てからの破壊数
 let f0DroneQueue = 0, f0DroneT = 0;
 let f0Heat = 0, f0HeatT = 0;      // 排熱利用: 自機連射の上乗せ (%) と残り時間 (skill-early.js の earlyRateMul が読む)
@@ -1030,7 +1028,7 @@ function f0Reset(){
   F0.protos.length = 0; F0.drones.length = 0; F0.mines.length = 0; F0.turrets.length = 0;
   f0ScrapN = 0; f0DroneQueue = 0; f0DroneT = 0;
   f0Heat = 0; f0HeatT = 0; f0ChargeT = 0; f0Heals = []; f0RebuildT = 0;
-  f0TravelD = 0; f0TravelInit = false; f0TurretCD = 0; f0Active = false;
+  f0Active = false;
 }
 
 // --- プロト ---
@@ -1177,39 +1175,40 @@ function updateProto(p, dt, U, pow){
   return true;
 }
 
-// --- 簡易砲台 (砲台投下): 移動距離に応じて足跡のように砲台を落としていく ---
-const F0_TURRET_DIST = BS * 25;   // 約25ブロック進むごとに1基投下
-const F0_TURRET_LIFE = 7;         // 1基が残る秒数
-const F0_TURRET_MAX = 3;          // 同時に置ける数 (超えたら古い順に畳む)
-const F0_TURRET_CD = 2;           // 投下の最短間隔 (ブースト連打で撤収爆破が乱発しないように)
+// --- 簡易砲台: 常に1基展開し、自機の斜め後ろについて回る ---
+const F0_TURRET_CYCLE = 7;        // 撤収爆破: この秒数ごとに畳んで組み直す
+const F0_TURRET_OFF = 46;         // 自機からの距離 (斜め後ろ)
 function packTurret(T, explode){
-  if (explode && sk("f0_pack")){   // 撤収爆破: 畳むとき (時間切れ・入れ替わり)、その場で爆発
+  if (explode && sk("f0_pack")){   // 撤収爆破: 畳むとき、その場で爆発
     bumpProc("f0pack", T.x, T.y);
     addRing({ x: T.x, y: T.y, r: BS * 3.4, color: "255,170,90", dur: 420 });
     f0Radius(T.x, T.y, BS * 3, playerDamage() * 2 * f0Pow());
     if (onScreen(T.x, T.y, 60)) sndBoom();
   }
 }
-function dropTurret(){
-  while (F0.turrets.length >= F0_TURRET_MAX) packTurret(F0.turrets.shift(), true);   // 古い砲台から畳む
-  const T = { x: player.x, y: player.y, ang: player.angle !== undefined ? player.angle : -Math.PI / 2,
-    fireT: 0.35, retT: 0, ti: -1, tm: 0, flash: 0, life: F0_TURRET_LIFE, drop: 0.25 };
-  F0.turrets.push(T);
+function turretHome(){   // 自機の向きから見て左斜め後ろ
+  const a = (player.angle !== undefined ? player.angle : -Math.PI / 2) + Math.PI * 0.78;
+  return { x: player.x + Math.cos(a) * F0_TURRET_OFF, y: player.y + Math.sin(a) * F0_TURRET_OFF };
 }
 function updateTurrets(dt, U, pow){
-  if (!f0TravelInit){ f0TravelInit = true; f0LastPX = player.x; f0LastPY = player.y; }
-  const moved = Math.hypot(player.x - f0LastPX, player.y - f0LastPY);
-  f0LastPX = player.x; f0LastPY = player.y;
-  if (!sk("f0_turret")){ F0.turrets.length = 0; f0TravelD = 0; return; }
-  if (moved < BS * 4) f0TravelD += moved;   // ワープ・リスポーンのような瞬間移動は数えない
-  if (f0TurretCD > 0) f0TurretCD -= dt;
-  if (f0TravelD >= F0_TURRET_DIST && f0TurretCD <= 0){ f0TravelD = 0; f0TurretCD = F0_TURRET_CD; dropTurret(); }
-  for (let i = F0.turrets.length - 1; i >= 0; i--){
-    const T = F0.turrets[i];
-    T.life -= dt;
-    if (T.life <= 0){ F0.turrets.splice(i, 1); packTurret(T, true); continue; }
-    turretFire(T, dt, U, pow);
+  if (!sk("f0_turret")){ F0.turrets.length = 0; return; }
+  let T = F0.turrets[0];
+  if (!T){
+    const h = turretHome();
+    T = { x: h.x, y: h.y, ang: -Math.PI / 2, fireT: 0.35, retT: 0, ti: -1, tm: 0, flash: 0, life: F0_TURRET_CYCLE, drop: 0.25 };
+    F0.turrets.push(T);
   }
+  // 追従: 定位置へなめらかに寄る (壁は無視して浮遊)。ワープなどで大きく離れたら即座に定位置へ
+  T.x += (player.vx || 0) * dt; T.y += (player.vy || 0) * dt;   // 自機と同じ速さで動いた上で (ブースト中も置いていかれない)
+  const h = turretHome(), dx = h.x - T.x, dy = h.y - T.y;
+  if (dx * dx + dy * dy > BS * 20 * BS * 20){ T.x = h.x; T.y = h.y; }
+  else { const k = Math.min(1, dt * 12); T.x += dx * k; T.y += dy * k; }   // 定位置とのずれをなめらかに詰める
+  // 撤収爆破: 一定時間ごとに畳んで (爆発して) その場で組み直す
+  if (sk("f0_pack")){
+    T.life -= dt;
+    if (T.life <= 0){ packTurret(T, true); T.life = F0_TURRET_CYCLE; T.drop = 0.25; T.ti = -1; T.tm = 0; }
+  } else T.life = F0_TURRET_CYCLE;
+  turretFire(T, dt, U, pow);
 }
 function turretFire(T, dt, U, pow){
   if (T.flash > 0) T.flash -= dt;
@@ -1224,12 +1223,17 @@ function turretFire(T, dt, U, pow){
     T.retT = 0.4;
     const mb = nearestMob(T.x, T.y, range);
     if (mb){ T.tm = mb.id; T.ti = -1; }
-    else { T.tm = 0; if (T.ti < 0 || isDestroyed(T.ti)) T.ti = findNearestBlock(T.x, T.y, range); }
+    else {
+      T.tm = 0;
+      let far = false;
+      if (T.ti >= 0 && !isDestroyed(T.ti)){ const bp = blockPos(T.ti); far = (bp.x - T.x) ** 2 + (bp.y - T.y) ** 2 > range * range; }   // 自機について動くので、射程外に出た目標は捨てる
+      if (T.ti < 0 || far || isDestroyed(T.ti)) T.ti = findNearestBlock(T.x, T.y, range);
+    }
   }
   T.fireT -= dt * f0RateMul();
   if (T.fireT > 0) return;
   T.fireT = 0.5;
-  const per = (sk("f0_range") ? 0.35 : 0.25) * 0.5;   // 0.5秒間隔: 1発 = DPS×25% (測距儀で35%) ÷ 毎秒2発
+  const per = (sk("f0_range") ? 0.50 : 0.35) * 0.5;   // 0.5秒間隔: 1発 = DPS×35% (測距儀で50%) ÷ 毎秒2発
   const shots = sk("f0_turret2") ? 2 : 1;              // 連装砲台: 1回に2発
   for (let s = 0; s < shots; s++){
     const mb = T.tm ? mobById(T.tm) : null;
@@ -1323,12 +1327,12 @@ function f0Draw(now, toScreen){
     ctx.strokeStyle = "rgba(255,83,64,.6)"; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(sx, sy, (5 + 2 * Math.sin(now / 150)) * zoom, 0, 7); ctx.stroke();
   }
-  // 簡易砲台: 台座 + 砲身 (投下直後は上から落ちてくる・畳まれる直前は点滅)
+  // 簡易砲台: 台座 + 砲身 (組み立て直後は上から落ちてくる・撤収爆破の直前は点滅)
   for (const T of F0.turrets){
     if (onScreen(T.x, T.y, 60)){
       const [sx0, sy0] = toScreen(T.x, T.y), sx = sx0, sy = sy0 - Math.max(0, T.drop) * 160 * zoom;
       ctx.save();
-      if (T.life < 1.2) ctx.globalAlpha = 0.45 + 0.45 * Math.abs(Math.sin(now / 90));
+      if (T.life < 1.2 && sk("f0_pack")) ctx.globalAlpha = 0.45 + 0.45 * Math.abs(Math.sin(now / 90));
       ctx.translate(sx, sy);
       ctx.fillStyle = "#1c2f38"; ctx.strokeStyle = "#7df9ff"; ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.moveTo(-13 * zoom, 9 * zoom); ctx.lineTo(13 * zoom, 9 * zoom); ctx.lineTo(8 * zoom, -4 * zoom); ctx.lineTo(-8 * zoom, -4 * zoom); ctx.closePath(); ctx.fill(); ctx.stroke();

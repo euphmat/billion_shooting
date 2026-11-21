@@ -10,7 +10,7 @@
    ファイルを足すときは APP_SCRIPTS の「読み込み順」に注意: 全て通常の <script> と同じく
    グローバルを共有するので、読み込み時に実行されるコードは先に読まれたファイルにしか依存できない。
    ========================================================= */
-const APP_VERSION = 103;
+const APP_VERSION = 104;
 
 const APP_STYLES = ["css/style.css", "css/side.css", "css/mobile.css"];
 

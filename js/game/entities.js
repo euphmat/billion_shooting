@@ -18,6 +18,32 @@ const BOOST_MUL = 10;
 let boostKey = false;        // スペース押下中 (PC)
 let boostTouchOn = false;    // スマホのトグル (mobile.js が切り替える。セッション内のみ保持)
 let boostOn = false;         // このフレーム実際にブースト中か (描画とボットの追いつきが参照)
+// 自機の軌跡 (新しい順)。ブースト中の追従ボットは、ここを一列になって辿る (自機が掘った通路の中を通るので壁に埋まらない)
+const BOOST_TRAIL_GAP = 22;        // 隊列の間隔 (ワールド単位)
+const boostTrail = [];
+function recordBoostTrail(){
+  const last = boostTrail[0];
+  if (last){
+    const dx = player.x - last.x, dy = player.y - last.y;
+    if (dx * dx + dy * dy > BS * 8 * BS * 8) boostTrail.length = 0;   // ワープ・リスポーンなどの瞬間移動では軌跡を切る
+    else if (dx * dx + dy * dy < 36) return;                          // 6 単位ごとに記録
+  }
+  boostTrail.unshift({ x: player.x, y: player.y });
+  if (boostTrail.length > 600) boostTrail.length = 600;
+}
+// 自機から軌跡に沿って dist だけ戻った地点 (軌跡が足りなければ一番古い点。軌跡が無ければ自機の真後ろ)
+function trailPoint(dist){
+  let px = player.x, py = player.y;
+  for (const q of boostTrail){
+    const d = Math.hypot(q.x - px, q.y - py);
+    if (d >= dist){ const t = dist / d; return { x: px + (q.x - px) * t, y: py + (q.y - py) * t }; }
+    dist -= d; px = q.x; py = q.y;
+  }
+  if (boostTrail.length) return { x: px, y: py };
+  return { x: player.x - Math.cos(player.angle || 0) * dist, y: player.y - Math.sin(player.angle || 0) * dist };
+}
+// 隊列の速度: 自機の今の速さ + 離れている分の追いつき (約0.15秒で隊列に戻る)
+const convoySpeed = d => Math.hypot(player.vx || 0, player.vy || 0) * 1.1 + 300 + d * 7;
 const boostGhosts = [];      // 残像 {x, y, a, t} (最大14)
 const boostParts = [];       // 噴射パーティクル {x, y, vx, vy, t, life} (最大90)
 let boostGhostT = 0, boostPartT = 0;

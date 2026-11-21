@@ -39,6 +39,7 @@ function frame(now){
   // 高速時は 1 フレームの移動量がブロック (BS=24) を超えるので、小刻みに進めて各歩で衝突を解く (game/physics.js)
   moveWithCollision(player, player.vx * dt, player.vy * dt, 10);
   if (ax || ay) player.angle = Math.atan2(ay, ax);
+  recordBoostTrail();   // ブースト中の追従ボットが辿る自機の軌跡
   // ブースト演出の発生 (残像と噴射。寿命は draw 側が時刻で管理する)
   if (boostOn){
     boostGhostT -= dt; boostPartT -= dt;
@@ -99,36 +100,44 @@ function frame(now){
         else { const idx = findNearestBlock(b.x, b.y, 1400); if (idx >= 0){ b.tx = g2w(idx % D); b.ty = g2w(((idx / D) | 0)); } }
       }
     }
-    // 移動先: 目標ブロック。追従モードで合流中は自機の周りの編隊位置
-    let mvx = b.tx, mvy = b.ty, regroup = false;
-    if (botMode === "follow" && mvx === null){
-      const a2 = bi / Math.max(1, bots.length) * Math.PI * 2 + nowMs / 5000;
-      mvx = player.x + Math.cos(a2) * 95; mvy = player.y + Math.sin(a2) * 95; regroup = true;
-    }
-    if (mvx !== null && mvx !== undefined){
-      const dx = mvx - b.x, dy = mvy - b.y, d = Math.hypot(dx, dy);
-      // 装備の届く距離まで近づく (オーラは範囲内まで、短射程は撃ち切れる距離まで)。遠い目標へは距離に応じて加速する
-      const stopD = regroup ? 24 : bw && bw.mode === "aura" ? (bw.auraR || 110) * 0.7
-                  : Math.min(atkRange() * 0.75, atkRange() * ((bw && bw.range) || 1) * 0.9);
-      // 追いつき上限: 通常は従来通り 2200。プレイヤーがブースト中だけ、自機のブースト速度に
-      // 合わせて上限を広げる (置いてけぼりにせず、ブーストを止めればすぐ編隊に戻れる範囲)
-      const spdCap = boostOn ? Math.max(2200, playerSpeed() * BOOST_MUL) : 2200;
-      if (d > stopD){ const spd = 210 + Math.min(spdCap, Math.max(0, d - 400) * 0.75); moveWithCollision(b, dx / d * spd * dt, dy / d * spd * dt, 10); }
-      else resolveCollision(b, 10);
-      b.angle = Math.atan2(dy, dx);
-    }
-    // 追従モードで壁に阻まれて自機から離れたままのボットは、自機のそばへワープさせる
-    // (壁をすり抜けなくなったので、ブーストで置いていかれると戻れなくなるのを防ぐ)
-    if (botMode === "follow"){
-      const fdx = player.x - b.x, fdy = player.y - b.y;
-      b.farT = fdx * fdx + fdy * fdy > 900 * 900 ? (b.farT || 0) + dt : 0;
-      if (b.farT > 2){
-        b.farT = 0;
-        addRing({ x: b.x, y: b.y, r: 36, color: "255,255,255", dur: 300 });
-        const a2 = bi / Math.max(1, bots.length) * Math.PI * 2;
-        b.x = player.x + Math.cos(a2) * 30; b.y = player.y + Math.sin(a2) * 30; b.tx = null;
-        resolveCollision(b, 10);
-        addRing({ x: b.x, y: b.y, r: 36, color: "255,255,255", dur: 300 });
+    // ブースト中の追従モード: 掘るのをやめ、自機の通った跡を一列になって高速で付いてくる
+    if (botMode === "follow" && boostOn){
+      b.tx = null; b.retargetT = 0; b.farT = 0; b.convoy = true;
+      const tp = trailPoint(BOOST_TRAIL_GAP * (bi + 1));
+      steerBot(b, tp.x, tp.y, convoySpeed(Math.hypot(tp.x - b.x, tp.y - b.y)), dt, 0);
+    } else {
+      if (b.convoy){ b.convoy = false; resolveCollision(b, 10); }   // ブーストが終わったら壁から押し出して通常の移動へ
+      // 移動先: 目標ブロック。追従モードで合流中は自機の周りの編隊位置
+      let mvx = b.tx, mvy = b.ty, regroup = false;
+      if (botMode === "follow" && mvx === null){
+        const a2 = bi / Math.max(1, bots.length) * Math.PI * 2 + nowMs / 5000;
+        mvx = player.x + Math.cos(a2) * 95; mvy = player.y + Math.sin(a2) * 95; regroup = true;
+      }
+      if (mvx !== null && mvx !== undefined){
+        const dx = mvx - b.x, dy = mvy - b.y, d = Math.hypot(dx, dy);
+        // 装備の届く距離まで近づく (オーラは範囲内まで、短射程は撃ち切れる距離まで)。遠い目標へは距離に応じて加速する
+        const stopD = regroup ? 24 : bw && bw.mode === "aura" ? (bw.auraR || 110) * 0.7
+                    : Math.min(atkRange() * 0.75, atkRange() * ((bw && bw.range) || 1) * 0.9);
+        // 追いつき上限: 通常は従来通り 2200。プレイヤーがブースト中だけ、自機のブースト速度に
+        // 合わせて上限を広げる (置いてけぼりにせず、ブーストを止めればすぐ編隊に戻れる範囲)
+        const spdCap = boostOn ? Math.max(2200, playerSpeed() * BOOST_MUL) : 2200;
+        if (d > stopD){ const spd = 210 + Math.min(spdCap, Math.max(0, d - 400) * 0.75); moveWithCollision(b, dx / d * spd * dt, dy / d * spd * dt, 10); }
+        else resolveCollision(b, 10);
+        b.angle = Math.atan2(dy, dx);
+      }
+      // 追従モードで壁に阻まれて自機から離れたままのボットは、自機のそばへワープさせる
+      // (壁をすり抜けなくなったので、ブーストで置いていかれると戻れなくなるのを防ぐ)
+      if (botMode === "follow"){
+        const fdx = player.x - b.x, fdy = player.y - b.y;
+        b.farT = fdx * fdx + fdy * fdy > 900 * 900 ? (b.farT || 0) + dt : 0;
+        if (b.farT > 2){
+          b.farT = 0;
+          addRing({ x: b.x, y: b.y, r: 36, color: "255,255,255", dur: 300 });
+          const a2 = bi / Math.max(1, bots.length) * Math.PI * 2;
+          b.x = player.x + Math.cos(a2) * 30; b.y = player.y + Math.sin(a2) * 30; b.tx = null;
+          resolveCollision(b, 10);
+          addRing({ x: b.x, y: b.y, r: 36, color: "255,255,255", dur: 300 });
+        }
       }
     }
     b.fireT -= bdt;
@@ -149,59 +158,65 @@ function frame(now){
   const cbMode = state.cbMode || "follow";   // follow=追従 / solo=独立 / botfollow=ボット追従
   for (let ci = 0; ci < coinBots.length; ci++){
     const cb = coinBots[ci];
-    cb.retargetT -= dt;
-    if (cb.target && cb.target.gone){ cb.target = null; cb.retargetT = 0; }
-    if (cb.retargetT <= 0){
-      cb.target = coinsArr.length ? pickCoinTarget(cb, claims(), cbSpd, cbVac) : null;
-      if (cb.target && cbMode === "follow"){   // 追従: 自機から遠いコインは追わない
-        const pdx = cb.target.x - player.x, pdy = cb.target.y - player.y;
-        if (pdx * pdx + pdy * pdy > 2600 * 2600) cb.target = null;
+    if (cbMode === "follow" && boostOn){   // ブースト中の追従モード: コインは追わず、攻撃ボットの後ろに続いて高速で付いてくる
+      cb.target = null; cb.idle = null; cb.retargetT = 0;
+      const tp = trailPoint(BOOST_TRAIL_GAP * ((botMode === "follow" ? bots.length : 0) + ci + 1));
+      steerBot(cb, tp.x, tp.y, convoySpeed(Math.hypot(tp.x - cb.x, tp.y - cb.y)), dt, 0);
+    } else {
+      cb.retargetT -= dt;
+      if (cb.target && cb.target.gone){ cb.target = null; cb.retargetT = 0; }
+      if (cb.retargetT <= 0){
+        cb.target = coinsArr.length ? pickCoinTarget(cb, claims(), cbSpd, cbVac) : null;
+        if (cb.target && cbMode === "follow"){   // 追従: 自機から遠いコインは追わない
+          const pdx = cb.target.x - player.x, pdy = cb.target.y - player.y;
+          if (pdx * pdx + pdy * pdy > 2600 * 2600) cb.target = null;
+        }
+        if (cb.target && cbMode === "botfollow"){   // ボット追従: 担当ボットの近くのコインだけ拾う
+          const tdx2 = cb.target.x - cb.x, tdy2 = cb.target.y - cb.y;
+          if (tdx2 * tdx2 + tdy2 * tdy2 > 950 * 950) cb.target = null;
+        }
+        cb.idle = cb.target ? null : (cbMode === "solo" ? pickIdleSpot(cb, cbSpd) : null);
+        cb.retargetT = 0.15;
       }
-      if (cb.target && cbMode === "botfollow"){   // ボット追従: 担当ボットの近くのコインだけ拾う
-        const tdx2 = cb.target.x - cb.x, tdy2 = cb.target.y - cb.y;
-        if (tdx2 * tdx2 + tdy2 * tdy2 > 950 * 950) cb.target = null;
+      if (cb.target){
+        // 目標の周りに山があるときは、その重心へ向かう (一停車で山ごと吸引圏内に入れる)
+        let ax = cb.target.x, ay = cb.target.y;
+        const caim = coinClusterAim(claims(), cb.target, Math.min(cbVac, 320));
+        if (caim){ ax = caim[0]; ay = caim[1]; }
+        // 独立モード: 同じ山に複数台が向かうときは、重心の周りに花びら状に散って吸引エリアを分担する (1点に重ならない)
+        if (caim && cbMode === "solo"){
+          let sharers = 0;
+          for (const o of coinBots){ if (o === cb || !o.target) continue;
+            const odx = o.target.x - cb.target.x, ody = o.target.y - cb.target.y;
+            if (odx * odx + ody * ody < 480 * 480) sharers++; }
+          if (sharers > 0){ const a = ci * 2.39996; ax += Math.cos(a) * 150; ay += Math.sin(a) * 150; }
+        }
+        const tdx = ax - cb.x, tdy = ay - cb.y, td2 = tdx * tdx + tdy * tdy;
+        const warpR = 800 - 150 * cbLv("stargate");
+        if ((cbLv("anchor") > 0 || cbLv("stargate") > 0) && td2 > warpR * warpR){   // 時空アンカー / 星核ワープコア: 遠い目標の手前へワープ
+          const td = Math.sqrt(td2);
+          addRing({ x:cb.x, y:cb.y, r:40, t:nowMs, color:"64,224,208", dur:300 });
+          cb.x = ax - tdx / td * 120; cb.y = ay - tdy / td * 120;
+          addRing({ x:cb.x, y:cb.y, r:40, t:nowMs, color:"64,224,208", dur:300 });
+        }
+        steerBot(cb, ax, ay, cbSpd * (td2 > 400 * 400 ? cbNozzle() : 1) * (td2 > 1200 * 1200 ? 1.35 : 1), dt, 0);   // 推進ノズル + 長距離巡航ブースト: 移動の死に時間を減らす
       }
-      cb.idle = cb.target ? null : (cbMode === "solo" ? pickIdleSpot(cb, cbSpd) : null);
-      cb.retargetT = 0.15;
-    }
-    if (cb.target){
-      // 目標の周りに山があるときは、その重心へ向かう (一停車で山ごと吸引圏内に入れる)
-      let ax = cb.target.x, ay = cb.target.y;
-      const caim = coinClusterAim(claims(), cb.target, Math.min(cbVac, 320));
-      if (caim){ ax = caim[0]; ay = caim[1]; }
-      // 独立モード: 同じ山に複数台が向かうときは、重心の周りに花びら状に散って吸引エリアを分担する (1点に重ならない)
-      if (caim && cbMode === "solo"){
-        let sharers = 0;
-        for (const o of coinBots){ if (o === cb || !o.target) continue;
-          const odx = o.target.x - cb.target.x, ody = o.target.y - cb.target.y;
-          if (odx * odx + ody * ody < 480 * 480) sharers++; }
-        if (sharers > 0){ const a = ci * 2.39996; ax += Math.cos(a) * 150; ay += Math.sin(a) * 150; }
+      else if (cbMode === "follow"){   // 自機の周りの編隊位置で待つ (遠いときは加速して合流)
+        const a3 = ci / Math.max(1, coinBots.length) * Math.PI * 2 + nowMs / 6000;
+        const tx3 = player.x + Math.cos(a3) * 75, ty3 = player.y + Math.sin(a3) * 75;
+        const dd3 = Math.hypot(tx3 - cb.x, ty3 - cb.y);
+        steerBot(cb, tx3, ty3, cbSpd * (1 + Math.min(5, dd3 / 700)), dt, 10);
       }
-      const tdx = ax - cb.x, tdy = ay - cb.y, td2 = tdx * tdx + tdy * tdy;
-      const warpR = 800 - 150 * cbLv("stargate");
-      if ((cbLv("anchor") > 0 || cbLv("stargate") > 0) && td2 > warpR * warpR){   // 時空アンカー / 星核ワープコア: 遠い目標の手前へワープ
-        const td = Math.sqrt(td2);
-        addRing({ x:cb.x, y:cb.y, r:40, t:nowMs, color:"64,224,208", dur:300 });
-        cb.x = ax - tdx / td * 120; cb.y = ay - tdy / td * 120;
-        addRing({ x:cb.x, y:cb.y, r:40, t:nowMs, color:"64,224,208", dur:300 });
+      else if (cbMode === "botfollow"){   // 担当の攻撃ボット (1台につき回収ボット1台) の側で待つ。攻撃ボットが回収ボットより多い/少ない場合は割り当てを繰り返す
+        const ab = bots.length ? bots[ci % bots.length] : null;
+        const ax = ab ? ab.x : player.x, ay = ab ? ab.y : player.y;
+        const a3 = ci * 2.39996;
+        const tx3 = ax + Math.cos(a3) * 48, ty3 = ay + Math.sin(a3) * 48;
+        const dd3 = Math.hypot(tx3 - cb.x, ty3 - cb.y);
+        steerBot(cb, tx3, ty3, cbSpd * 1.2 * (1 + Math.min(5, dd3 / 700)), dt, 8);
       }
-      steerBot(cb, ax, ay, cbSpd * (td2 > 400 * 400 ? cbNozzle() : 1) * (td2 > 1200 * 1200 ? 1.35 : 1), dt, 0);   // 推進ノズル + 長距離巡航ブースト: 移動の死に時間を減らす
+      else idleMove(cb, cbSpd, dt, ci, coinBots.length);
     }
-    else if (cbMode === "follow"){   // 自機の周りの編隊位置で待つ (遠いときは加速して合流)
-      const a3 = ci / Math.max(1, coinBots.length) * Math.PI * 2 + nowMs / 6000;
-      const tx3 = player.x + Math.cos(a3) * 75, ty3 = player.y + Math.sin(a3) * 75;
-      const dd3 = Math.hypot(tx3 - cb.x, ty3 - cb.y);
-      steerBot(cb, tx3, ty3, cbSpd * (1 + Math.min(5, dd3 / 700)), dt, 10);
-    }
-    else if (cbMode === "botfollow"){   // 担当の攻撃ボット (1台につき回収ボット1台) の側で待つ。攻撃ボットが回収ボットより多い/少ない場合は割り当てを繰り返す
-      const ab = bots.length ? bots[ci % bots.length] : null;
-      const ax = ab ? ab.x : player.x, ay = ab ? ab.y : player.y;
-      const a3 = ci * 2.39996;
-      const tx3 = ax + Math.cos(a3) * 48, ty3 = ay + Math.sin(a3) * 48;
-      const dd3 = Math.hypot(tx3 - cb.x, ty3 - cb.y);
-      steerBot(cb, tx3, ty3, cbSpd * 1.2 * (1 + Math.min(5, dd3 / 700)), dt, 8);
-    }
-    else idleMove(cb, cbSpd, dt, ci, coinBots.length);
     // 接触回収: 近づいたコインはその場で確実に拾う (吸引だけに頼らない)。拡張ハッチで範囲が広がる
     for (let j = coinsArr.length - 1; j >= 0; j--){
       const cn = coinsArr[j], ex = cn.x - cb.x, ey = cn.y - cb.y;
