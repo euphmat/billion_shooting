@@ -405,12 +405,13 @@ const weaponPowerMul = k => weaponLvMul(k) * weaponTierMul(k) * evoPowerMul(k); 
 const PELLET_BONUS_MAX = 2;
 const weaponPellets = k => (WEAPONS[k].pellets || 1) + Math.min(PELLET_BONUS_MAX, Math.floor(weaponLvOf(k) / 10));
 const WEAPON_UP_COST = k => niceRound(Math.max(20, WEAPONS[k].cost * 0.4) * Math.pow(1.5, weaponLvOf(k)));
+const UP_MAT_MAX = 9999;   // 強化の素材要求数 (1種あたり) の上限。高レベルでも天文学的な数にならないように
 function WEAPON_UP_MATS(k){
   const w = WEAPONS[k], lv = weaponLvOf(k), out = {};
   const keys = Object.keys(w.recipe);
   // ハンドドリル (レシピなし) はコインだけで強化できる。以前は石/木を交互に要求していたが、
   // 地表は約68ブロックと薄く石は2〜4%しか出ないので、内側へ掘り進むと序盤で詰まっていた
-  for (const m of keys) out[m] = Math.ceil(w.recipe[m] * 0.2 * Math.pow(1.25, lv));
+  for (const m of keys) out[m] = Math.min(UP_MAT_MAX, Math.ceil(w.recipe[m] * 0.2 * Math.pow(1.25, lv)));
   return out;
 }
 // 武器強化は素材代用払い (ui/common.js の matSubPlan) が効くので、判定も実質所持に合わせる (代用できるのは製作素材だけ)
