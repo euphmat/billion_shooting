@@ -18,6 +18,8 @@ function gameClear(quiet){
   if (state.endingSeen || cleared) return;
   state.endingSeen = true; cleared = true;
   saveNow(); flushWorld(true); updateClearBadge();
+  // 破壊率 100% の表示とエンディングを同時に: 本体ループは cleared で止まるので、ここで HUD を 100% に更新してから演出に入る
+  if (typeof updateHUD === "function") updateHUD();
   if (quiet){ showEndingScreen(); return; }   // 起動時点で既に破壊し尽くしていた場合: 演出なしで結果画面だけ出す
   sndClear();
   startCinematic();

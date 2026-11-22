@@ -21,11 +21,16 @@ function coinRate(){
 }
 function updateHUD(){
   refreshAffordability();
-  const pct = Math.min(100, state.destroyed / WORLD_TOTAL * 100), w = Math.max(pct, 0.05).toFixed(4) + "%", bar = $("sideProgress");
-  setText($("sidePct"), pct.toFixed(pct < 10 ? 4 : 2) + "%");
+  // 惑星破壊率は主惑星 (1億ブロック) だけを見る。衛星・小惑星・最難関を壊しても進まない。
+  // 主惑星の残数 mainAlive が 0 になる瞬間 = 破壊率 100% = エンディング (gameClear) と同時になる。
+  const mainDestroyed = TARGET_TOTAL - mainAlive;
+  const pct = Math.min(100, mainDestroyed / TARGET_TOTAL * 100), w = Math.max(pct, 0.05).toFixed(4) + "%", bar = $("sideProgress");
+  // 表示の四捨五入で 100.00% が先に出ないように: 主惑星が残っている間は 99.99% が上限
+  const pctText = mainAlive <= 0 ? "100.00%" : Math.min(pct, 99.99).toFixed(pct < 10 ? 4 : 2) + "%";
+  setText($("sidePct"), pctText);
   if (bar._w !== w){ bar._w = w; bar.style.width = w; }
-  setText($("sideDestroyed"), "破壊 " + fmt(state.destroyed));
-  setText($("sideRemain"), "残り " + fmt(Math.max(0, WORLD_TOTAL - state.destroyed)));   // 全天体の残数 (破壊率と同じく全天体の合計で数える)
+  setText($("sideDestroyed"), "破壊 " + fmt(mainDestroyed));
+  setText($("sideRemain"), "残り " + fmt(Math.max(0, mainAlive)));   // 主惑星の残数 (破壊率と同じ主惑星で数える)
   setText($("sideCoins"), fmt(state.coins));
   const r = coinRate();
   setText($("sideRate"), r >= 1 ? "+" + fmt(r) + "/秒" : "");
