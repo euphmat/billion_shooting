@@ -98,7 +98,7 @@ function renderMapList(){
       <span class="map-dot" style="background:${r.visited ? MAT[r.sig].color : "#3a3f47"}"></span>
       <span class="map-row-main">
         <span class="map-row-name">${SATS[r.si].ultra ? `<em class="map-ultra">最難関</em>` : ""}${r.name}${r.cur ? `<em class="map-cur">現在地</em>` : ""}</span>
-        <span class="map-row-sub">${r.fx ? r.fx.name : "効果なし"} ・ 看板素材 ${MAT[r.sig].name}</span>
+        <span class="map-row-sub">${r.fx ? r.fx.name : "効果なし"} ・ 看板素材 ${MAT[r.sig].name}${SATS[r.si].ultra ? ` ・ ${ultraLocked(SATS[r.si]) ? "🔒 " : ""}Lv${SATS[r.si].reqLv}〜` : ""}</span>
       </span>
       <span class="map-row-side">
         <span>宝箱 残り ${r.visited ? r.chests : "?"}</span>
@@ -117,7 +117,7 @@ function setMapView(v){
 function mapPopHTML(si){
   const S = SATS[si], visited = state.visitedBodies.includes(si);
   return `<div class="mp-name"><span class="map-dot" style="background:${visited ? MAT[S.sig].color : "#3a3f47"}"></span>${S.name}${visited ? "" : "<em>未訪問</em>"}</div>`
-    + (S.ultra ? `<div class="mp-ultra">最難関 #${S.rank} ・ 地表HP ${fmt(S.hpBase)}〜 ・ 異次元の硬さ</div>` : "")
+    + (S.ultra ? `<div class="mp-ultra">最難関 #${S.rank} ・ 地表HP ${fmt(S.hpBase)}〜 ・ 異次元の硬さ ・ ${ultraLocked(S) ? "🔒 " : ""}Lv${S.reqLv}〜</div>` : "")
     + `<div>看板素材: ${MAT[S.sig].name}</div>`
     + (S.fx ? `<div>効果: <b>${S.fx.name}</b></div><div class="mp-desc">${S.fx.desc}</div>` : "")
     + `<div>宝箱: ${visited ? `残り ${chestsLeftFor(si)} / 3` : "?"} ・ 距離: ${visited ? fmtDist(bodyDist(si)) : "?"}</div>`
@@ -269,6 +269,7 @@ function findLandingCell(S){
 }
 function fastTravelTo(si){
   const S = SATS[si]; if (!S) return false;
+  if (ultraLocked(S)){ toast(`最難関ダンジョン「${S.name}」は Lv${S.reqLv} 以上で挑戦できる`); return false; }   // 挑戦レベル制限
   const cell = findLandingCell(S);
   if (!cell){ toast("着地できる場所が見つからなかった"); return false; }
   recordReturnPos();   // 「さっきの場所に戻る」用に移動直前の位置を記録

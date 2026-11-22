@@ -378,6 +378,7 @@ function coinSkillMul(){
   return m;
 }
 function skillOnBreak(idx, gx, gy, kind, rare){
+  const uLocked = ultraLockedAt(gx, gy);   // 最難関のレベル制限中は、その天体からの報酬を一切出さない
   let xp = blockXP(gx, gy) * MATS[materialAt(gx, gy)].xp;
   xp *= skMul("c_xp", 1.15);
   if (rare && sk("c_know")) xp *= 1 + 4 * skA("c_know") + 7 * skA("c_know2");   // 5倍 / 真理の鑑定 12倍 (ボーナス分を増幅)
@@ -385,6 +386,7 @@ function skillOnBreak(idx, gx, gy, kind, rare){
   xp *= evoXpMul();   // 固有覚醒: 経験値の加速 (夢見の加護)
   const dfx = dungeonFxAt(gx, gy); if (dfx) xp *= dfx.xp;   // ダンジョン固有効果: 経験値倍率
   xp *= earlyBreakXpMul(idx, gx, gy);   // 序盤スキル: 初物 / 霜の学び / 撃破の学び / 採掘の経験
+  if (uLocked) xp = 0;   // 制限中の最難関ブロックからは経験値を得られない
   gainXP(xp);
   combo++; comboT = 3;
   earlyOnBreak(idx, gx, gy, kind);   // 序盤スキル (状態異常を消す前に呼ぶ: 燃焼・腐食・ひびを見る)
@@ -454,10 +456,12 @@ function skillOnBreak(idx, gx, gy, kind, rare){
     bumpProc("treasureBreak", x, y);
     treasureSet.delete(idx);
     const tm = MATS[materialAt(gx, gy)], tb = Math.max(4, Math.round(4 * skA("e_treasure") + 4 * skA("e_treasure2") + 4 * skA("e_treasure3")));   // +4 / +8 / +12個 (各段の差分を増幅)
-    invAdd(tm.key, tb); noteDrop(x, y, tm, tb);
-    gainXP(blockXP(gx, gy) * (2 * skLvMul("e_treasure") + 2 * skA("e_treasure3")));   // 通常分と合わせて 3倍 / 5倍
-    const cv = Math.max(5, Math.round(blockCoinValue(gx, gy) * 2 * skLvMul("e_treasure") * skLvMul("e_treasure2"))), cn2 = sk("e_treasure3") ? 8 : 5;   // 枚数はそのまま、1枚の額が強化で増える
-    for (let i = 0; i < cn2; i++){ const a = Math.random() * Math.PI * 2, sp = 120 + Math.random() * 260; spawnCoin({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, value: cv, chest: false, age: 0 }); }
+    if (!uLocked){   // 制限中の最難関ではお宝ボーナス (素材・経験値・コイン) も出ない
+      invAdd(tm.key, tb); noteDrop(x, y, tm, tb);
+      gainXP(blockXP(gx, gy) * (2 * skLvMul("e_treasure") + 2 * skA("e_treasure3")));   // 通常分と合わせて 3倍 / 5倍
+      const cv = Math.max(5, Math.round(blockCoinValue(gx, gy) * 2 * skLvMul("e_treasure") * skLvMul("e_treasure2"))), cn2 = sk("e_treasure3") ? 8 : 5;   // 枚数はそのまま、1枚の額が強化で増える
+      for (let i = 0; i < cn2; i++){ const a = Math.random() * Math.PI * 2, sp = 120 + Math.random() * 260; spawnCoin({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, value: cv, chest: false, age: 0 }); }
+    }
     addRing({ x, y, r: BS * 2.2, t: performance.now(), color: "255,214,64", dur: 500 });
   }
   if (sk("e_treasure") && treasureSet.size < (sk("e_treasure3") ? 60 : sk("e_treasure2") ? 40 : 20) && Math.random() < (sk("e_treasure3") ? 0.02 : sk("e_treasure2") ? 0.012 : 0.005) * (sk("e_rights") ? 2 : 1)){   // 惑星採掘権 (奥義): お宝出現率 ×2
@@ -575,6 +579,7 @@ function gainCoin(c, byBot){
 function scanMaterialAt(x, y){
   const gx = w2g(x), gy = w2g(y);
   if (gx < 0 || gy < 0 || gx >= D || gy >= D) return;
+  if (ultraLockedAt(gx, gy)) return;   // 最難関のレベル制限中は地層スキャンでも素材を拾えない
   const b = bodyAt(gx, gy);
   if (b < 0) return;
   let m;

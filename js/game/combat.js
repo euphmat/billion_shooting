@@ -194,9 +194,11 @@ function onBlockBroken(idx){
   const chest = sk("c_king") && Math.random() < (sk("c_king2") ? 0.015 : 0.005);   // ミダス王: 宝箱
   if (chest) value *= 20 * skA("c_king") + 10 * skA("c_king2") + 30 * skA("c_king3");   // 20倍 / 30倍 / 60倍 (各段の差分を増幅。宝箱の確率はLvで変えない)
   value = Math.max(1, Math.round(value));
-  dropMaterial(gx, gy, m, kind);
-  noteCoinSpawn(g2w(gx), g2w(gy), value);   // 回収ボットの待ち伏せ先 (コイン発生ヒートマップ)
-  spawnCoin({ x:g2w(gx), y:g2w(gy), vx:(Math.random()-.5)*90, vy:(Math.random()-.5)*90, value, chest, age:0 });   // 上限を超えたら既存のコインへ上乗せ
+  if (!ultraLockedAt(gx, gy)){   // 最難関のレベル制限中はコインも素材も出ない (value の計算自体は従来通り)
+    dropMaterial(gx, gy, m, kind);
+    noteCoinSpawn(g2w(gx), g2w(gy), value);   // 回収ボットの待ち伏せ先 (コイン発生ヒートマップ)
+    spawnCoin({ x:g2w(gx), y:g2w(gy), vx:(Math.random()-.5)*90, vy:(Math.random()-.5)*90, value, chest, age:0 });   // 上限を超えたら既存のコインへ上乗せ
+  }
   sndBreak(m);
   if (goldified){   // 黄金化: 金色に輝いて壊れる (リング + 金の星バースト + フィード)
     bumpProc("goldify", g2w(gx), g2w(gy)); sndGoldify();

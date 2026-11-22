@@ -59,6 +59,8 @@ function frame(now){
     }
   }
 
+  ultraGateUpdate();   // 最難関の入場ゲート (移動後の最終位置で判定。game/dungeon.js)
+
   // --- player fire ---
   player.fireT -= pfdt;
   const w = evoW(state.weapon);   // 覚醒 (★) 込み (ガトリングの最大連射も伸びる)

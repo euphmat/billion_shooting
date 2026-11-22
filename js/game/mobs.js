@@ -214,13 +214,15 @@ function killMob(m){
   sndMobDie();
   if (typeof burstAt === "function") burstAt(m.x, m.y, m.lastFx || { accent: (m.type && m.type.color) || "#ffd24d", c2: "#ffffff", burst: "dots" }, null);
   const si = m.sat, S = SATS[si], T = m.type;
-  const total = S.ultra ? Math.round(m.maxHp / 8 * S.fx.coin) : Math.round((30 + si * 45) * T.hpMul * (T.coinMul || 1)), each = Math.max(1, Math.round(total / 4));   // 最難関の番人は HP に見合った大金
-  for (let k = 0; k < 4; k++)
-    spawnCoin({ x: m.x, y: m.y, vx: (Math.random() - .5) * 120, vy: (Math.random() - .5) * 120, value: each, chest: false, age: 0 });
-  gainXP(Math.round((S.ultra ? Math.sqrt(m.maxHp) * 3 : (8 + si * 6) * T.hpMul * (T.xpMul || 1)) * (S.fx ? S.fx.xp : 1)));
-  if (S.ultra){ const n = 6 + (Math.random() * 10 | 0); invAdd(S.sig, n); noteDrop(m.x, m.y, MAT[S.sig], n); }   // 最難関の番人は看板素材を必ずまとめて落とす
-  else if (Math.random() < 0.35 * (S.fx ? S.fx.drop : 1)){ const n = 1 + (Math.random() * 3 | 0); invAdd(S.sig, n); noteDrop(m.x, m.y, MAT[S.sig], n); }
-  if (artSpecial("mobDrop")){ invAdd(S.sig, 1); noteDrop(m.x, m.y - 16, MAT[S.sig], 1); bumpArtProc("e_harv"); }   // 星屑の収穫者: 必ず落ちる
+  if (!ultraLocked(S)){   // 最難関のレベル制限中は、倒してもコイン・経験値・看板素材は一切出ない
+    const total = S.ultra ? Math.round(m.maxHp / 8 * S.fx.coin) : Math.round((30 + si * 45) * T.hpMul * (T.coinMul || 1)), each = Math.max(1, Math.round(total / 4));   // 最難関の番人は HP に見合った大金
+    for (let k = 0; k < 4; k++)
+      spawnCoin({ x: m.x, y: m.y, vx: (Math.random() - .5) * 120, vy: (Math.random() - .5) * 120, value: each, chest: false, age: 0 });
+    gainXP(Math.round((S.ultra ? Math.sqrt(m.maxHp) * 3 : (8 + si * 6) * T.hpMul * (T.xpMul || 1)) * (S.fx ? S.fx.xp : 1)));
+    if (S.ultra){ const n = 6 + (Math.random() * 10 | 0); invAdd(S.sig, n); noteDrop(m.x, m.y, MAT[S.sig], n); }   // 最難関の番人は看板素材を必ずまとめて落とす
+    else if (Math.random() < 0.35 * (S.fx ? S.fx.drop : 1)){ const n = 1 + (Math.random() * 3 | 0); invAdd(S.sig, n); noteDrop(m.x, m.y, MAT[S.sig], n); }
+    if (artSpecial("mobDrop")){ invAdd(S.sig, 1); noteDrop(m.x, m.y - 16, MAT[S.sig], 1); bumpArtProc("e_harv"); }   // 星屑の収穫者: 必ず落ちる
+  }
   m.hp = 0; m.dead = true;
 }
 // 射撃の照準用: (x, y) から rng 以内の最も近いモンスター (ブロックより優先して狙う)

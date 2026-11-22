@@ -28,3 +28,24 @@ function updateDungeonBanner(){
     if (prevFx) toast("ダンジョンを出た");
   }
 }
+
+// ---------- 最難関ダンジョンの入場ゲート (挑戦レベル制限) ----------
+// 制限レベル未満で円内に入ったら外周まで押し戻す。移動後の最終位置で判定するので、ブースト (×10) でもすり抜けられない
+let ultraGateSi = -1, ultraGateToastT = 0;   // トーストのスロットル (同じ天体では3秒に1回まで)
+function ultraGateUpdate(){
+  for (let si = ULTRA_START; si < SATS.length; si++){
+    const S = SATS[si];
+    if (!ultraLocked(S)) continue;
+    const cx = g2w(S.cx), cy = g2w(S.cy), R = S.r * BS;
+    const dx = player.x - cx, dy = player.y - cy, d2 = dx * dx + dy * dy;
+    if (d2 >= R * R) continue;
+    const d = Math.sqrt(d2);
+    const ux = d > 0.01 ? dx / d : 0, uy = d > 0.01 ? dy / d : -1;   // 中心ちょうどにいたら真上へ
+    player.x = cx + ux * (R + 2); player.y = cy + uy * (R + 2);
+    const now = performance.now();
+    if (si !== ultraGateSi || now - ultraGateToastT > 3000){
+      ultraGateSi = si; ultraGateToastT = now;
+      toast(`最難関ダンジョン「${S.name}」は Lv${S.reqLv} 以上で挑戦できる`);
+    }
+  }
+}

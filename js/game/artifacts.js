@@ -374,7 +374,7 @@ function chaosDice(idx, gx, gy, dmg){
   } else if (roll === 1){   // コインバースト
     diceColor = "#ffd60a";
     const v = Math.max(10, Math.round(blockCoinValue(gx, gy) * 3));
-    for (let k = 0; k < 8; k++){ const a = Math.random() * Math.PI * 2, sp = 140 + Math.random() * 240; spawnCoin({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, value: Math.ceil(v / 2), chest: false, age: 0 }); }
+    if (!ultraLockedAt(gx, gy)) for (let k = 0; k < 8; k++){ const a = Math.random() * Math.PI * 2, sp = 140 + Math.random() * 240; spawnCoin({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, value: Math.ceil(v / 2), chest: false, age: 0 }); }   // 最難関の制限中はコインを出さない
     diceLabel("🎲 コインバースト！", "#ffd60a");
   } else if (roll === 2){   // 全体凍結
     diceColor = "#7df0ff";

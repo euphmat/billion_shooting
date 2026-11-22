@@ -239,14 +239,15 @@ const EVO_VERB = {
     prep: q => { q.left = q.n; } },
   coinburst:{ def: { x: 6 }, d: q => `コインが噴き出す (そのブロックの${evoR2(q.x)}倍)`,
     run: (c, q) => {
+      if (ultraLockedAt(c.gx, c.gy)) return;   // 最難関のレベル制限中は報酬系の発動も出ない
       const v = Math.max(1, Math.round(blockCoinValue(c.gx, c.gy) * q.x * coinMulStatic() * weaponYield() / 4));
       for (let i = 0; i < 4; i++){ const a = Math.random() * 6.283, sp = 140 + Math.random() * 220; spawnCoin({ x: c.x, y: c.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, value: v, chest: false, age: 0 }); }
       euFxRing(c, BS * 1.5, 420, "255,214,10");
     } },
   ore:      { def: { n: 3 }, d: q => `その素材を さらに +${q.n}個`,
-    run: (c, q) => { const m = MATS[materialAt(c.gx, c.gy)]; if (!m) return; invAdd(m.key, q.n); noteDrop(c.x, c.y, m, q.n); euFxRing(c, BS * 1.2, 360, matColorRGB(m)); } },
+    run: (c, q) => { if (ultraLockedAt(c.gx, c.gy)) return; const m = MATS[materialAt(c.gx, c.gy)]; if (!m) return; invAdd(m.key, q.n); noteDrop(c.x, c.y, m, q.n); euFxRing(c, BS * 1.2, 360, matColorRGB(m)); } },
   wisdom:   { def: { x: 4 }, d: q => `そのブロックの経験値を さらに ${evoR2(q.x)}倍ぶん得る`,
-    run: (c, q) => { const m = MATS[materialAt(c.gx, c.gy)]; gainXP(blockXP(c.gx, c.gy) * (m ? m.xp : 1) * q.x); euFxRing(c, BS * 1.4, 400, "140,200,255"); } },
+    run: (c, q) => { if (ultraLockedAt(c.gx, c.gy)) return; const m = MATS[materialAt(c.gx, c.gy)]; gainXP(blockXP(c.gx, c.gy) * (m ? m.xp : 1) * q.x); euFxRing(c, BS * 1.4, 400, "140,200,255"); } },
   treasure: { def: { n: 1 }, d: q => `近くの${q.n}ブロックを「お宝」に変える (壊すと素材・コイン・経験値の大ボーナス)`,
     run: (c, q) => { let n = q.n; for (const j of euNear(c, q.n * 3, BS * 8)){ if (n <= 0 || treasureSet.size >= 80) break; if (!treasureSet.has(j)){ treasureSet.add(j); n--; addRing({ x: g2w(j % D), y: g2w((j / D) | 0), r: BS * 1.6, color: "255,214,64", dur: 600 }); } } } },
   magnet:   { def: { R: 500 }, d: q => `自機の周囲${q.R}のコインを一瞬で回収する`,

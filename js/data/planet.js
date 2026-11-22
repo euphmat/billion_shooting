@@ -287,11 +287,16 @@ const ULTRA_OFF = 5900;            // 世界の中心から四隅への距離 (�
 ULTRA_DEFS.forEach((d, j) => {
   const tab = (a, b, c) => buildTable([[MAT[d[1]].i, a], [MAT[d[2]].i, b], [MAT[d[3]].i, c], [MAT[d[4]].i, 12]]);
   const S = { name: d[0], sig: d[1], r: d[5], r2: d[5] * d[5], exp: d[6], hpBase: d[7], mobHp: d[10], salt: 3000 + j * 31 + 7, ultra: true, rank: j + 1,
+    reqLv: [100, 150, 200, 250][j],   // 挑戦レベル制限 (経験値が桁違いなので、育っていないうちは入れない)
     cx: GC + d[8] * ULTRA_OFF, cy: GC + d[9] * ULTRA_OFF,
     tab0: null, tab1: null, tab2: null, _t: [tab(40, 45, 15), tab(55, 15, 30), tab(70, 0, 10)] };
   [S.tab0, S.tab1, S.tab2] = S._t; delete S._t;
   SATS.push(S);
 });
+// ---------- 最難関の挑戦レベル制限 ----------
+// state は実行時に参照するので、スクリプトのロード順は不問
+const ultraLocked = S => !!(S && S.ultra && state.lv < S.reqLv);
+function ultraLockedAt(gx, gy){ const b = bodyAt(gx, gy); return b > 0 && ultraLocked(SATS[b - 1]); }
 
 /* ---------- ダンジョン固有効果 (SATS と同じ順番: 衛星10 → 小惑星20 → 内部20) ----------
    dmg=ブロックへの与ダメ倍率 / coin=コイン倍率 / xp=経験値倍率 / hurt=被ダメ倍率 / drop=看板素材ドロップ率倍率
